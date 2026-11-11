@@ -658,7 +658,7 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 
 | Check | Catches | State |
 |-------|---------|-------|
-| `forbidden-files` | Documents, audio, video, archives, dumps, env files, oversized files; test data outside `deploy/seed` | Now |
+| `forbidden-files` | Documents, audio, video, archives, dumps, env files, oversized files; raster images outside `app/public`; test data outside `deploy/seed` | Now |
 | `acceptance-unchanged` | A pull request edits or deletes an existing acceptance scenario together with code. Adding new ones is allowed | Now |
 | `secrets` | Keys, passwords and tokens in changes | Now |
 | `lint-docs` | Broken Markdown | Now |

@@ -70,6 +70,12 @@ forbidden_case fail "CSV outside deploy/seed" "e2e/data/students.csv"
 forbidden_case pass "CSV inside deploy/seed" "deploy/seed/students.csv"
 forbidden_case fail "SQL dump outside migrations" "e2e/data/students.sql"
 forbidden_case pass "SQL migration" "app/src/server/db/migrations/0001_init.sql"
+forbidden_case fail "raster image in docs" "docs/page-12.png"
+forbidden_case fail "raster image among components" "app/src/components/unit.jpg"
+forbidden_case fail "raster image under a nested public directory" "docs/app/public/page.JPEG"
+forbidden_case pass "raster image in app/public" "app/public/favicon.png"
+forbidden_case pass "nested raster image in app/public" "app/public/icons/lesson.webp"
+forbidden_case pass "SVG outside app/public is code" "app/src/components/logo.svg"
 
 # --- acceptance-unchanged ----------------------------------------------------
 
