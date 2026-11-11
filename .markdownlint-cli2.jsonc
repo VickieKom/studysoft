@@ -1,0 +1,10 @@
+{
+  // Long tables and URLs are fine; everything else stays strict.
+  "config": {
+    "MD013": false,
+    "MD060": false
+  },
+  "globs": ["**/*.md"],
+  // The pull request template is a form, not a document: it has no title.
+  "ignores": ["**/node_modules/**", ".github/pull_request_template.md"]
+}

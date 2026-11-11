@@ -1,0 +1,35 @@
+# Paths where a mistake is expensive or where a change could weaken the checks
+# themselves. Changes here need the maintainer's approval; everything else is
+# merged by the product owner once the checks are green.
+# See README.md, "How work flows".
+
+# Database schema and migrations
+/app/src/server/db/ @foxcool
+
+# Authentication, access links, tokens
+/app/src/server/access/ @foxcool
+
+# Base procedures and the procedures reachable by students, parents and agents
+/app/src/server/router/core/ @foxcool
+/app/src/server/router/student/ @foxcool
+/app/src/server/router/parent/ @foxcool
+/app/src/server/router/agent/ @foxcool
+
+# Dependencies
+package.json @foxcool
+package-lock.json @foxcool
+
+# The checks and their configuration
+/.github/ @foxcool
+/scripts/ci/ @foxcool
+/Makefile @foxcool
+/.markdownlint-cli2.jsonc @foxcool
+tsconfig*.json @foxcool
+eslint.config.* @foxcool
+
+# Deployment and test data
+/deploy/ @foxcool
+
+# Rules and decisions
+/AGENTS.md @foxcool
+/docs/architecture.md @foxcool

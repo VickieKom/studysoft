@@ -1,0 +1,30 @@
+name: Task
+description: One vertical slice that can be shown on staging
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: What changes for the user, and which problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: >
+        Steps a user takes and what they see after each one. These steps become
+        the acceptance scenario, so write them as observable behaviour.
+      placeholder: |
+        1. The teacher opens a student's card and clicks "Reissue link".
+        2. The old student link shows "Link is no longer valid".
+        3. The new link opens the current homework.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this task deliberately does not do.
+    validations:
+      required: true
