@@ -20,6 +20,20 @@
 /app/src/server/router/parent/ @foxcool @VickieKom
 /app/src/server/router/agent/ @foxcool @VickieKom
 
+# Entry points and request gating before the router: file serving checks
+# permissions in app/src/app/api/, and middleware or proxy decides which
+# requests reach it
+/app/src/app/api/ @foxcool @VickieKom
+/app/src/middleware.* @foxcool @VickieKom
+/app/src/proxy.* @foxcool @VickieKom
+
+# MCP server: handles the agent's personal token
+/mcp/ @foxcool @VickieKom
+
+# Next.js configuration: response headers, including the sandbox policy that
+# isolates games
+next.config.* @foxcool @VickieKom
+
 # Dependencies
 package.json @foxcool @VickieKom
 package-lock.json @foxcool @VickieKom
@@ -31,6 +45,17 @@ package-lock.json @foxcool @VickieKom
 /.markdownlint-cli2.jsonc @foxcool @VickieKom
 tsconfig*.json @foxcool @VickieKom
 eslint.config.* @foxcool @VickieKom
+# Test runner configuration can skip scenarios without touching e2e/acceptance/,
+# which acceptance-unchanged does not see
+playwright.config.* @foxcool @VickieKom
+playwright.*.config.* @foxcool @VickieKom
+vitest.config.* @foxcool @VickieKom
+vitest.*.config.* @foxcool @VickieKom
+# Where migrations come from
+drizzle.config.* @foxcool @VickieKom
+# An allowlist entry or an ignored fingerprint switches the secret scan off
+/.gitleaks.toml @foxcool @VickieKom
+/.gitleaksignore @foxcool @VickieKom
 
 # Deployment and test data
 /deploy/ @foxcool @VickieKom
