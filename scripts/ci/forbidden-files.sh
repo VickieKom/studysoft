@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Fails when the repository tracks files that must never be committed:
 # learning content, media, archives, database dumps, env files, oversized
-# files, and test data outside deploy/seed/.
+# files, raster images outside app/public/, and test data outside deploy/seed/.
+#
+# Raster images are allowed only under app/public/: the application needs
+# icons and illustrations, but a scanned or rendered textbook page is an image
+# too, and app/public/ is the one place a reviewer looks for them. SVG is code
+# and is reviewed as such.
 #
 # The test-data rule is a heuristic: it knows data formats and the usual names
 # of test-data directories. A JSON file under an unusual name still passes,
@@ -43,6 +48,14 @@ while IFS= read -r -d '' path; do
       ;;
     *.dump | *.sqlite | *.sqlite3 | *.db)
       fail "$path" "database dumps may contain personal data"
+      ;;
+  esac
+
+  case "/$lower" in
+    /app/public/*) ;;
+    *.png | *.jpg | *.jpeg | *.gif | *.webp | *.avif | *.bmp | *.tif | *.tiff | \
+      *.ico | *.heic | *.heif | *.jxl)
+      fail "$path" "raster images live only in app/public/"
       ;;
   esac
 
