@@ -16,7 +16,8 @@ jobs:
   checks:
     name: Repository checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Includes a production build and the acceptance scenarios against it.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,6 +33,9 @@ jobs:
           # Pull requests compare against their base branch. A push to main
           # compares main with itself, which is an empty and passing diff.
           BASE: origin/${{ github.base_ref || 'main' }}
+          # The runner needs the browser's system libraries as well.
+          PLAYWRIGHT_INSTALL_FLAGS: --with-deps
+          BUILD_SHA: ${{ github.sha }}
         run: make check
 
   secrets:

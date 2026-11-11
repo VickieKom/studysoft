@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Учитель А",
+    "email": "teacher-a@example.test",
+    "password": "local-stand-teacher-a"
+  },
+  {
+    "name": "Учитель Б",
+    "email": "teacher-b@example.test",
+    "password": "local-stand-teacher-b"
+  }
+]

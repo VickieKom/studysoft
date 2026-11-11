@@ -1,0 +1,104 @@
+/*
+ * Design tokens: the one file every colour, size and radius comes from
+ * (docs/architecture.md, 8.7). Values are from the design reference in #1.
+ *
+ * Student screens take their accent from --accent-*; green is the default
+ * theme. A theme never changes the background, text, borders, or the colours
+ * that mark an answer right or wrong.
+ */
+:root {
+  --bg: #ffffff;
+  --surface: #f6f7f5;
+  --border: #e3e7e2;
+  --text: #232825;
+  --text-secondary: #5f6762;
+  --text-muted: #9aa19c;
+
+  --green-50: #eef6f0;
+  --green-100: #d7ebdd;
+  --green-300: #8bc3a0;
+  --green-500: #4a9a6c;
+  --green-600: #2f7a52;
+  --green-700: #25613f;
+  --green-900: #173d29;
+
+  --accent-50: var(--green-50);
+  --accent-100: var(--green-100);
+  --accent-300: var(--green-300);
+  --accent-500: var(--green-500);
+  --accent-600: var(--green-600);
+  --accent-700: var(--green-700);
+  --accent-900: var(--green-900);
+
+  --warning: #8f6516;
+  --warning-bg: #fbf3e2;
+  --danger: #b9473d;
+  --danger-bg: #fbecea;
+  --on-accent: #ffffff;
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-task: 20px;
+
+  --control-height: 40px;
+  --control-height-student: 44px;
+
+  --font-sans: "Manrope Variable", system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-green-50: var(--green-50);
+  --color-green-100: var(--green-100);
+  --color-green-300: var(--green-300);
+  --color-green-500: var(--green-500);
+  --color-green-600: var(--green-600);
+  --color-green-700: var(--green-700);
+  --color-green-900: var(--green-900);
+  --color-accent-50: var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-300: var(--accent-300);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-900: var(--accent-900);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-on-accent: var(--on-accent);
+
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-task: var(--radius-task);
+
+  --font-sans: var(--font-sans);
+
+  /* Type scale: size / line height, from the design reference. */
+  --text-h1: 28px;
+  --text-h1--line-height: 36px;
+  --text-h2: 22px;
+  --text-h2--line-height: 30px;
+  --text-h3: 18px;
+  --text-h3--line-height: 26px;
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+  --text-small: 13px;
+  --text-small--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-button: 14px;
+  --text-button--line-height: 20px;
+  --text-task-title: 22px;
+  --text-task-title--line-height: 30px;
+  --text-answer: 17px;
+  --text-answer--line-height: 24px;
+
+  /* Spacing in multiples of 4 px. */
+  --spacing: 4px;
+}
