@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local data: uploaded files and database volumes never belong in the repo
+/data/
+
+# Editor, OS and agent-tool state stays local
+.DS_Store
+.idea/
+.vscode/
+.claude/
+.cursor/
+.aider*
+.mcp.json

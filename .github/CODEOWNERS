@@ -1,0 +1,40 @@
+# Paths where a mistake is expensive or where a change could weaken the checks
+# themselves. Changes here need the maintainer's approval; everything else is
+# merged by the product owner once the checks are green.
+#
+# The product owner is listed second only because GitHub does not let authors
+# approve their own pull requests: she approves the maintainer's pull requests
+# here, and nobody else's. See README.md, "How work flows".
+
+# Database schema and migrations
+/app/src/server/db/ @foxcool @VickieKom
+
+# Authentication, access links, tokens
+/app/src/server/access/ @foxcool @VickieKom
+
+# Base procedures and the procedures reachable without a teacher session:
+# public, students, parents and agents
+/app/src/server/router/core/ @foxcool @VickieKom
+/app/src/server/router/public/ @foxcool @VickieKom
+/app/src/server/router/student/ @foxcool @VickieKom
+/app/src/server/router/parent/ @foxcool @VickieKom
+/app/src/server/router/agent/ @foxcool @VickieKom
+
+# Dependencies
+package.json @foxcool @VickieKom
+package-lock.json @foxcool @VickieKom
+
+# The checks and their configuration
+/.github/ @foxcool @VickieKom
+/scripts/ci/ @foxcool @VickieKom
+/Makefile @foxcool @VickieKom
+/.markdownlint-cli2.jsonc @foxcool @VickieKom
+tsconfig*.json @foxcool @VickieKom
+eslint.config.* @foxcool @VickieKom
+
+# Deployment and test data
+/deploy/ @foxcool @VickieKom
+
+# Rules and decisions
+/AGENTS.md @foxcool @VickieKom
+/docs/architecture.md @foxcool @VickieKom

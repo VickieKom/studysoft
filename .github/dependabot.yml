@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Actions are pinned by commit hash; this keeps the pins current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Every npm package arrives through the lockfile; this keeps it current.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
