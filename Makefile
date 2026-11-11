@@ -19,7 +19,7 @@ DB_ROOT := postgres://studysoft:studysoft@127.0.0.1:$(DB_PORT)
 LOCAL_AUTH_SECRET := local-stand-only-auth-secret-never-used-elsewhere
 BUILD_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 
-DEV_ENV := DATABASE_URL=$(DB_ROOT)/studysoft AUTH_SECRET=$(LOCAL_AUTH_SECRET) APP_URL=http://localhost:3000 BUILD_SHA=dev
+DEV_ENV := DATABASE_URL=$(DB_ROOT)/studysoft AUTH_SECRET=$(LOCAL_AUTH_SECRET) APP_URL=http://localhost:3000 BUILD_SHA=$(BUILD_SHA)
 TEST_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_test AUTH_SECRET=$(LOCAL_AUTH_SECRET) APP_URL=http://localhost:3000 BUILD_SHA=test
 E2E_PORT ?= 3100
 E2E_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_e2e AUTH_SECRET=$(LOCAL_AUTH_SECRET) APP_URL=http://localhost:$(E2E_PORT) BUILD_SHA=$(BUILD_SHA) E2E_PORT=$(E2E_PORT)
