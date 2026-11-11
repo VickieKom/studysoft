@@ -18,7 +18,7 @@ Early. The repository holds the foundation: architecture, decisions, the rules f
 2. **Acceptance scenario.** The acceptance steps become an automated scenario in `e2e/acceptance/`, merged before the implementation. Written first, it checks the task rather than whatever code came out.
 3. **Implementation.** A coding agent implements the issue under the rules in [AGENTS.md](AGENTS.md) and opens a pull request.
 4. **Checks.** CI runs the same `make check` that runs locally, plus a secret scan. A red check blocks the merge.
-5. **Merge.** The product owner merges ordinary changes. Changes to the paths in [CODEOWNERS](.github/CODEOWNERS) — database schema, access, the checks themselves, deployment — wait for the maintainer.
+5. **Merge.** The product owner merges ordinary changes. Changes to the paths in [CODEOWNERS](.github/CODEOWNERS) — database schema, access, the checks themselves, deployment — wait for the maintainer. The maintainer's own pull requests there are approved by the product owner.
 6. **Staging.** The merged build appears on staging, where the result is reviewed.
 
 How the system is put together and why: [docs/architecture.md](docs/architecture.md).

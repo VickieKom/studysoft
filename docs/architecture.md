@@ -677,10 +677,10 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 
 | Paths | Whose approval is needed |
 |-------|--------------------------|
-| `app/src/server/db/` (schema and migrations), `app/src/server/access/`, base procedures, public, student, parent and agent procedures, `package.json` and the lockfile, linter and TypeScript configuration, `.github/`, `scripts/ci/`, `deploy/`, `Makefile`, `AGENTS.md`, `docs/architecture.md` | The reviewer's (CODEOWNERS) |
+| `app/src/server/db/` (schema and migrations), `app/src/server/access/`, base procedures, public, student, parent and agent procedures, `package.json` and the lockfile, linter and TypeScript configuration, `.github/`, `scripts/ci/`, `deploy/`, `Makefile`, `AGENTS.md`, `docs/architecture.md` | The reviewer's (CODEOWNERS). The product owner is a second code owner only to approve the reviewer's own pull requests, because GitHub does not let authors approve themselves |
 | Everything else: screens, styles, texts, teacher-side procedures and module logic on the existing schema | The product owner merges once checks are green |
 
-Direct pushes to `main` are forbidden for everyone, the owner included.
+Direct pushes to `main` are forbidden for everyone, the owner included. The branch ruleset enforces this: required checks, a pull request for every change, code-owner approval for guarded paths, and no bypass. A ruleset cannot require a particular code owner, so "the owner approves only the reviewer's pull requests" is a convention, not a check.
 
 **What a task looks like.** The issue template requires three sections: what and why; acceptance (steps that become a Playwright scenario); out of scope. A task without acceptance is not started. The size of a task is one vertical slice that can be shown on staging.
 
