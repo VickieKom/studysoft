@@ -28,13 +28,11 @@ jobs:
           node-version: 22
 
       - name: Run make check
-        run: make check
-
-      - name: Acceptance scenarios unchanged
-        if: github.event_name == 'pull_request'
         env:
-          BASE_REF: ${{ github.base_ref }}
-        run: bash scripts/ci/acceptance-unchanged.sh "origin/$BASE_REF"
+          # Pull requests compare against their base branch. A push to main
+          # compares main with itself, which is an empty and passing diff.
+          BASE: origin/${{ github.base_ref || 'main' }}
+        run: make check
 
   secrets:
     name: Secret scan

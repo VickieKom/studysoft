@@ -3,6 +3,10 @@
 
 .DEFAULT_GOAL := help
 
+# Branch the acceptance guard compares against. CI passes the pull request's
+# base; locally the default is right unless you target another branch.
+BASE ?= origin/main
+
 # Pinned so local runs and CI lint with the same rules.
 MARKDOWNLINT := npx --yes markdownlint-cli2@0.24.0
 
@@ -13,9 +17,10 @@ help: ## List available commands
 
 check: check-repo lint-docs ## Run every check that CI runs
 
-check-repo: ## Guard scripts: self-test, then scan tracked files
+check-repo: ## Guard scripts: self-test, tracked files, acceptance scenarios
 	bash scripts/ci/test.sh
 	bash scripts/ci/forbidden-files.sh
+	bash scripts/ci/acceptance-unchanged.sh $(BASE)
 
 lint-docs: ## Lint Markdown files
 	$(MARKDOWNLINT)

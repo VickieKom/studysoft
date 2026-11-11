@@ -104,6 +104,11 @@ acceptance_case pass "existing scenario edited on its own" edited_scenario_alone
 acceptance_case fail "existing scenario deleted together with code" deleted_scenario_with_code
 acceptance_case pass "code change without touching scenarios" code_alone
 
+new_repo
+write "app/src/login.ts" "code"
+commit "base"
+expect fail "acceptance-unchanged: unknown base ref is an error, not a pass" "$repo" bash "$here/acceptance-unchanged.sh" origin/missing
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures guard self-test(s) failed"
   exit 1

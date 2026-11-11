@@ -28,8 +28,8 @@ Status: target architecture. The repository holds the foundation; application co
 
 | Stage | Scope |
 |-------|-------|
-| 1 (core) | Teacher sign-in; student cards, notes, payments, lesson history; schedule with recurring slots and two time zones; library with textbooks split into units; two-window lesson mode with a board; homework with automatic checking behind a student link |
-| 2 | Student vocabulary, assessments, dashboard, teacher overview, reports for parents, parent link, student feedback |
+| 1 (core) | Teacher sign-in; student cards, notes, payments, lesson history; schedule with recurring slots and two time zones; library with textbooks split into units; two-window lesson mode with a board; homework with automatic checking behind a student link; access links for the student and the parent (the parent page is a read-only shell until stage 2) |
+| 2 | Student vocabulary, assessments, dashboard, teacher overview, parent dashboard and reports, student feedback |
 | 3 | Mascots and game elements, messenger notifications, lesson stage behind a student link, shared board, group interface, accounts for other teachers |
 
 **Non-functional:**
