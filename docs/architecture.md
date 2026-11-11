@@ -84,7 +84,7 @@ The order is the priority: when goals conflict, the higher row wins.
 - **The product owner does not read code yet.** Whatever must hold is checked automatically, not by review.
 - **The reviewer is stronger on the server than in React.** Complex screens are verified by acceptance scenarios, not by reviewing markup.
 - **The repository is public.** It contains no learning content, no student data and no secrets (section 8.9).
-- **Tool neutrality**: agent instructions live in `AGENTS.md`; names of specific AI tools do not appear in code, comments or commits.
+- **Tool neutrality**: agent instructions live in `AGENTS.md`; names of specific AI tools do not appear in code or comments. Attribution lines in commits and pull requests are allowed.
 - **Whole structure first.** The product owner wants every section to exist in a basic form before any is polished. The architecture answers with vertical slices: each section first appears thin but end to end.
 
 ### 2.3 External
