@@ -9,8 +9,10 @@
 # Authentication, access links, tokens
 /app/src/server/access/ @foxcool
 
-# Base procedures and the procedures reachable by students, parents and agents
+# Base procedures and the procedures reachable without a teacher session:
+# public, students, parents and agents
 /app/src/server/router/core/ @foxcool
+/app/src/server/router/public/ @foxcool
 /app/src/server/router/student/ @foxcool
 /app/src/server/router/parent/ @foxcool
 /app/src/server/router/agent/ @foxcool

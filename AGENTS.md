@@ -20,9 +20,9 @@ StudySoft is a platform for private language tutors: students and payments, sche
 
 Each of these is, or will be, enforced by a check. Breaking one fails the pipeline.
 
-1. **Data goes through the router only.** Screens, server components and the MCP server read and change data through router procedures. Nothing outside `app/src/server/` imports a server module or touches the database.
+1. **Data goes through the router only.** Screens, server components and the MCP server read and change data through router procedures. Code outside `app/src/server/` imports only the router entry point, `app/src/server/router/index.ts`: client components through the router client, server components and `app/src/app/api/` through its server caller. Nothing outside `app/src/server/` imports any other server module or touches the database.
 2. **Every procedure declares its output schema.** Never return a database row as is.
-3. **Access is deny-by-default.** Every procedure is exactly one kind: teacher, student, parent or agent. The teacher identifier comes from the session, never from the request.
+3. **Access is deny-by-default.** Every procedure is exactly one kind: public, teacher, student, parent or agent. Public procedures are only teacher sign-in and the exchange of a link token for a session; adding another one is a guarded change. The teacher identifier comes from the session, never from the request.
 4. **Students and parents never receive** correct answers before submission, teacher notes, payments, contacts, or another student's data.
 5. **Agent procedures create drafts only.** Publishing is a teacher procedure.
 6. **No learning content in the repository.** No textbook pages or excerpts, exercises, games, recordings, characters, or real student data — not in code, tests, seed data, comments or documentation.
@@ -35,7 +35,7 @@ Each of these is, or will be, enforced by a check. Breaking one fails the pipeli
 
 ## Guarded paths
 
-Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the maintainer's approval: database schema and migrations, access code, base procedures and the procedures for students, parents and agents, dependencies, check configuration, CI, deployment, this file, and the architecture document. If a task needs such a change, keep it as small as possible and explain it in the pull request.
+Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the maintainer's approval: database schema and migrations, access code, base procedures and the public, student, parent and agent procedures, dependencies, check configuration, CI, deployment, this file, and the architecture document. If a task needs such a change, keep it as small as possible and explain it in the pull request.
 
 ## Language
 
@@ -59,7 +59,7 @@ app/
   src/app/teacher/     teacher's workspace
   src/app/s/           screens behind a student link
   src/app/p/           screens behind a parent link
-  src/app/api/         entry points: router, files, health
+  src/app/api/         entry points: router, files, /api/healthz
   src/server/<module>/ server modules: access, crm, schedule, library, lesson, homework, blob
   src/server/router/   procedures, grouped by who may call them
   src/server/db/       schema and migrations

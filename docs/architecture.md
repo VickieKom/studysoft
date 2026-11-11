@@ -250,6 +250,7 @@ graph TB
     lesson --> homework
     homework --> library
     library --> blob
+    access --> db
     crm --> db
     schedule --> db
     library --> db
@@ -295,7 +296,7 @@ Dependency rules:
 | `crm` | Student card, contacts, statuses, notes, payments, balance, lesson price history | `db` |
 | `schedule` | Recurring slots, creating lessons ahead, rescheduling and cancelling, time zones | `db` |
 | `library` | Textbooks, files, units, page images, games, warm-ups, videos; textbook parsing and its confirmation; export and import of materials | `blob`, `db` |
-| `lesson` | Lesson plan by stages, stage state, the "finish lesson" command with all its consequences | `schedule`, `homework` |
+| `lesson` | Lesson plan by stages, stage state, the "finish lesson" command with all its consequences | `schedule`, `homework`, `db` |
 | `homework` | Homework, task types, draft answers, single attempt, automatic checking, manual review | `library`, `db` |
 | `blob` | The `BlobStore` interface: put, read, delete a file. A `file` adapter now, `s3` later | Disk |
 | `db` | Schema, migrations and transactions; every query takes the teacher identifier | PostgreSQL |
@@ -307,7 +308,7 @@ app/
   src/app/teacher/     teacher's workspace
   src/app/s/           screens behind a student link
   src/app/p/           screens behind a parent link
-  src/app/api/         entry points: router, files, /healthz
+  src/app/api/         entry points: router, files, /api/healthz
   src/server/<module>/ server modules from the table above
   src/server/router/   procedures, grouped by who may call them
   src/server/db/       schema and migrations
@@ -387,11 +388,11 @@ sequenceDiagram
     participant A as app
     participant D as PostgreSQL
 
-    S->>R: 1. Opens the link with a token
+    S->>R: 1. Opens the link; the token stays in the fragment
     R->>A: 2. Page and static assets (assets from the proxy cache)
-    S->>A: 3. Exchanges the token for a session
+    S->>A: 3. Sends the token in a request body
     A->>D: 4. Finds the link by the token hash
-    A-->>S: 5. Session cookie, token removed from the address
+    A-->>S: 5. Session cookie; the page clears the fragment
     S->>A: 6. Current homework
     A-->>S: 7. Tasks without correct answers
     S->>A: 8. Saves each answer after every task
@@ -599,15 +600,16 @@ A single small virtual server (2 vCPU, 4 GB of memory) runs production with room
 | Student | Link with a token, exchanged for a session | Current homework, vocabulary, an active assessment. Only their own data and only what is published |
 | Parent | A separate link with a token | Read only: the dashboard and sent reports of their child |
 
-Permissions are set by the kind of a router procedure: teacher, student, parent or agent. A procedure without a kind cannot be created. Stage 1 has two public procedures: teacher sign-in and the exchange of a token for a session.
+Permissions are set by the kind of a router procedure: public, teacher, student, parent or agent. A procedure without a kind cannot be created. There are exactly two public procedures: teacher sign-in and the exchange of a token for a session. Adding another one changes a guarded path.
 
 **Links with a token:**
 
 - A token is 256 random bits. The database stores only its hash.
-- On first open the token is exchanged for a session cookie and removed from the address bar, so it does not linger in history and screenshots.
+- The token travels in the URL fragment (`/s#<token>`). Browsers never send the fragment to a server, so the token does not reach the access logs of the edge proxy or Traefik.
+- On first open the page script sends the token in a request body to the exchange procedure, receives a session cookie and clears the fragment, so the token does not linger in history and screenshots.
 - Reissuing a link revokes the previous one immediately.
 - A revoked, a foreign and a non-existent token produce the same response.
-- The number of attempts from one address is limited at the proxy.
+- Token exchange attempts are limited by the application per client address, so the limit holds whichever host a request comes through. Behind the edge proxy the address is taken from the forwarded header of that trusted proxy only.
 - Access is stored as a record of "who, role, sign-in method". A password for a student or a parent can later be added as one more sign-in method for the same person without changing the rest of the model.
 
 **Tenant isolation.** The teacher identifier comes from the session, never from the request. Functions of the `db` module take it as a mandatory parameter. An integration test creates two teachers and checks every procedure.
@@ -636,8 +638,8 @@ Permissions are set by the kind of a router procedure: teacher, student, parent 
 ### 8.2 Observability
 
 - **Logs**: structured JSON to the container's stdout; every request has its own identifier.
-- **Health check**: `/healthz` returns the database state and the build SHA. The SHA proves that staging has updated.
-- **Monitoring**: the production `/healthz` is probed by external monitoring with an alert to a messenger. A separate probe opens a student page from the students' country.
+- **Health check**: `/api/healthz` returns the database state and the build SHA. The SHA proves that staging has updated.
+- **Monitoring**: the production `/api/healthz` is probed by external monitoring with an alert to a messenger. A separate probe opens a student page from the students' country.
 - **Metrics and tracing**: not introduced in stage 1. With a dozen users logs are enough.
 
 ### 8.3 Error handling
@@ -675,7 +677,7 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 
 | Paths | Whose approval is needed |
 |-------|--------------------------|
-| `app/src/server/db/` (schema and migrations), `app/src/server/access/`, base procedures, procedures for students, parents and agents, `package.json` and the lockfile, linter and TypeScript configuration, `.github/`, `scripts/ci/`, `deploy/`, `Makefile`, `AGENTS.md`, `docs/architecture.md` | The reviewer's (CODEOWNERS) |
+| `app/src/server/db/` (schema and migrations), `app/src/server/access/`, base procedures, public, student, parent and agent procedures, `package.json` and the lockfile, linter and TypeScript configuration, `.github/`, `scripts/ci/`, `deploy/`, `Makefile`, `AGENTS.md`, `docs/architecture.md` | The reviewer's (CODEOWNERS) |
 | Everything else: screens, styles, texts, teacher-side procedures and module logic on the existing schema | The product owner merges once checks are green |
 
 Direct pushes to `main` are forbidden for everyone, the owner included.
@@ -879,7 +881,7 @@ Deliberate simplifications of the start. Each gets an issue at the moment the co
 
 ## Document metadata
 
-- **Version**: 0.4
+- **Version**: 0.5
 - **Last updated**: 2026-11-11
 - **Owner**: Viktoriia Komarova
 - **Status**: Draft — target architecture, ahead of application code
