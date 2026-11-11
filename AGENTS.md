@@ -35,7 +35,7 @@ Each of these is, or will be, enforced by a check. Breaking one fails the pipeli
 
 ## Guarded paths
 
-Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the maintainer's approval: database schema and migrations, access code, base procedures and the public, student, parent and agent procedures, dependencies, check configuration, CI, deployment, this file, and the architecture document. The product owner is a second code owner only so that the maintainer's own pull requests can be approved; every other change to these paths waits for the maintainer. If a task needs such a change, keep it as small as possible and explain it in the pull request.
+Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the maintainer's approval: database schema and migrations, access code, base procedures and the public, student, parent and agent procedures, entry points under `app/src/app/api/` and request gating (middleware, proxy), the MCP server, Next.js configuration, dependencies, check configuration (linters, TypeScript, test runners, migration tool, secret scan), CI, deployment, this file, and the architecture document. The product owner is a second code owner only so that the maintainer's own pull requests can be approved; every other change to these paths waits for the maintainer. If a task needs such a change, keep it as small as possible and explain it in the pull request.
 
 ## Language
 
