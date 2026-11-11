@@ -35,7 +35,9 @@ test("a wrong password shows an error and does not sign the teacher in", async (
   await page.getByLabel("Пароль").fill("not-the-password");
   await page.getByRole("button", { name: "Войти" }).click();
 
-  await expect(page.getByRole("alert")).toHaveText("Неверная почта или пароль");
+  // Next.js keeps its own empty "alert" region for route announcements, so
+  // the error is found by its text among the alerts.
+  await expect(page.getByRole("alert").filter({ hasText: "Неверная почта или пароль" })).toBeVisible();
   await expect(page).toHaveURL(/\/sign-in$/);
 
   await page.goto("/teacher/students");
