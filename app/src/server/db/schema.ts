@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { boolean, index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, foreignKey, index, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -86,7 +86,11 @@ export const student = pgTable(
     createdAt: createdAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (t) => [index("student_teacher_id_idx").on(t.teacherId)],
+  (t) => [
+    index("student_teacher_id_idx").on(t.teacherId),
+    // Target of composite foreign keys that keep rows inside one teacher.
+    unique("student_id_teacher_id_key").on(t.id, t.teacherId),
+  ],
 );
 
 // Groups exist from the first migration because they are expensive to add
@@ -102,18 +106,19 @@ export const group = pgTable(
     createdAt: createdAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (t) => [index("group_teacher_id_idx").on(t.teacherId)],
+  (t) => [
+    index("group_teacher_id_idx").on(t.teacherId),
+    unique("group_id_teacher_id_key").on(t.id, t.teacherId),
+  ],
 );
 
+// The composite foreign keys make the database refuse a member row that links
+// one teacher's group with another teacher's student.
 export const groupMember = pgTable(
   "group_member",
   {
-    groupId: uuid("group_id")
-      .notNull()
-      .references(() => group.id),
-    studentId: uuid("student_id")
-      .notNull()
-      .references(() => student.id),
+    groupId: uuid("group_id").notNull(),
+    studentId: uuid("student_id").notNull(),
     teacherId: uuid("teacher_id")
       .notNull()
       .references(() => teacher.id),
@@ -121,6 +126,16 @@ export const groupMember = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.groupId, t.studentId] }),
+    foreignKey({
+      name: "group_member_group_teacher_fk",
+      columns: [t.groupId, t.teacherId],
+      foreignColumns: [group.id, group.teacherId],
+    }),
+    foreignKey({
+      name: "group_member_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
     index("group_member_student_id_idx").on(t.studentId),
     index("group_member_teacher_id_idx").on(t.teacherId),
   ],

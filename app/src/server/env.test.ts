@@ -5,11 +5,17 @@ const valid = {
   DATABASE_URL: "postgres://user:pass@localhost:5432/db",
   AUTH_SECRET: "x".repeat(32),
   APP_URL: "http://localhost:3000",
+  BUILD_SHA: "0123abc",
 };
 
 describe("parseEnv", () => {
-  it("accepts a complete environment and defaults the build SHA", () => {
-    expect(parseEnv(valid)).toEqual({ ...valid, BUILD_SHA: "dev" });
+  it("accepts a complete environment", () => {
+    expect(parseEnv(valid)).toEqual(valid);
+  });
+
+  it("requires the build SHA", () => {
+    const { BUILD_SHA: _sha, ...withoutSha } = valid;
+    expect(() => parseEnv(withoutSha)).toThrow(/BUILD_SHA/);
   });
 
   it("rejects a short auth secret", () => {
@@ -21,6 +27,6 @@ describe("parseEnv", () => {
   });
 
   it("names missing variables without echoing values", () => {
-    expect(() => parseEnv({ AUTH_SECRET: "short" })).toThrow(/DATABASE_URL, AUTH_SECRET, APP_URL/);
+    expect(() => parseEnv({ AUTH_SECRET: "short" })).toThrow(/DATABASE_URL, AUTH_SECRET, APP_URL, BUILD_SHA/);
   });
 });

@@ -666,7 +666,7 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 | `lint` | Style and common mistakes; server actions | Now |
 | `unit` | Unit tests | Now |
 | `integration` | Tests against real PostgreSQL, including tenant isolation, link scope and the shape of responses for students | Now |
-| `migrations` | Schema in code and migrations match; the linter (squawk) catches locking and destructive changes | Linter now; schema drift later |
+| `migrations` | Schema in code and migrations match; the linter (squawk) catches locking and destructive changes | Linter now; schema drift with #2 |
 | `acceptance` | Playwright acceptance scenarios against a production build; against the image once it exists (#4) | Now |
 | `server-boundary` | Access to server modules bypassing the router; server actions in components; entry points outside `src/app/api/` | With the skeleton |
 | `output-schema` | A procedure without an output schema | With the skeleton |

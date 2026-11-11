@@ -1,5 +1,5 @@
 {
-  "id": "bcd7ee7c-5470-4025-b722-11d1d756259f",
+  "id": "fc566b80-7d89-4161-85af-4d16d3f11a9b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -198,7 +198,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "group_id_teacher_id_key": {
+          "name": "group_id_teacher_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "teacher_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -266,32 +275,6 @@
         }
       },
       "foreignKeys": {
-        "group_member_group_id_group_id_fk": {
-          "name": "group_member_group_id_group_id_fk",
-          "tableFrom": "group_member",
-          "tableTo": "group",
-          "columnsFrom": [
-            "group_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "group_member_student_id_student_id_fk": {
-          "name": "group_member_student_id_student_id_fk",
-          "tableFrom": "group_member",
-          "tableTo": "student",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "group_member_teacher_id_teacher_id_fk": {
           "name": "group_member_teacher_id_teacher_id_fk",
           "tableFrom": "group_member",
@@ -301,6 +284,36 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "group_member_group_teacher_fk": {
+          "name": "group_member_group_teacher_fk",
+          "tableFrom": "group_member",
+          "tableTo": "group",
+          "columnsFrom": [
+            "group_id",
+            "teacher_id"
+          ],
+          "columnsTo": [
+            "id",
+            "teacher_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "group_member_student_teacher_fk": {
+          "name": "group_member_student_teacher_fk",
+          "tableFrom": "group_member",
+          "tableTo": "student",
+          "columnsFrom": [
+            "student_id",
+            "teacher_id"
+          ],
+          "columnsTo": [
+            "id",
+            "teacher_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -492,7 +505,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "student_id_teacher_id_key": {
+          "name": "student_id_teacher_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "teacher_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

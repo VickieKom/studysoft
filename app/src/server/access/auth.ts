@@ -36,6 +36,7 @@ function createAuth() {
     // Teachers are created by the operator; there is no registration.
     emailAndPassword: { enabled: true, disableSignUp: true },
     advanced: { database: { generateId: "uuid" } },
+    // shortcut: in-memory limit, resets on restart; move to the database store before a second app process (#4)
     rateLimit: { enabled: true, storage: "memory" },
     telemetry: { enabled: false },
   });

@@ -4,7 +4,8 @@ const schema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
   APP_URL: z.url({ protocol: /^https?$/ }),
-  BUILD_SHA: z.string().min(1).default("dev"),
+  // Required: an image built without it must fail to start, not report "dev".
+  BUILD_SHA: z.string().min(1),
 });
 
 export type Env = z.infer<typeof schema>;

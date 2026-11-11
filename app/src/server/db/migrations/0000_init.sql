@@ -22,7 +22,8 @@ CREATE TABLE "group" (
 	"teacher_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"deleted_at" timestamp with time zone
+	"deleted_at" timestamp with time zone,
+	CONSTRAINT "group_id_teacher_id_key" UNIQUE("id","teacher_id")
 );
 --> statement-breakpoint
 CREATE TABLE "group_member" (
@@ -50,7 +51,8 @@ CREATE TABLE "student" (
 	"teacher_id" uuid NOT NULL,
 	"display_name" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"deleted_at" timestamp with time zone
+	"deleted_at" timestamp with time zone,
+	CONSTRAINT "student_id_teacher_id_key" UNIQUE("id","teacher_id")
 );
 --> statement-breakpoint
 CREATE TABLE "teacher" (
@@ -75,9 +77,9 @@ CREATE TABLE "verification" (
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_teacher_id_teacher_id_fk" FOREIGN KEY ("teacher_id") REFERENCES "public"."teacher"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "group" ADD CONSTRAINT "group_teacher_id_teacher_id_fk" FOREIGN KEY ("teacher_id") REFERENCES "public"."teacher"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "group_member" ADD CONSTRAINT "group_member_group_id_group_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."group"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "group_member" ADD CONSTRAINT "group_member_student_id_student_id_fk" FOREIGN KEY ("student_id") REFERENCES "public"."student"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "group_member" ADD CONSTRAINT "group_member_teacher_id_teacher_id_fk" FOREIGN KEY ("teacher_id") REFERENCES "public"."teacher"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "group_member" ADD CONSTRAINT "group_member_group_teacher_fk" FOREIGN KEY ("group_id","teacher_id") REFERENCES "public"."group"("id","teacher_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "group_member" ADD CONSTRAINT "group_member_student_teacher_fk" FOREIGN KEY ("student_id","teacher_id") REFERENCES "public"."student"("id","teacher_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_teacher_id_teacher_id_fk" FOREIGN KEY ("teacher_id") REFERENCES "public"."teacher"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "student" ADD CONSTRAINT "student_teacher_id_teacher_id_fk" FOREIGN KEY ("teacher_id") REFERENCES "public"."teacher"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_teacher_id_idx" ON "account" USING btree ("teacher_id");--> statement-breakpoint

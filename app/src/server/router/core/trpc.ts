@@ -14,11 +14,17 @@ export function createContext(headers: Headers): Context {
   return { headers, db: db() };
 }
 
+export const INTERNAL_ERROR_MESSAGE = "Internal server error";
+
 const t = initTRPC.context<Context>().create({
-  // Internal details never reach the client; the code and our own message do.
-  errorFormatter({ shape }) {
+  // Internal details never reach the client. An unexpected error (a driver
+  // failure, a bug) carries its original text, which can name tables, columns
+  // or values; the client gets a generic message and the original is logged
+  // (core/errors.ts). Errors we throw on purpose keep their code and message.
+  errorFormatter({ shape, error }) {
     const { stack: _stack, ...data } = shape.data;
-    return { ...shape, data };
+    const message = error.code === "INTERNAL_SERVER_ERROR" ? INTERNAL_ERROR_MESSAGE : shape.message;
+    return { ...shape, message, data };
   },
 });
 
