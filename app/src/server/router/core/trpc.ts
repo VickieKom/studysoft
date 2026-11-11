@@ -1,0 +1,44 @@
+// Base procedures. Every procedure is exactly one kind — public, teacher,
+// student, parent or agent — and access is deny-by-default (AGENTS.md, rule 3).
+// The student, parent and agent kinds arrive with their slices.
+import { initTRPC, TRPCError } from "@trpc/server";
+import { teacherIdFromHeaders } from "../../access/auth";
+import { db, type Database } from "../../db/client";
+
+export type Context = {
+  headers: Headers;
+  db: Database;
+};
+
+export function createContext(headers: Headers): Context {
+  return { headers, db: db() };
+}
+
+export const INTERNAL_ERROR_MESSAGE = "Internal server error";
+
+const t = initTRPC.context<Context>().create({
+  // Internal details never reach the client. An unexpected error (a driver
+  // failure, a bug) carries its original text, which can name tables, columns
+  // or values; the client gets a generic message and the original is logged
+  // (core/errors.ts). Errors we throw on purpose keep their code and message.
+  errorFormatter({ shape, error }) {
+    const { stack: _stack, ...data } = shape.data;
+    const message = error.code === "INTERNAL_SERVER_ERROR" ? INTERNAL_ERROR_MESSAGE : shape.message;
+    return { ...shape, message, data };
+  },
+});
+
+export const router = t.router;
+export const createCallerFactory = t.createCallerFactory;
+
+/** Reachable without a session. Adding one is a guarded change. */
+export const publicProcedure = t.procedure;
+
+/** Requires a teacher session. The teacher identifier comes from it, never from input. */
+export const teacherProcedure = t.procedure.use(async ({ ctx, next }) => {
+  const teacherId = await teacherIdFromHeaders(ctx.headers);
+  if (!teacherId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({ ctx: { ...ctx, teacherId } });
+});

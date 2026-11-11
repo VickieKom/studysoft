@@ -4,7 +4,7 @@ Operating manual for coding agents working in this repository. It is terse on pu
 
 StudySoft is a platform for private language tutors: students and payments, schedule, a library of learning materials, a two-window lesson mode, homework with automatic checking. One Next.js application in TypeScript over PostgreSQL, plus an MCP server that lets the teacher's own AI agent read context and save drafts.
 
-**Status:** the repository holds the foundation only. Paths under `app/`, `mcp/`, `e2e/` and `deploy/` describe the target layout and appear with the first application slice. Do not invent a different layout.
+**Status:** the walking skeleton is being built. `app/`, `e2e/acceptance/` and `deploy/` exist; the teacher sign-in and the student list (#17) are the nearest slice to copy. `mcp/` and `e2e/smoke/` appear with their slices. Do not invent a different layout.
 
 ## How we work
 
@@ -22,7 +22,7 @@ Each of these is, or will be, enforced by a check. Breaking one fails the pipeli
 
 1. **Data goes through the router only.** Screens, server components and the MCP server read and change data through router procedures. Code outside `app/src/server/` imports only the router entry point, `app/src/server/router/index.ts`: client components through the router client, server components and `app/src/app/api/` through its server caller. Nothing outside `app/src/server/` imports any other server module or touches the database.
 2. **Every procedure declares its output schema.** Never return a database row as is.
-3. **Access is deny-by-default.** Every procedure is exactly one kind: public, teacher, student, parent or agent. Public procedures are only teacher sign-in and the exchange of a link token for a session; adding another one is a guarded change. The teacher identifier comes from the session, never from the request.
+3. **Access is deny-by-default.** Every procedure is exactly one kind: public, teacher, student, parent or agent. Reachable without a session are only teacher sign-in and sign-out (the authentication library's endpoints, allow-listed in `app/src/server/access/auth.ts`), the exchange of a link token for a session, and the health check; adding another one is a guarded change. The teacher identifier comes from the session, never from the request.
 4. **Students and parents never receive** correct answers before submission, teacher notes, payments, contacts, or another student's data.
 5. **Agent procedures create drafts only.** Publishing is a teacher procedure.
 6. **No learning content in the repository.** No textbook pages or excerpts, exercises, games, recordings, characters, or real student data — not in code, tests, seed data, comments or documentation.
@@ -47,8 +47,11 @@ Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the mainta
 
 ```bash
 make help    # list commands
-make check   # everything CI runs; run it before every push
+make dev     # local stand: PostgreSQL in Docker, migrations, seed data, app on :3000
+make check   # everything CI runs; run it before every push (needs Docker running)
 ```
+
+Teacher accounts for the local stand are in `deploy/seed/teachers.json`.
 
 `make check` is the single source of truth for what CI runs. When a slice adds a check, it adds it to `make check`.
 
@@ -73,6 +76,10 @@ scripts/ci/            guard scripts run by `make check`
 ```
 
 Order of work inside a slice: schema, then server module and procedure, then screen, then tests.
+
+Schema changes: edit `app/src/server/db/schema.ts`, then `npm run db:generate -w app -- --name <what>`. Start every migration with `SET LOCAL lock_timeout` and `SET LOCAL statement_timeout` like the first one; `make migrations` checks it.
+
+Screens of the teacher's workspace get their router caller from `app/src/app/teacher/caller.ts`. It redirects to sign-in without a session; the layout alone does not protect a page, because Next renders them in parallel.
 
 ## Tests
 

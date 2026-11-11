@@ -1,0 +1,16 @@
+{
+  // Type-checks the acceptance scenarios and the Playwright configuration.
+  // The application has its own tsconfig in app/.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts", "e2e/**/*.ts"]
+}

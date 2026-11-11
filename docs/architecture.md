@@ -166,8 +166,8 @@ Libraries marked "candidate" are confirmed when the skeleton is built: the curre
 | Framework | Next.js 16, React 19 | Current stable versions; standalone output gives one small image |
 | Server layer | tRPC and zod | Procedure types reach the screen without code generation; input is validated at the boundary; permissions are set per procedure |
 | Database access | Drizzle ORM | The schema is described in TypeScript, queries stay close to SQL and are readable in review |
-| Migrations | drizzle-kit, SQL files in the repository | A migration is visible to the eye; a migration linter catches destructive changes (candidate: squawk) |
-| Teacher sign-in | A ready-made library (candidate: Better Auth) | Authentication code is not written by agents; sessions live in the database |
+| Migrations | drizzle-kit, SQL files in the repository | A migration is visible to the eye; a migration linter, squawk, catches destructive changes and missing lock timeouts |
+| Teacher sign-in | A ready-made library: Better Auth | Authentication code is not written by agents; sessions live in the database |
 | Client data | TanStack Query on top of the tRPC client | Caching and retries without hand-written code |
 | Styling | Tailwind 4, Radix, Lucide icons | Design tokens map to CSS variables |
 | Forms | react-hook-form and zod | The same validation schemas on the client and the server |
@@ -564,8 +564,8 @@ The proxy caches only static assets with a hash in the name: scripts, styles, fo
 
 | Environment | Purpose | Differences |
 |-------------|---------|-------------|
-| Local | Development on the product owner's and the reviewer's computers | `make dev` brings everything up in Docker; synthetic data from `deploy/seed`; teacher sign-in with a test password |
-| CI | Checks on every pull request | The same compose file; acceptance scenarios run against the built image |
+| Local | Development on the product owner's and the reviewer's computers | `make dev` starts PostgreSQL in Docker and the application on the host with hot reload; synthetic data from `deploy/seed`; teacher sign-in with a test password |
+| CI | Checks on every pull request | The same compose file; acceptance scenarios run against a production build, against the image once it exists (#4) |
 | Staging | The product owner reviews what was merged into `main` | Synthetic data; updates itself |
 | Production | Real students | Backups, monitoring, rollout by tag, students enter through the proxy |
 
@@ -600,7 +600,7 @@ A single small virtual server (2 vCPU, 4 GB of memory) runs production with room
 | Student | Link with a token, exchanged for a session | Current homework, vocabulary, an active assessment. Only their own data and only what is published |
 | Parent | A separate link with a token | Read only: the dashboard and sent reports of their child |
 
-Permissions are set by the kind of a router procedure: public, teacher, student, parent or agent. A procedure without a kind cannot be created. There are exactly two public procedures: teacher sign-in and the exchange of a token for a session. Adding another one changes a guarded path.
+Permissions are set by the kind of a router procedure: public, teacher, student, parent or agent. A procedure without a kind cannot be created. Reachable without a session are exactly: teacher sign-in and sign-out, the exchange of a token for a session, and the health check. Sign-in and sign-out are the authentication library's own endpoints under `/api/auth/`; `src/server/access/auth.ts` lets through only those two and answers 404 to everything else the library offers. The health check is a public procedure that reveals only whether the database answers and the build SHA. Adding anything to this list changes a guarded path.
 
 **Links with a token:**
 
@@ -654,7 +654,7 @@ Permissions are set by the kind of a router procedure: public, teacher, student,
 
 The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an agent how to work; CI refuses to merge what breaks the rules.
 
-**Required checks on every pull request.** Checks marked "now" run already; the rest arrive with the application skeleton.
+**Required checks on every pull request.** Checks marked "now" run already; the rest arrive with later slices.
 
 | Check | Catches | State |
 |-------|---------|-------|
@@ -662,12 +662,12 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 | `acceptance-unchanged` | A pull request edits or deletes an existing acceptance scenario together with code. Adding new ones is allowed | Now |
 | `secrets` | Keys, passwords and tokens in changes | Now |
 | `lint-docs` | Broken Markdown | Now |
-| `typecheck` | Type errors in every package, including drift between the MCP server and the router | With the skeleton |
-| `lint` | Style and common mistakes | With the skeleton |
-| `unit` | Unit tests | With the skeleton |
-| `integration` | Tests against real PostgreSQL, including tenant isolation, link scope and the shape of responses for students | With the skeleton |
-| `migrations` | Schema in code and migrations match; the linter catches destructive changes | With the skeleton |
-| `acceptance` | Playwright acceptance scenarios against the built image | With the skeleton |
+| `typecheck` | Type errors in every package, including drift between the MCP server and the router | Now |
+| `lint` | Style and common mistakes; server actions | Now |
+| `unit` | Unit tests | Now |
+| `integration` | Tests against real PostgreSQL, including tenant isolation, link scope and the shape of responses for students | Now |
+| `migrations` | Schema in code and migrations match; the linter (squawk) catches locking and destructive changes | Linter now; schema drift with #2 |
+| `acceptance` | Playwright acceptance scenarios against a production build; against the image once it exists (#4) | Now |
 | `server-boundary` | Access to server modules bypassing the router; server actions in components; entry points outside `src/app/api/` | With the skeleton |
 | `output-schema` | A procedure without an output schema | With the skeleton |
 | `module-boundaries` | Importing the internals of another server module | With the skeleton |

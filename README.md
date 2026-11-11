@@ -25,12 +25,16 @@ How the system is put together and why: [docs/architecture.md](docs/architecture
 
 ## Development
 
+You need Git, Bash, Node.js 22 or newer, and Docker.
+
 ```bash
-make help    # list commands
+make dev     # start the local stand at http://localhost:3000
+make e2e     # run the acceptance scenarios against a production build
 make check   # run every check that CI runs
+make help    # list every command
 ```
 
-`make check` needs Git, Bash and Node.js 22 or newer. Commands to run the application locally arrive with the first application slice.
+`make dev` starts PostgreSQL in Docker, applies migrations, loads the synthetic data from `deploy/seed/` and runs the application with hot reload. Sign in with an account from `deploy/seed/teachers.json`.
 
 ## License
 
