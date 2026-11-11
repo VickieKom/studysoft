@@ -17,7 +17,20 @@ export default defineConfig({
     locale: "ru-RU",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // The sign-in endpoint allows three attempts per ten seconds from one client.
+  // The sign-in scenario uses all three, so it runs first; the setup then signs
+  // each teacher in once and every other scenario reuses those sessions
+  // (e2e/acceptance/sessions.ts).
+  projects: [
+    { name: "sign-in", testMatch: "teacher-sign-in.spec.ts", use: { ...devices["Desktop Chrome"] } },
+    { name: "sessions", testMatch: /\.setup\.ts$/, dependencies: ["sign-in"] },
+    {
+      name: "chromium",
+      testIgnore: ["teacher-sign-in.spec.ts", /\.setup\.ts$/],
+      dependencies: ["sessions"],
+      use: { ...devices["Desktop Chrome"] },
+    },
+  ],
   webServer: {
     command: `npm run start -w app -- --port ${port}`,
     url: `${baseURL}/api/healthz`,
