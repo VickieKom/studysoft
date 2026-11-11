@@ -41,7 +41,7 @@ Changes to the paths in [.github/CODEOWNERS](.github/CODEOWNERS) need the mainta
 
 - Code, comments, documentation, issues, commits and pull requests: English.
 - User interface text: Russian, written directly in the components.
-- No names of specific AI tools or vendors in code, comments or commits.
+- No names of specific AI tools or vendors in code or comments. The attribution lines a coding agent adds to commits and pull requests are fine.
 
 ## Commands
 
