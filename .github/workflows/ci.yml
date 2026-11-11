@@ -33,8 +33,6 @@ jobs:
           # Pull requests compare against their base branch. A push to main
           # compares main with itself, which is an empty and passing diff.
           BASE: origin/${{ github.base_ref || 'main' }}
-          # The runner needs the browser's system libraries as well.
-          PLAYWRIGHT_INSTALL_FLAGS: --with-deps
           BUILD_SHA: ${{ github.sha }}
         run: make check
 

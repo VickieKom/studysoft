@@ -24,7 +24,9 @@ TEST_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_test AUTH_SECRET=$(LOCAL_AUTH_SECR
 E2E_PORT ?= 3100
 E2E_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_e2e AUTH_SECRET=$(LOCAL_AUTH_SECRET) APP_URL=http://localhost:$(E2E_PORT) BUILD_SHA=$(BUILD_SHA) E2E_PORT=$(E2E_PORT)
 
-# CI adds --with-deps to install the browser's system libraries.
+# Pass --with-deps on a machine that lacks the browser's system libraries. CI
+# does not: the runner image already has them, and apt there only adds optional
+# fonts and fails the job whenever the Ubuntu mirrors are unreachable.
 PLAYWRIGHT_INSTALL_FLAGS ?=
 
 .PHONY: help check check-repo lint-docs install dev db-up db-down typecheck lint migrations test-unit test-integration e2e browsers
