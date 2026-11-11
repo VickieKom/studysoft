@@ -63,7 +63,13 @@ forbidden_case fail "env file" "app/.env.local"
 forbidden_case fail "test data outside deploy/seed" "e2e/fixtures/homework.json"
 forbidden_case pass "test data inside deploy/seed" "deploy/seed/fixtures/homework.json"
 forbidden_case fail "oversized file" "app/src/big.ts" 10
-forbidden_case pass "oversized lockfile is exempt" "package-lock.json" 10
+forbidden_case pass "oversized root lockfile is exempt" "package-lock.json" 10
+forbidden_case fail "oversized nested lockfile is not exempt" "docs/package-lock.json" 10
+forbidden_case fail "test data in a test-data directory" "app/test-data/student.json"
+forbidden_case fail "CSV outside deploy/seed" "e2e/data/students.csv"
+forbidden_case pass "CSV inside deploy/seed" "deploy/seed/students.csv"
+forbidden_case fail "SQL dump outside migrations" "e2e/data/students.sql"
+forbidden_case pass "SQL migration" "app/src/server/db/migrations/0001_init.sql"
 
 # --- acceptance-unchanged ----------------------------------------------------
 

@@ -3,6 +3,10 @@
 # learning content, media, archives, database dumps, env files, oversized
 # files, and test data outside deploy/seed/.
 #
+# The test-data rule is a heuristic: it knows data formats and the usual names
+# of test-data directories. A JSON file under an unusual name still passes,
+# which is why AGENTS.md states the rule as well.
+#
 # Why: the code is public and learning content is not. A textbook page or a
 # recording cannot be removed from git history once it is pushed.
 set -euo pipefail
@@ -44,13 +48,22 @@ while IFS= read -r -d '' path; do
 
   case "/$lower" in
     /deploy/seed/*) ;;
-    */fixtures/* | */__fixtures__/* | */testdata/* | */seed/*)
+    */fixtures/* | */__fixtures__/* | */testdata/* | */test-data/* | */test_data/* | \
+      */seed/* | */seeds/*)
       fail "$path" "test data lives only in deploy/seed/"
+      ;;
+    *.csv | *.tsv | *.jsonl | *.ndjson)
+      fail "$path" "data files live only in deploy/seed/"
+      ;;
+    /app/src/server/db/migrations/*.sql) ;;
+    *.sql)
+      fail "$path" "SQL outside migrations is data; it lives only in deploy/seed/"
       ;;
   esac
 
-  # The lockfile is generated and legitimately large.
-  if [ "$base" != "package-lock.json" ]; then
+  # The workspace lockfile is generated and legitimately large. Only the root
+  # one exists in an npm workspace, so a nested one gets no exemption.
+  if [ "$lower" != "package-lock.json" ]; then
     size="$(wc -c <"$path" | tr -d ' ')"
     if [ "$size" -gt "$max_bytes" ]; then
       fail "$path" "larger than $max_bytes bytes"

@@ -7,8 +7,8 @@
 # base; locally the default is right unless you target another branch.
 BASE ?= origin/main
 
-# Pinned so local runs and CI lint with the same rules.
-MARKDOWNLINT := npx --yes markdownlint-cli2@0.24.0
+# Tools come from package-lock.json, so local runs and CI execute the same code.
+MARKDOWNLINT := node_modules/.bin/markdownlint-cli2
 
 .PHONY: help check check-repo lint-docs
 
@@ -22,5 +22,10 @@ check-repo: ## Guard scripts: self-test, tracked files, acceptance scenarios
 	bash scripts/ci/forbidden-files.sh
 	bash scripts/ci/acceptance-unchanged.sh $(BASE)
 
-lint-docs: ## Lint Markdown files
+lint-docs: node_modules/.package-lock.json ## Lint Markdown files
 	$(MARKDOWNLINT)
+
+# npm ci installs strictly from the lockfile and refreshes this marker, so a
+# lockfile change triggers a reinstall and nothing else does.
+node_modules/.package-lock.json: package-lock.json
+	npm ci --ignore-scripts --no-audit --no-fund

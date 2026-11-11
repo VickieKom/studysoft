@@ -5,3 +5,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # Every npm package arrives through the lockfile; this keeps it current.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
