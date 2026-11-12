@@ -6,8 +6,19 @@
 // the same HTTP calls the MCP server makes. Every scenario starts signed in
 // (sessions.setup.ts); students and notes are synthetic.
 import { randomUUID } from "node:crypto";
-import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Page, test as base } from "@playwright/test";
 import { SECOND_TEACHER_SESSION, TEACHER_SESSION } from "./sessions";
+
+// The assistant's calls come from the teacher's computer with the token only,
+// never with the teacher's browser cookies: "assistant" is a request context
+// of its own, without the signed-in session the pages use.
+const test = base.extend<{ assistant: APIRequestContext }>({
+  assistant: async ({ playwright, baseURL }, use) => {
+    const context = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+    await use(context);
+    await context.dispose();
+  },
+});
 
 test.use({ storageState: TEACHER_SESSION });
 // One token per teacher: creating one revokes the previous one, so these
@@ -59,18 +70,18 @@ test("the token is shown once with a configuration snippet; after a reload only 
   await expect(page.locator("body")).not.toContainText(token);
 });
 
-test("the assistant lists the teacher's students with first names and statuses only", async ({ page, request }) => {
+test("the assistant lists the teacher's students with first names and statuses only", async ({ page, assistant }) => {
   await createStudent(page, "Список", "Невидимая");
   const token = await createToken(page);
 
-  const { status, body, text } = await agentCall(request, token, "agent.listStudents");
+  const { status, body, text } = await agentCall(assistant, token, "agent.listStudents");
   expect(status).toBe(200);
   expect(body.result.data).toContainEqual(expect.objectContaining({ firstName: "Список", status: "discussion" }));
   expect(text).not.toContain("Невидимая");
   expect(text).not.toContain("lastName");
 });
 
-test("the assistant reads a student's context with the profile and the latest notes", async ({ page, request }) => {
+test("the assistant reads a student's context with the profile and the latest notes", async ({ page, assistant }) => {
   const studentId = await createStudent(page, "Контекст", "Скрытова");
   await control(page, "Изменить").click();
   const profile: Record<string, string> = {
@@ -93,7 +104,7 @@ test("the assistant reads a student's context with the profile and the latest no
   }
   const token = await createToken(page);
 
-  const { status, body, text } = await agentCall(request, token, "agent.studentContext", { studentId });
+  const { status, body, text } = await agentCall(assistant, token, "agent.studentContext", { studentId });
   expect(status).toBe(200);
   expect(body.result.data).toMatchObject({
     firstName: "Контекст",
@@ -111,22 +122,22 @@ test("the assistant reads a student's context with the profile and the latest no
   for (const hidden of ["Скрытова", "lastName", "contact", "payment", "/s#"]) expect(text).not.toContain(hidden);
 });
 
-test("after «Отозвать» every assistant call is unauthorized", async ({ page, request }) => {
+test("after «Отозвать» every assistant call is unauthorized", async ({ page, assistant }) => {
   const studentId = await createStudent(page, "Отзыв", "Тестова");
   const token = await createToken(page);
-  expect((await agentCall(request, token, "agent.listStudents")).status).toBe(200);
+  expect((await agentCall(assistant, token, "agent.listStudents")).status).toBe(200);
 
   await control(page, "Отозвать").click();
   await expect(page.getByText(/[Тт]окена нет|[Тт]окен отозван/)).toBeVisible();
 
-  expect((await agentCall(request, token, "agent.listStudents")).status).toBe(401);
-  expect((await agentCall(request, token, "agent.studentContext", { studentId })).status).toBe(401);
+  expect((await agentCall(assistant, token, "agent.listStudents")).status).toBe(401);
+  expect((await agentCall(assistant, token, "agent.studentContext", { studentId })).status).toBe(401);
 });
 
 test("the token reaches neither another teacher's student nor the teacher's own procedures", async ({
   page,
   browser,
-  request,
+  assistant,
 }) => {
   // A student of the second teacher.
   const other = await browser.newContext({ storageState: SECOND_TEACHER_SESSION });
@@ -135,13 +146,13 @@ test("the token reaches neither another teacher's student nor the teacher's own 
   await other.close();
 
   const token = await createToken(page);
-  const foreign = await agentCall(request, token, "agent.studentContext", { studentId: foreignId });
-  const missing = await agentCall(request, token, "agent.studentContext", { studentId: randomUUID() });
+  const foreign = await agentCall(assistant, token, "agent.studentContext", { studentId: foreignId });
+  const missing = await agentCall(assistant, token, "agent.studentContext", { studentId: randomUUID() });
   expect(foreign.status).toBe(404);
   expect(foreign.status).toBe(missing.status);
   expect(foreign.body.error.data.code).toBe(missing.body.error.data.code);
   expect(foreign.text).not.toContain("Чужой");
 
   // The token is not a teacher session.
-  expect((await agentCall(request, token, "teacher.students.list")).status).toBe(401);
+  expect((await agentCall(assistant, token, "teacher.students.list")).status).toBe(401);
 });
