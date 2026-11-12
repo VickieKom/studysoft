@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ACTIVE_STATUSES, isBlank, LEVELS, PROFILE_KEYS, type ProfileKey, STATUSES, TIME_ZONE_IDS } from "../../../domain/student";
-import { ensureLink } from "../../access/links";
+import { ensureLink, revokeLinks } from "../../access/links";
 import { createStudent, findStudent, listStudents, updateStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -85,6 +85,10 @@ export const studentsRouter = router({
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...changes } = input;
+      // "Завершили" closes both links (#21). Revoked before the status is
+      // saved: if saving fails, access is closed anyway, and the next copy
+      // reissues the link. Coming back reissues them on the first copy.
+      if (changes.status === "finished") await revokeLinks(ctx.db, ctx.teacherId, id);
       if (!(await updateStudent(ctx.db, ctx.teacherId, id, changes))) throw notFound();
       return { id };
     }),
