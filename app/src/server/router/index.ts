@@ -6,6 +6,7 @@ import { handleAuthRequest } from "../access/auth";
 import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, router } from "./core/trpc";
 import { healthRouter } from "./public/health";
+import { notesRouter } from "./teacher/notes";
 import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 
@@ -14,6 +15,7 @@ export const appRouter = router({
   teacher: router({
     session: sessionRouter,
     students: studentsRouter,
+    notes: notesRouter,
   }),
 });
 
