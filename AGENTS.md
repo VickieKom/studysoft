@@ -9,7 +9,7 @@ StudySoft is a platform for private language tutors: students and payments, sche
 ## How we work
 
 - **One issue, one vertical slice.** A slice goes through every layer and can be shown on staging. Do not start work without an issue that has an Acceptance section.
-- **Scenario first.** The acceptance scenario for an issue is written before the implementation, in its own pull request.
+- **Scenario first.** The acceptance scenario for an issue is written before the implementation, in its own draft pull request. That pull request is reviewed but not merged: a scenario without its implementation keeps `main` red. The implementation branch starts from the scenario branch, its pull request lands both, and it supersedes the scenario pull request. It leaves the scenario files exactly as the scenario pull request has them; if the scenario turns out wrong, fix it in the scenario pull request and rebase onto it.
 - **Copy the nearest slice.** Find the closest existing slice and follow its layout, naming and tests. Three similar lines beat a premature helper.
 - **Surgical edits.** Do not refactor adjacent code while passing by. File an issue instead.
 - **Living documentation.** A change to a pattern updates the document that describes it in the same pull request. A stale document is a bug.

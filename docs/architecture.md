@@ -482,9 +482,9 @@ sequenceDiagram
     participant St as Staging
 
     V->>G: 1. Issue with an Acceptance section
-    V->>G: 2. Pull request with the acceptance scenario
+    V->>G: 2. Draft pull request with the acceptance scenario
     V->>A: 3. Starts the agent on the issue
-    A->>G: 4. Pull request with the implementation
+    A->>G: 4. Pull request with the implementation, branched from the scenario
     G->>CI: 5. Required checks
     CI-->>G: 6. Green
     V->>G: 7. Merge (or waits for the maintainer's approval)
@@ -492,7 +492,7 @@ sequenceDiagram
     V->>St: 9. Looks at the result
 ```
 
-Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
+Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
 
 ### 6.2 Behaviour on failure
 
