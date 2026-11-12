@@ -89,7 +89,7 @@ The order is the priority: when goals conflict, the higher row wins.
 
 ### 2.3 External
 
-- **Personal data**: data about children and parents is personal data. The platform stores the minimum (decision 6 in section 9); legal requirements on where data is stored are met by the deployment.
+- **Personal data**: data about children and parents is personal data. The platform stores the fields the product requirements ask for (decision 6 in section 9); how much it holds is a known risk (section 11). Legal requirements on where data is stored are met by the deployment.
 - **Textbook copyright**: textbook files are visible to the teacher only and have no public links. A student receives only what the teacher included in homework.
 - **Characters**: original only, uploaded by the teacher.
 - **Video calls**: an external video-call service. The platform stores only the meeting link.
@@ -349,8 +349,8 @@ erDiagram
 | Entity | Owning module | Retention | Notes |
 |--------|---------------|-----------|-------|
 | `teacher` | `access` | Permanent | Account and settings: time zone, cancellation rule |
-| `student` | `crm` | Permanent, soft delete | First name, optional last name (teacher only), status, age, school year, time zone, level, interests, gaps, textbook and current unit. No phone. Only teacher procedures read the last name |
-| `contact` | `crm` | Until consent is withdrawn | Parent's email only |
+| `student` | `crm` | Permanent, soft delete | Profile fields as in [the product requirements](product/modules.md): first and last name, status, age, school year, time zone, level, interests, gaps, textbook and current unit |
+| `contact` | `crm` | Until consent is withdrawn | The parent's and the student's contacts, as in the product requirements |
 | `access_link` | `access` | Until revoked | Who, role (student or parent), sign-in method, token hash, revocation date |
 | `schedule_slot` | `schedule` | Permanent | Weekday, time, time zone, validity dates |
 | `lesson` | `schedule` | Permanent | Type, paid or free, time in UTC, status, unit, meeting link, plan by stages |
@@ -622,15 +622,10 @@ Permissions are set by the kind of a router procedure: public, teacher, student,
 
 **Dependencies.** npm packages are an attack surface of their own. Versions are pinned by the lockfile, CI installs strictly from it, adding a dependency needs the reviewer's approval, updates arrive as automated pull requests.
 
-**Data minimisation:**
+**Personal data.** The fields come from the product requirements; a slice adds the ones it needs. Storing less is not a rule but a warning: every field is one more thing a leak exposes (section 11). Whether to drop fields is decided separately, or case by case once the platform runs with real students. What holds regardless of the field list:
 
-| Stored | Not stored |
-|--------|-----------|
-| First name, age, school year, time zone | Date of birth, address, phone |
-| Last name, optional, teacher only: never in student, parent or agent responses, never in logs (#18) | — |
-| Parent's email, if they agree to receive reports | Messenger handles of students and parents in stages 1 and 2 |
-| Voice answers, with a retention period from settings | Photos and videos of the child in the profile |
-| Teacher's notes | — |
+- the last name and contacts are for the teacher only: never on student or parent pages, in their procedures, or in the agent's student context;
+- voice answers are kept for the retention period from settings.
 
 **Logs and secrets.** Logs carry internal identifiers only; names, tokens and answer contents never appear there. Secrets live outside this repository, in the deployment's own secret store and in the server's environment. Their absence here is checked on every pull request.
 
@@ -754,7 +749,7 @@ All accepted on 2026-11-11. A decision is changed by editing its row in a pull r
 | 3 | AI works through MCP in the teacher's session; the server calls no model | No API key, worker or queue; the server can be hosted anywhere; "drafts only" is enforced on the server | Generation starts from the agent's window, not a button. A teacher without an agent cannot use it | Model calls from the server: revisit when a second teacher arrives (section 8.8) |
 | 4 | Students and parents sign in with a token link | Teenagers will not get past a login screen to homework; less personal data | The link is the key; mitigated by reissue and by exchanging the token for a session | Passwords: recovery, weak passwords and attempt limiting for no better protection. Revisit in stage 3 |
 | 5 | Teacher sign-in through a ready-made authentication library (candidate: Better Auth) | Password hashing, sessions and brute-force protection are not written by agents | A third-party dependency in the most sensitive place | Hand-written sign-in; a separate authentication service |
-| 6 | Store the minimum of personal data; where data is hosted is a deployment decision. A student's last name is stored when the teacher enters one, and only teacher procedures read it (changed in #18) | A leak exposes little; moving to another country changes no code; the teacher can tell students with the same first name apart | The student card is poorer than the requirements ask for; data-residency law is met by whoever deploys | A full card with contacts |
+| 6 | Store the personal data the product requirements ask for; keeping it small is a warning, not a rule. Where data is hosted is a deployment decision | The card serves the teacher's work; which fields are worth their risk is clearer with real students than in advance. Moving to another country changes no code | A leak exposes more; dropping fields later is a migration and a decision of its own; data-residency law is met by whoever deploys | The minimum up front (first name with an initial, the parent's email only): it cut fields the teacher needs before anyone had used them |
 | 7 | Students enter through a reverse proxy in their country; the teacher and MCP connect to the main host directly | A local address for students without moving data; a blocked proxy does not stop the teacher | One more point of failure for students; two places to configure TLS | One name on the main host; a tunnel between hosts |
 | 8 | Files on the server disk behind the `BlobStore` interface | No cost and no external dependency for 10–15 GB; S3 later is a second adapter | The disk is shared and must be watched; large files pass through the application | S3 from day one |
 | 9 | Lesson state is one versioned document; BroadcastChannel carries it now, a small Node.js relay over WebSocket in stage 3 | Stage 1 needs no real-time server; changing the transport does not touch the stage or the control panel | The change format must be designed before stage 3 | A real-time server from day one; a separate language for the relay |
@@ -803,7 +798,8 @@ All accepted on 2026-11-11. A decision is changed by editing its row in a pull r
 | The reviewer is a bottleneck: in stage 1 many tasks change the database schema | Medium | Medium | The schema for stage 1 slices is designed as a batch in advance; such pull requests are reviewed first |
 | A vulnerable or hijacked npm package | Low | High | Lockfile, installs strictly from it, reviewer approval for new dependencies, automated update pull requests |
 | The address of the edge host is throttled or blocked | Medium | High for students | A probe from the students' country; moving the proxy to another host within an hour |
-| The chosen deployment does not meet legal requirements on where personal data is stored | Low with a handful of students | Medium | Minimisation, parental consent; moving the database and files to the required country is a deployment task and changes no code |
+| The chosen deployment does not meet legal requirements on where personal data is stored | Low with a handful of students | Medium | Parental consent; moving the database and files to the required country is a deployment task and changes no code |
+| A leak of the database or a backup exposes children's and parents' personal data and contacts; the more fields, the more it exposes | Low | High | Teacher-only fields never leave teacher procedures; logs carry identifiers only; parental consent. Dropping fields is decided separately, or case by case in production (decision 6) |
 | The agent subscription quota is not enough for development and content generation at once | Medium | Medium | Small slices; a manual path for every feature with AI |
 | The student cannot hear a track when the stage window is shared in the video call | Medium | Medium | Verify in practice before building the lesson mode: share a tab with sound or a window |
 | Voice recording on iOS Safari yields a different format than Chrome | Medium | Low | Store as is together with the media type; verify playback on the teacher's side; transcoding later |
