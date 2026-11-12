@@ -15,7 +15,7 @@
 // "Завершили" revokes both links; when the student comes back, the next copy
 // reissues them, so the old tokens stay dead.
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { accessLink, linkSession, student } from "../db/schema";
 import { env } from "../env";
@@ -113,16 +113,24 @@ export async function currentLinkUrl(db: Database, teacherId: string, studentId:
 /**
  * Moves a link to its next generation in one statement: a new token, no
  * revocation. The old token and every session opened from it stop working.
- * The update is conditional on the generation it started from: if another
- * request changed the link meanwhile, its result stands when it is a fresh,
- * open link, and nothing is undone otherwise (a revocation wins).
+ * The update is conditional on the generation and the revocation it read: if
+ * another request changed the link meanwhile, its result stands when it is a
+ * fresh, open link, and nothing is undone otherwise. A «Завершили» that lands
+ * between the read and the update is not lifted by a reissue. Exported for
+ * the test of that interleaving; callers use reissueLink and currentLinkUrl.
  */
-async function bumpGeneration(db: Database, link: LinkRow, role: LinkRole): Promise<LinkRow> {
+export async function bumpGeneration(db: Database, link: LinkRow, role: LinkRole): Promise<LinkRow> {
   const generation = link.generation + 1;
   const [next] = await db
     .update(accessLink)
     .set({ generation, tokenHash: sha256(deriveToken(link.id, role, generation)), revokedAt: null })
-    .where(and(eq(accessLink.id, link.id), eq(accessLink.generation, link.generation)))
+    .where(
+      and(
+        eq(accessLink.id, link.id),
+        eq(accessLink.generation, link.generation),
+        link.revokedAt ? isNotNull(accessLink.revokedAt) : isNull(accessLink.revokedAt),
+      ),
+    )
     .returning(linkColumns);
   if (next) return next;
   const [reread] = await db.select(linkColumns).from(accessLink).where(eq(accessLink.id, link.id));
