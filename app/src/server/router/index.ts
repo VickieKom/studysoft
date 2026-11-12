@@ -9,6 +9,7 @@ import { agentStudentsRouter } from "./agent/students";
 import { healthRouter } from "./public/health";
 import { linksRouter } from "./public/links";
 import { studentHomeworkRouter } from "./student/homework";
+import { parentMeRouter } from "./parent/me";
 import { studentMeRouter } from "./student/me";
 import { homeworkRouter } from "./teacher/homework";
 import { linksTeacherRouter } from "./teacher/links";
@@ -21,6 +22,7 @@ export const appRouter = router({
   health: healthRouter,
   links: linksRouter,
   student: mergeRouters(studentMeRouter, router({ homework: studentHomeworkRouter })),
+  parent: parentMeRouter,
   agent: agentStudentsRouter,
   teacher: router({
     session: sessionRouter,

@@ -9,15 +9,25 @@
 // Opening a link exchanges the token for a session: a random cookie value
 // whose hash is stored with the link's generation. Sessions slide: each visit
 // moves the expiry forward.
+//
+// Taking a link back (#21): a reissue bumps the generation, which changes the
+// token and ends every session of the old generation. Moving a student to
+// "Завершили" revokes both links; when the student comes back, the next copy
+// reissues them, so the old tokens stay dead.
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { accessLink, linkSession, student } from "../db/schema";
 import { env } from "../env";
 
 export type LinkRole = "student" | "parent";
 
-export const LINK_SESSION_COOKIE = "studysoft_link";
+// One cookie per role: a family often shares one device, and opening the
+// parent link there must not end the child's session, nor the other way round.
+export const LINK_SESSION_COOKIES: Record<LinkRole, string> = {
+  student: "studysoft_link_student",
+  parent: "studysoft_link_parent",
+};
 const SESSION_DAYS = 90;
 // The browser keeps the cookie longer than the session lives; the server
 // decides when a session is over.
@@ -31,26 +41,36 @@ export function deriveToken(linkId: string, role: LinkRole, generation: number):
   return createHmac("sha256", env().LINK_KEY).update(`${linkId}|${role}|${generation}`).digest("base64url");
 }
 
+// Each role has its own route tree: /s for the student, /p for the parent.
+const LINK_PATHS: Record<LinkRole, string> = { student: "/s", parent: "/p" };
+
 /** The link's address: the token travels in the fragment, never to a server log. */
-export function linkUrl(token: string): string {
-  return new URL(`/s#${token}`, env().APP_URL).toString();
+export function linkUrl(token: string, role: LinkRole): string {
+  return new URL(`${LINK_PATHS[role]}#${token}`, env().APP_URL).toString();
 }
 
-/**
- * The current link of a student for a role, issued on first use. Students
- * created before links existed get theirs when the teacher first copies it.
- */
-type LinkRow = { id: string; generation: number; tokenHash: string };
+type LinkRow = { id: string; generation: number; tokenHash: string; revokedAt: Date | null };
+
+const linkColumns = {
+  id: accessLink.id,
+  generation: accessLink.generation,
+  tokenHash: accessLink.tokenHash,
+  revokedAt: accessLink.revokedAt,
+};
 
 async function findLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow | undefined> {
   const [row] = await db
-    .select({ id: accessLink.id, generation: accessLink.generation, tokenHash: accessLink.tokenHash })
+    .select(linkColumns)
     .from(accessLink)
     .where(and(eq(accessLink.studentId, studentId), eq(accessLink.teacherId, teacherId), eq(accessLink.role, role)));
   return row;
 }
 
-// Revocation (revoked_at) is not handled here yet: #21 brings it.
+/**
+ * The link row of a student for a role, created on first use; it may be
+ * revoked. Students created before links existed get theirs when the teacher
+ * first copies it.
+ */
 export async function ensureLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow> {
   const existing = await findLink(db, teacherId, studentId, role);
   if (existing) return existing;
@@ -61,7 +81,7 @@ export async function ensureLink(db: Database, teacherId: string, studentId: str
     .insert(accessLink)
     .values({ id, teacherId, studentId, role, generation: 1, tokenHash })
     .onConflictDoNothing({ target: [accessLink.studentId, accessLink.role] })
-    .returning({ id: accessLink.id, generation: accessLink.generation, tokenHash: accessLink.tokenHash });
+    .returning(linkColumns);
   if (created) return created;
   // Two copies at once: the other request won the insert. Read it once; if
   // it is still not this teacher's, the caller asked for someone else's student.
@@ -78,13 +98,57 @@ export async function ensureLink(db: Database, teacherId: string, studentId: str
  * generation, not to the token.
  */
 export async function currentLinkUrl(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<string> {
-  const link = await ensureLink(db, teacherId, studentId, role);
+  const found = await ensureLink(db, teacherId, studentId, role);
+  // A revoked link belongs to a student who has come back from "Завершили":
+  // the card offers a new one. The caller refuses while the student is there.
+  const link = found.revokedAt ? await bumpGeneration(db, found, role) : found;
   const token = deriveToken(link.id, role, link.generation);
   const tokenHash = sha256(token);
   if (tokenHash !== link.tokenHash) {
     await db.update(accessLink).set({ tokenHash }).where(eq(accessLink.id, link.id));
   }
-  return linkUrl(token);
+  return linkUrl(token, role);
+}
+
+/**
+ * Moves a link to its next generation in one statement: a new token, no
+ * revocation. The old token and every session opened from it stop working.
+ * The update is conditional on the generation and the revocation it read: if
+ * another request changed the link meanwhile, its result stands when it is a
+ * fresh, open link, and nothing is undone otherwise. A «Завершили» that lands
+ * between the read and the update is not lifted by a reissue. Exported for
+ * the test of that interleaving; callers use reissueLink and currentLinkUrl.
+ */
+export async function bumpGeneration(db: Database, link: LinkRow, role: LinkRole): Promise<LinkRow> {
+  const generation = link.generation + 1;
+  const [next] = await db
+    .update(accessLink)
+    .set({ generation, tokenHash: sha256(deriveToken(link.id, role, generation)), revokedAt: null })
+    .where(
+      and(
+        eq(accessLink.id, link.id),
+        eq(accessLink.generation, link.generation),
+        link.revokedAt ? isNotNull(accessLink.revokedAt) : isNull(accessLink.revokedAt),
+      ),
+    )
+    .returning(linkColumns);
+  if (next) return next;
+  const [reread] = await db.select(linkColumns).from(accessLink).where(eq(accessLink.id, link.id));
+  if (reread && !reread.revokedAt && reread.generation > link.generation) return reread;
+  throw new Error("bumpGeneration: the link changed meanwhile");
+}
+
+/** "Перевыпустить": the student's or the parent's link gets a new token (#21). */
+export async function reissueLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<void> {
+  await bumpGeneration(db, await ensureLink(db, teacherId, studentId, role), role);
+}
+
+/** Closes both links of a student and every session opened from them (#21, "Завершили"). */
+export async function revokeLinks(db: Database, teacherId: string, studentId: string): Promise<void> {
+  await db
+    .update(accessLink)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(accessLink.studentId, studentId), eq(accessLink.teacherId, teacherId), isNull(accessLink.revokedAt)));
 }
 
 /**
@@ -110,29 +174,31 @@ export async function exchangeToken(db: Database, token: string): Promise<{ cook
   return { cookie, role: link.role as LinkRole };
 }
 
-export function sessionCookieHeader(value: string): string {
+export function sessionCookieHeader(value: string, role: LinkRole): string {
   const secure = env().APP_URL.startsWith("https:") ? "; Secure" : "";
-  return `${LINK_SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_SECONDS}${secure}`;
+  return `${LINK_SESSION_COOKIES[role]}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_SECONDS}${secure}`;
 }
 
-function cookieFrom(headers: Headers): string | null {
+function cookieFrom(headers: Headers, cookieName: string): string | null {
   for (const part of (headers.get("cookie") ?? "").split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name === LINK_SESSION_COOKIE) return rest.join("=") || null;
+    if (name === cookieName) return rest.join("=") || null;
   }
   return null;
 }
 
 /**
- * Who a link session belongs to, or null. A session is valid while it has not
+ * Who the session of one role belongs to, or null. Only that role's cookie is
+ * read, and the link must be of that role. A session is valid while it has not
  * expired, its link is not revoked, its generation is the link's current one,
  * and the student is not deleted. A valid session is extended.
  */
 export async function linkSessionFromHeaders(
   db: Database,
   headers: Headers,
+  role: LinkRole,
 ): Promise<{ role: LinkRole; studentId: string; teacherId: string } | null> {
-  const cookie = cookieFrom(headers);
+  const cookie = cookieFrom(headers, LINK_SESSION_COOKIES[role]);
   if (!cookie) return null;
 
   const now = new Date();
@@ -147,7 +213,12 @@ export async function linkSessionFromHeaders(
     .from(linkSession)
     .innerJoin(
       accessLink,
-      and(eq(accessLink.id, linkSession.linkId), eq(accessLink.generation, linkSession.generation), isNull(accessLink.revokedAt)),
+      and(
+        eq(accessLink.id, linkSession.linkId),
+        eq(accessLink.role, role),
+        eq(accessLink.generation, linkSession.generation),
+        isNull(accessLink.revokedAt),
+      ),
     )
     .innerJoin(student, and(eq(student.id, accessLink.studentId), isNull(student.deletedAt)))
     .where(and(eq(linkSession.tokenHash, sha256(cookie)), gt(linkSession.expiresAt, now)));

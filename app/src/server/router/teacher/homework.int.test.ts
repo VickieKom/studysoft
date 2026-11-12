@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import allTypes from "../../../../../deploy/seed/homework/demo-all-types.json";
 import short from "../../../../../deploy/seed/homework/demo-short.json";
-import { LINK_SESSION_COOKIE } from "../../access/links";
+import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb } from "../../db/client";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
@@ -36,7 +36,7 @@ beforeAll(async () => {
     headers: { "Content-Type": "application/json" },
     body: json({ token }),
   });
-  studentCookie = response.headers.getSetCookie().find((c) => c.startsWith(LINK_SESSION_COOKIE))!.split(";")[0]!;
+  studentCookie = response.headers.getSetCookie().find((c) => c.startsWith(`${LINK_SESSION_COOKIES.student}=`))!.split(";")[0]!;
 });
 
 afterAll(closeDb);

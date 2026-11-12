@@ -55,8 +55,9 @@ export async function findStudent(db: Database, teacherId: string, id: string): 
 }
 
 /**
- * What the student's own page may show: the first name only. Never selects the
- * last name or anything else of the card (#18, #19).
+ * What a page behind a link — the student's own or the parent's — may show:
+ * the first name only. Never selects the last name or anything else of the
+ * card (#18, #19, #20).
  */
 export async function studentPageView(db: Database, teacherId: string, id: string): Promise<{ firstName: string } | null> {
   const [row] = await db

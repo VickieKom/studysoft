@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { formatDueDate, tasksLabel } from "@/domain/homework";
 import { createServerCaller, isUnauthorized } from "@/server/router";
-import { LinkExchange } from "./link-exchange";
+import { LinkExchange } from "@/components/link-exchange";
 
 export const metadata = { title: "Домашка — StudySoft" };
 

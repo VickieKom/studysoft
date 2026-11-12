@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentNotes } from "@/components/student-notes";
 import { PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
@@ -31,7 +32,6 @@ export default async function StudentCardPage({ params }: Props) {
             {student.lastName && <p className="text-h3 text-text-secondary">{student.lastName}</p>}
           </div>
           <div className="flex items-start gap-2">
-            <CopyLinkButton studentId={student.id} />
             <Link
               href={`/teacher/students/${student.id}/edit`}
               className="inline-flex h-10 items-center rounded-control border border-border px-4 text-button font-semibold hover:bg-surface"
@@ -54,6 +54,19 @@ export default async function StudentCardPage({ params }: Props) {
             </Fragment>
           ))}
         </dl>
+        <section aria-label="Ссылки" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
+          {student.status === "finished" ? (
+            // "Завершили" closes both links (#21); coming back gives new ones.
+            <p className="text-small text-text-secondary">Ссылки закрыты, пока ученик в статусе «Завершили»</p>
+          ) : (
+            (["student", "parent"] as const).map((role) => (
+              <div key={role} className="flex flex-wrap items-center gap-2">
+                <CopyLinkButton studentId={student.id} role={role} />
+                <ReissueLinkButton studentId={student.id} role={role} />
+              </div>
+            ))
+          )}
+        </section>
       </div>
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentNotes studentId={student.id} notes={notes} />
