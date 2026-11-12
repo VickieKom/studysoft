@@ -100,6 +100,20 @@ export async function findHomework(
 }
 
 /**
+ * Replaces the tasks of a draft (#37): the editor sends the whole list after
+ * every change. Returns false when there is no such draft; a published
+ * homework never changes.
+ */
+export async function updateDraftTasks(db: Database, teacherId: string, id: string, document: HomeworkDocument): Promise<boolean> {
+  const rows = await db
+    .update(homework)
+    .set({ document: homeworkSchema.parse(document), title: document.title })
+    .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
+    .returning({ id: homework.id });
+  return rows.length > 0;
+}
+
+/**
  * Publishes a draft with a deadline. The student's previously published
  * homework is closed as "missed" in the same transaction (product
  * requirements 5.1.6, item 4). Returns false when there is no such draft.

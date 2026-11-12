@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { parseHomework, taskSchema } from "../../../domain/homework-format";
+import { HOMEWORK_FORMAT_VERSION, parseHomework, taskSchema, validateHomework } from "../../../domain/homework-format";
 import { findStudent } from "../../crm/students";
 import {
   findHomework,
@@ -9,6 +9,7 @@ import {
   listHomework,
   publishHomework,
   unpublishHomework,
+  updateDraftTasks,
 } from "../../homework/homework";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -53,6 +54,22 @@ export const homeworkRouter = router({
       if (!found) throw notFound();
       const { createdAt: _c, ...rest } = found;
       return rest;
+    }),
+
+  /**
+   * Saves the edited tasks of a draft (#37). The whole list is validated
+   * against the homework format; the message names the task and the field.
+   */
+  updateTasks: teacherProcedure
+    .input(z.object({ id: z.uuid(), tasks: z.array(z.unknown()).max(50) }))
+    .output(z.object({ tasks: z.array(taskSchema) }))
+    .mutation(async ({ ctx, input }) => {
+      const draft = await findHomework(ctx.db, ctx.teacherId, input.id);
+      if (!draft || draft.status !== "draft") throw notFound();
+      const checked = validateHomework({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: input.tasks });
+      if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
+      if (!(await updateDraftTasks(ctx.db, ctx.teacherId, input.id, checked.homework))) throw notFound();
+      return { tasks: checked.homework.tasks };
     }),
 
   publish: teacherProcedure
