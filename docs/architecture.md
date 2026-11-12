@@ -492,7 +492,7 @@ sequenceDiagram
     V->>St: 9. Looks at the result
 ```
 
-Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
+Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request; `acceptance-unchanged` fails if any commit after the first one touching product code changes, renames or deletes a scenario file that the scenario commits created or changed. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
 
 ### 6.2 Behaviour on failure
 
@@ -659,7 +659,7 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 | Check | Catches | State |
 |-------|---------|-------|
 | `forbidden-files` | Documents, audio, video, archives, dumps, env files, oversized files; raster images outside `app/public`; test data outside `deploy/seed` | Now |
-| `acceptance-unchanged` | A pull request edits or deletes an existing acceptance scenario together with code. Adding new ones is allowed | Now |
+| `acceptance-unchanged` | A pull request edits, renames or deletes an existing acceptance scenario together with code; an implementation changes a new scenario after its scenario commits (commits that touch no product code freeze the scenario files they add or change). Adding new ones is allowed | Now |
 | `secrets` | Keys, passwords and tokens in changes | Now |
 | `lint-docs` | Broken Markdown | Now |
 | `typecheck` | Type errors in every package, including drift between the MCP server and the router | Now |

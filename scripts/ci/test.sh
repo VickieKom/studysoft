@@ -138,6 +138,78 @@ write "app/src/login.ts" "code"
 commit "base"
 expect fail "acceptance-unchanged: unknown base ref is an error, not a pass" "$repo" bash "$here/acceptance-unchanged.sh" origin/missing
 
+# Scenario first: the implementation branch starts from the scenario branch, so
+# the new scenario is not on main yet. These cases build the branch commit by
+# commit; the function under test makes its own commits.
+
+# flow_case <pass|fail> <label> <function that makes the branch's commits>
+flow_case() {
+  new_repo
+  write "app/src/login.ts" "original code"
+  commit "base"
+  git -C "$repo" checkout -q -b change
+  "$3"
+  expect "$1" "acceptance-unchanged: $2" "$repo" bash "$here/acceptance-unchanged.sh" main
+}
+
+scenario_commit() {
+  write "e2e/acceptance/students.spec.ts" "scenario"
+  commit "scenario"
+}
+implementation_commit() {
+  write "app/src/students.ts" "code"
+  commit "implementation"
+}
+
+flow_scenario_then_code() {
+  scenario_commit
+  implementation_commit
+}
+flow_scenario_fixed_before_code() {
+  scenario_commit
+  write "e2e/acceptance/students.spec.ts" "scenario, fixed in the scenario pull request"
+  commit "fix scenario"
+  implementation_commit
+}
+flow_scenario_edited_with_code() {
+  scenario_commit
+  write "e2e/acceptance/students.spec.ts" "weakened scenario"
+  write "app/src/students.ts" "code"
+  commit "implementation"
+}
+flow_scenario_edited_after_code() {
+  scenario_commit
+  implementation_commit
+  write "e2e/acceptance/students.spec.ts" "weakened scenario"
+  commit "touch up scenario"
+}
+flow_scenario_deleted_after_code() {
+  scenario_commit
+  implementation_commit
+  git -C "$repo" rm -q e2e/acceptance/students.spec.ts
+  commit "drop scenario"
+}
+flow_scenario_renamed_after_code() {
+  scenario_commit
+  implementation_commit
+  git -C "$repo" mv e2e/acceptance/students.spec.ts e2e/acceptance/pupils.spec.ts
+  commit "rename scenario"
+}
+flow_another_scenario_added_after_code() {
+  scenario_commit
+  implementation_commit
+  write "e2e/acceptance/notes.spec.ts" "another new scenario"
+  commit "add a scenario"
+}
+
+flow_case pass "implementation on top of an unchanged new scenario" flow_scenario_then_code
+flow_case pass "new scenario fixed before the implementation starts" flow_scenario_fixed_before_code
+flow_case fail "new scenario edited in the implementation commit" flow_scenario_edited_with_code
+flow_case fail "new scenario edited after the implementation started" flow_scenario_edited_after_code
+flow_case fail "new scenario deleted after the implementation started" flow_scenario_deleted_after_code
+flow_case fail "new scenario renamed after the implementation started" flow_scenario_renamed_after_code
+flow_case pass "another new scenario added after the implementation started" flow_another_scenario_added_after_code
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures guard self-test(s) failed"
   exit 1
