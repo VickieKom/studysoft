@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { StudentHomework } from "@/components/student-homework";
 import { StudentNotes } from "@/components/student-notes";
 import { PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../../caller";
@@ -14,6 +15,7 @@ export default async function StudentCardPage({ params }: Props) {
   const student = await studentOrNotFound((await params).id);
   const { caller } = await teacherCaller();
   const notes = await caller.teacher.notes.list({ studentId: student.id });
+  const homework = await caller.teacher.homework.list({ studentId: student.id });
 
   return (
     <main>
@@ -53,6 +55,7 @@ export default async function StudentCardPage({ params }: Props) {
           ))}
         </dl>
       </div>
+      <StudentHomework studentId={student.id} homework={homework} />
       <StudentNotes studentId={student.id} notes={notes} />
     </main>
   );
