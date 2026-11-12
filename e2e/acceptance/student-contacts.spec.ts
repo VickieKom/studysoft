@@ -10,7 +10,7 @@ import { TEACHER_SESSION } from "./sessions";
 test.use({ storageState: TEACHER_SESSION, permissions: ["clipboard-read", "clipboard-write"] });
 
 const NO_SESSION = { cookies: [], origins: [] };
-const CONTACT_LABELS = ["Имя родителя", "Почта родителя", "Мессенджер родителя", "Почта ученика", "Мессенджер ученика"];
+const CONTACT_LABELS = ["ФИО родителя", "Почта родителя", "Мессенджер родителя", "Почта ученика", "Мессенджер ученика"];
 
 function control(page: Page, name: string) {
   return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
@@ -41,7 +41,7 @@ async function openFresh(browser: Browser, link: string): Promise<Page> {
 test("the contacts are saved and shown on the card for the teacher only", async ({ page, browser }) => {
   const card = await createStudent(page, "Контакты");
   const contacts = {
-    "Имя родителя": "Мама Тестовая",
+    "ФИО родителя": "Мама Тестовая",
     "Почта родителя": "parent@example.test",
     "Мессенджер родителя": "@parent_test",
     "Почта ученика": "student@example.test",
