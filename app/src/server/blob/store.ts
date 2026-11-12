@@ -51,7 +51,7 @@ export function blobStore(): BlobStore {
 /** Keeps a file of this teacher and returns its id. The bytes go first: a row never points at nothing. */
 export async function saveBlob(db: Database, teacherId: string, bytes: Uint8Array, contentType: string): Promise<string> {
   const id = crypto.randomUUID();
-  // shortcut: a file whose row is not written (a failed import) stays on disk; clean up with backups (#4)
+  // shortcut: files nothing refers to (a failed import, a replaced or removed picture) stay until cleanup exists (#73)
   await blobStore().put(id, bytes);
   await db.insert(blob).values({ id, teacherId, contentType, size: bytes.byteLength });
   return id;

@@ -67,6 +67,22 @@ async function fetchImage(headers: Headers, homeworkId: string, taskIndex: strin
   return { status: response.status, type: response.headers.get("Content-Type"), body: Buffer.from(await response.arrayBuffer()) };
 }
 
+async function fetchWithTag(headers: Headers, homeworkId: string, taskIndex: string, ifNoneMatch?: string) {
+  const request = new Headers(headers);
+  if (ifNoneMatch) request.set("If-None-Match", ifNoneMatch);
+  const response = await handleHomeworkImageRequest(
+    new Request(`${env().APP_URL}/api/files/homework/${homeworkId}/${taskIndex}`, { headers: request }),
+    homeworkId,
+    taskIndex,
+  );
+  return {
+    status: response.status,
+    etag: response.headers.get("ETag"),
+    cache: response.headers.get("Cache-Control"),
+    body: Buffer.from(await response.arrayBuffer()),
+  };
+}
+
 beforeAll(async () => {
   teacherHeaders = await signedInHeaders(teacherA);
   teacher = createServerCaller(teacherHeaders);
@@ -148,5 +164,29 @@ describe("pictures in homework", () => {
     await expect(otherTeacher.teacher.homework.updateTasks({ id, tasks: [kept] })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("is revalidated at its address, so a reorder or a replacement shows the new picture", async () => {
+    const { studentId } = await student("Порядок картинок");
+    // A second picture with other bytes: the same PNG with a byte after its end.
+    const other = Buffer.concat([PNG_BYTES, Buffer.from([0x21])]);
+    const { id } = await teacher.teacher.homework.import({
+      studentId,
+      json: json(withImages([PNG, dataUrl("image/png", other)])),
+    });
+
+    const first = await fetchWithTag(teacherHeaders, id, "0");
+    expect(first).toMatchObject({ status: 200, cache: "private, no-cache" });
+    expect(first.body.equals(PNG_BYTES)).toBe(true);
+    // An unchanged picture: 304 without the bytes.
+    expect(await fetchWithTag(teacherHeaders, id, "0", first.etag!)).toMatchObject({ status: 304, etag: first.etag });
+
+    // «Ниже» on the first task: the same address now has the other picture.
+    const [a, b] = (await teacher.teacher.homework.get({ id })).tasks;
+    await teacher.teacher.homework.updateTasks({ id, tasks: [b, a] });
+    const moved = await fetchWithTag(teacherHeaders, id, "0", first.etag!);
+    expect(moved.status).toBe(200);
+    expect(moved.etag).not.toBe(first.etag);
+    expect(moved.body.equals(other)).toBe(true);
   });
 });

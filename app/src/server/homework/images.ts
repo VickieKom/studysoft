@@ -111,13 +111,18 @@ export async function handleHomeworkImageRequest(request: Request, homeworkId: s
   const image = (row?.document as HomeworkDocument | undefined)?.tasks[Number(taskIndex)]?.image;
   const ref = image ? imageRef(image) : null;
   const file = ref ? await readBlob(database, owner.teacherId, ref) : null;
-  if (!file) return notFound();
+  if (!file || !ref) return notFound();
 
+  // The address names a task's position, not a file: reordering or replacing
+  // puts another file there. The browser keeps a copy but asks every time;
+  // the ETag is the file's id, so an unchanged picture costs a 304.
+  const caching = { ETag: `"${ref}"`, "Cache-Control": "private, no-cache" };
+  if (request.headers.get("If-None-Match") === caching.ETag) return new Response(null, { status: 304, headers: caching });
   return new Response(Buffer.from(file.bytes), {
     headers: {
+      ...caching,
       "Content-Type": file.contentType,
       "Content-Length": String(file.bytes.byteLength),
-      "Cache-Control": "private, max-age=3600",
       "X-Content-Type-Options": "nosniff",
       "Content-Disposition": "inline",
     },
