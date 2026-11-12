@@ -16,6 +16,8 @@ export async function waitingCount(db: Database, teacherId: string): Promise<num
     .select({ count: sql<number>`count(*)::int` })
     .from(homeworkSubmission)
     .innerJoin(homework, eq(homework.id, homeworkSubmission.homeworkId))
+    // The same students the list shows: a deleted student's submission is not counted.
+    .innerJoin(student, and(eq(student.id, homework.studentId), isNull(student.deletedAt)))
     .where(and(eq(homework.teacherId, teacherId), eq(homeworkSubmission.isCurrent, true), waitingCondition));
   return row?.count ?? 0;
 }
@@ -313,6 +315,10 @@ export async function reopenHomework(
       )
       .for("update", { of: homework });
     if (!row) return "not_found";
+    // Publishing for one student goes one at a time (#65): holding the student
+    // row, the check below and the publish after it cannot race a publish of
+    // another draft.
+    await tx.select({ id: student.id }).from(student).where(eq(student.id, row.studentId)).for("update");
     const [other] = await tx
       .select({ id: homework.id })
       .from(homework)

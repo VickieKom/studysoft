@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import review from "../../../../../deploy/seed/homework/demo-review.json";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
-import { homeworkAnswer, homeworkSubmission } from "../../db/schema";
+import { homeworkAnswer, homeworkSubmission, student } from "../../db/schema";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleRouterRequest } from "../index";
@@ -177,5 +177,14 @@ describe("teacher.review", () => {
     await otherTeacher.teacher.review.opened({ id: submissionId });
     const [row] = await db().select().from(homeworkSubmission).where(eq(homeworkSubmission.id, submissionId));
     expect(row!.openedAt).toBeNull();
+  });
+
+  it("does not count a deleted student's submission, as the list does not show it", async () => {
+    const before = await teacher.teacher.review.waiting();
+    const { studentId } = await submitted("Удалённый");
+    expect(await teacher.teacher.review.waiting()).toBe(before + 1);
+    await db().update(student).set({ deletedAt: new Date() }).where(eq(student.id, studentId));
+    expect(await teacher.teacher.review.waiting()).toBe(before);
+    expect((await teacher.teacher.review.list({ studentId: null })).some((r) => r.studentName === "Удалённый")).toBe(false);
   });
 });
