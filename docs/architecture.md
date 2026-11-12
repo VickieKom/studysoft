@@ -351,7 +351,7 @@ erDiagram
 | `teacher` | `access` | Permanent | Account and settings: time zone, cancellation rule |
 | `student` | `crm` | Permanent, soft delete | First name, optional last name (teacher only), status, age, school year, time zone, level, interests, gaps, textbook and current unit. No phone. Only teacher procedures read the last name |
 | `contact` | `crm` | Until consent is withdrawn | Parent's email only |
-| `access_link` | `access` | Until revoked | Who, role (student or parent), sign-in method, token hash, revocation date |
+| `access_link` | `access` | Until revoked | Who, role (student or parent), generation, token hash, revocation date; one per student and role. `link_session`: cookie hash, generation, sliding expiry |
 | `schedule_slot` | `schedule` | Permanent | Weekday, time, time zone, validity dates |
 | `lesson` | `schedule` | Permanent | Type, paid or free, time in UTC, status, unit, meeting link, plan by stages |
 | `lesson_state` | `lesson` | Until the lesson is finished, then a snapshot | Stage state document with a version number |
@@ -604,10 +604,10 @@ Permissions are set by the kind of a router procedure: public, teacher, student,
 
 **Links with a token:**
 
-- A token is 256 random bits. The database stores only its hash.
+- A token is 256 bits derived, not stored: `HMAC(LINK_KEY, link id ‖ role ‖ generation)`. `LINK_KEY` is a secret in the environment, never in the database; the database keeps the token's hash for the lookup on exchange and the generation. The card recomputes the same link on every copy, so copying never reissues it; a reissue bumps the generation. Rotating `LINK_KEY` invalidates every link at once (#19).
 - The token travels in the URL fragment (`/s#<token>`). Browsers never send the fragment to a server, so the token does not reach the access logs of the edge proxy or Traefik.
 - On first open the page script sends the token in a request body to the exchange procedure, receives a session cookie and clears the fragment, so the token does not linger in history and screenshots.
-- Reissuing a link revokes the previous one immediately.
+- A session opened from a link stores a hash of its cookie and the link's generation; it lasts 90 days and is extended on each visit. Reissuing a link revokes the previous one immediately, together with every session of the old generation.
 - A revoked, a foreign and a non-existent token produce the same response.
 - Token exchange attempts are limited by the application per client address, so the limit holds whichever host a request comes through. Behind the edge proxy the address is taken from the forwarded header of that trusted proxy only.
 - Access is stored as a record of "who, role, sign-in method". A password for a student or a parent can later be added as one more sign-in method for the same person without changing the rest of the model.

@@ -6,16 +6,22 @@ import { handleAuthRequest } from "../access/auth";
 import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, router } from "./core/trpc";
 import { healthRouter } from "./public/health";
+import { linksRouter } from "./public/links";
+import { studentMeRouter } from "./student/me";
+import { linksTeacherRouter } from "./teacher/links";
 import { notesRouter } from "./teacher/notes";
 import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 
 export const appRouter = router({
   health: healthRouter,
+  links: linksRouter,
+  student: studentMeRouter,
   teacher: router({
     session: sessionRouter,
     students: studentsRouter,
     notes: notesRouter,
+    links: linksTeacherRouter,
   }),
 });
 

@@ -30,7 +30,7 @@ export function serveRouter(router: AnyRouter, endpoint: string, request: Reques
     endpoint,
     req: request,
     router,
-    createContext: () => createContext(request.headers),
+    createContext: ({ resHeaders }) => createContext(request.headers, resHeaders),
     onError: ({ error, path }) => logProcedureError(error, path),
   });
 }

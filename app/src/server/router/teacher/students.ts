@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ACTIVE_STATUSES, isBlank, LEVELS, PROFILE_KEYS, type ProfileKey, STATUSES, TIME_ZONE_IDS } from "../../../domain/student";
+import { ensureLink } from "../../access/links";
 import { createStudent, findStudent, listStudents, updateStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -71,7 +72,12 @@ export const studentsRouter = router({
   create: teacherProcedure
     .input(fields)
     .output(z.object({ id: z.uuid() }))
-    .mutation(async ({ ctx, input }) => ({ id: await createStudent(ctx.db, ctx.teacherId, input) })),
+    .mutation(async ({ ctx, input }) => {
+      const id = await createStudent(ctx.db, ctx.teacherId, input);
+      // The student link exists from the start (#19); copying it later never changes it.
+      await ensureLink(ctx.db, ctx.teacherId, id, "student");
+      return { id };
+    }),
 
   update: teacherProcedure
     .input(fields.extend({ id: z.uuid(), status: z.enum(STATUSES) }).merge(profileInput))
