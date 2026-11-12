@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import allTypes from "../../../../../deploy/seed/homework/demo-all-types.json";
+import editor from "../../../../../deploy/seed/homework/demo-editor.json";
 import short from "../../../../../deploy/seed/homework/demo-short.json";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb } from "../../db/client";
@@ -120,5 +121,56 @@ describe("teacher.homework", () => {
       });
       await expect(otherTeacher.teacher.homework.unpublish({ id: target })).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
+  });
+});
+
+describe("teacher.homework.updateTasks", () => {
+  it("saves edited, added, removed and reordered tasks of a draft", async () => {
+    const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
+    const [gap, , written] = editor.tasks;
+    const added = { type: "single_choice", prompt: "Pick a colour.", options: ["blue", "table"], answer: 0 };
+    const fixed = { ...gap, prompt: "Fill in the gap.", answers: [["is", "'s"]] };
+
+    const { tasks } = await teacher.teacher.homework.updateTasks({ id, tasks: [fixed, added, written] });
+    expect(tasks.map((t) => t.prompt)).toEqual(["Fill in the gap.", "Pick a colour.", "Write about your pet."]);
+    const preview = await teacher.teacher.homework.get({ id });
+    expect(preview.tasks).toEqual([fixed, added, written]);
+    expect(preview.taskCount).toBe(3);
+  });
+
+  it("refuses an invalid list with a message naming the task and the field, and keeps the draft", async () => {
+    const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
+    const noKey = { ...editor.tasks[0], answers: [[]] };
+    await expect(teacher.teacher.homework.updateTasks({ id, tasks: [noKey] })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(/^Задание 1, поле answers/),
+    });
+    await expect(teacher.teacher.homework.updateTasks({ id, tasks: [] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect((await teacher.teacher.homework.get({ id })).tasks).toEqual(editor.tasks);
+  });
+
+  it("changes only this teacher's drafts", async () => {
+    const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
+    await expect(otherTeacher.teacher.homework.updateTasks({ id, tasks: editor.tasks })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await teacher.teacher.homework.publish({ id, dueDate: today(2) });
+    await expect(teacher.teacher.homework.updateTasks({ id, tasks: editor.tasks.slice(1) })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect((await teacher.teacher.homework.get({ id })).tasks).toEqual(editor.tasks);
+  });
+
+  it("checks the student's answer against the edited key", async () => {
+    const student = createServerCaller(new Headers({ cookie: studentCookie }));
+    const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
+    const [gap, ...rest] = editor.tasks;
+    await teacher.teacher.homework.updateTasks({ id, tasks: [{ ...gap, answers: [["is", "'s"]] }, ...rest] });
+    await teacher.teacher.homework.publish({ id, dueDate: today(1) });
+    await student.student.homework.saveAnswer({ id, taskIndex: 0, answer: { type: "gap", gaps: ["’s"] } });
+    expect(await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() })).toEqual({
+      correct: 1,
+      wrong: 1,
+    });
   });
 });

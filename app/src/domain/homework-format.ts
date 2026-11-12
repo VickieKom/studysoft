@@ -154,6 +154,11 @@ export function parseHomework(json: string): ParseResult {
   } catch {
     return { ok: false, errors: ["Это не JSON: проверьте скобки, кавычки и запятые"] };
   }
+  return validateHomework(input);
+}
+
+/** Validates a homework already parsed, as the draft editor sends it (#37). */
+export function validateHomework(input: unknown): ParseResult {
   const result = homeworkSchema.safeParse(input, { error: ru.localeError });
   if (result.success) return { ok: true, homework: result.data };
   return { ok: false, errors: result.error.issues.slice(0, 10).map((issue) => describe(issue, input)) };
