@@ -3,6 +3,8 @@ import { z } from "zod";
 const schema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
+  // Derives access-link tokens (#19). Rotating it invalidates every link at once.
+  LINK_KEY: z.string().min(32, "LINK_KEY must be at least 32 characters"),
   APP_URL: z.url({ protocol: /^https?$/ }),
   // Required: an image built without it must fail to start, not report "dev".
   BUILD_SHA: z.string().min(1),

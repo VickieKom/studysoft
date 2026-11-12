@@ -351,13 +351,13 @@ erDiagram
 | `teacher` | `access` | Permanent | Account and settings: time zone, cancellation rule |
 | `student` | `crm` | Permanent, soft delete | Profile fields as in [the product requirements](product/modules.md): first and last name, status, age, school year, time zone, level, interests, gaps, textbook and current unit |
 | `contact` | `crm` | Until consent is withdrawn | The parent's and the student's contacts, as in the product requirements |
-| `access_link` | `access` | Until revoked | Who, role (student or parent), sign-in method, token hash, revocation date |
+| `access_link` | `access` | Until revoked | Who, role (student or parent), generation, token hash, revocation date; one per student and role. `link_session`: cookie hash, generation, sliding expiry |
 | `schedule_slot` | `schedule` | Permanent | Weekday, time, time zone, validity dates |
 | `lesson` | `schedule` | Permanent | Type, paid or free, time in UTC, status, unit, meeting link, plan by stages |
 | `lesson_state` | `lesson` | Until the lesson is finished, then a snapshot | Stage state document with a version number |
 | `payment` | `crm` | Permanent | The balance is computed, not stored |
 | `price_history`, `level_history` | `crm` | Permanent | History of the lesson price and the level: past charges are never recomputed |
-| `note` | `crm` | Permanent | Attached to a student or to a lesson |
+| `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42) or to a lesson (with the schedule). A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
 | `textbook`, `textbook_file` | `library` | Permanent | Files are visible to the teacher only |
 | `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed" |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
@@ -492,7 +492,7 @@ sequenceDiagram
     V->>St: 9. Looks at the result
 ```
 
-Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
+Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request; `acceptance-unchanged` finds the scenario pull request's branch by the issue number in the branch name and fails if any scenario file it changed — `playwright.config.ts` included, since it decides what runs — differs here from what was reviewed. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
 
 ### 6.2 Behaviour on failure
 
@@ -604,12 +604,12 @@ Permissions are set by the kind of a router procedure: public, teacher, student,
 
 **Links with a token:**
 
-- A token is 256 random bits. The database stores only its hash.
+- A token is 256 bits derived, not stored: `HMAC(LINK_KEY, link id ‖ role ‖ generation)`. `LINK_KEY` is a secret in the environment, never in the database; the database keeps the token's hash for the lookup on exchange and the generation. The card recomputes the same link on every copy, so copying never reissues it; a reissue bumps the generation. Rotating `LINK_KEY` invalidates every link at once (#19).
 - The token travels in the URL fragment (`/s#<token>`). Browsers never send the fragment to a server, so the token does not reach the access logs of the edge proxy or Traefik.
 - On first open the page script sends the token in a request body to the exchange procedure, receives a session cookie and clears the fragment, so the token does not linger in history and screenshots.
-- Reissuing a link revokes the previous one immediately.
+- A session opened from a link stores a hash of its cookie and the link's generation; it lasts 90 days and is extended on each visit. Reissuing a link revokes the previous one immediately, together with every session of the old generation.
 - A revoked, a foreign and a non-existent token produce the same response.
-- Token exchange attempts are limited by the application per client address, so the limit holds whichever host a request comes through. Behind the edge proxy the address is taken from the forwarded header of that trusted proxy only.
+- Token exchange attempts are limited by the application per client address, so the limit holds whichever host a request comes through. Behind the edge proxy the address is taken from the forwarded header of that trusted proxy only. **Pending (#54):** the exchange ships without this limit until the proxy setup in #4; expired link sessions are cleaned up there too.
 - Access is stored as a record of "who, role, sign-in method". A password for a student or a parent can later be added as one more sign-in method for the same person without changing the rest of the model.
 
 **Tenant isolation.** The teacher identifier comes from the session, never from the request. Functions of the `db` module take it as a mandatory parameter. An integration test creates two teachers and checks every procedure.
@@ -655,7 +655,7 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 | Check | Catches | State |
 |-------|---------|-------|
 | `forbidden-files` | Documents, audio, video, archives, dumps, env files, oversized files; raster images outside `app/public`; test data outside `deploy/seed` | Now |
-| `acceptance-unchanged` | A pull request edits or deletes an existing acceptance scenario together with code. Adding new ones is allowed | Now |
+| `acceptance-unchanged` | An implementation lands a scenario that differs from its reviewed scenario branch (`feature/<issue>-acceptance-*`), compared by content so rebases pass; scenario files (`e2e/acceptance/`, `playwright.config.ts`) changed outside that branch other than new scenarios; without a reviewed branch, an existing scenario file changed together with code. Adding new scenarios is allowed | Now |
 | `secrets` | Keys, passwords and tokens in changes | Now |
 | `lint-docs` | Broken Markdown | Now |
 | `typecheck` | Type errors in every package, including drift between the MCP server and the router | Now |

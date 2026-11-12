@@ -4,6 +4,7 @@ import { parseEnv } from "./env";
 const valid = {
   DATABASE_URL: "postgres://user:pass@localhost:5432/db",
   AUTH_SECRET: "x".repeat(32),
+  LINK_KEY: "k".repeat(32),
   APP_URL: "http://localhost:3000",
   BUILD_SHA: "0123abc",
 };
@@ -27,6 +28,6 @@ describe("parseEnv", () => {
   });
 
   it("names missing variables without echoing values", () => {
-    expect(() => parseEnv({ AUTH_SECRET: "short" })).toThrow(/DATABASE_URL, AUTH_SECRET, APP_URL, BUILD_SHA/);
+    expect(() => parseEnv({ AUTH_SECRET: "short" })).toThrow(/DATABASE_URL, AUTH_SECRET, LINK_KEY, APP_URL, BUILD_SHA/);
   });
 });

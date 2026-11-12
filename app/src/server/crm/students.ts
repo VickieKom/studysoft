@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import type { Level, Status, TimeZoneId } from "../../domain/student";
+import type { Level, Profile, Status, TimeZoneId } from "../../domain/student";
 import type { Database } from "../db/client";
 import { student } from "../db/schema";
 
@@ -10,8 +10,8 @@ export type StudentFields = {
   timeZone: TimeZoneId;
 };
 
-/** The teacher's view of a student. Teacher procedures only (#18). */
-export type StudentCard = StudentFields & { id: string; status: Status };
+/** The teacher's view of a student. Teacher procedures only (#18, #41). */
+export type StudentCard = StudentFields & Profile & { id: string; status: Status };
 
 const cardColumns = {
   id: student.id,
@@ -20,6 +20,13 @@ const cardColumns = {
   level: student.level,
   timeZone: student.timeZone,
   status: student.status,
+  age: student.age,
+  schoolYear: student.schoolYear,
+  interests: student.interests,
+  whatWorks: student.whatWorks,
+  gaps: student.gaps,
+  textbook: student.textbook,
+  currentUnit: student.currentUnit,
 };
 
 // Level, time zone and status are plain text columns; the router validates
@@ -47,6 +54,18 @@ export async function findStudent(db: Database, teacherId: string, id: string): 
   return row ? toCard(row) : null;
 }
 
+/**
+ * What the student's own page may show: the first name only. Never selects the
+ * last name or anything else of the card (#18, #19).
+ */
+export async function studentPageView(db: Database, teacherId: string, id: string): Promise<{ firstName: string } | null> {
+  const [row] = await db
+    .select({ firstName: student.firstName })
+    .from(student)
+    .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt)));
+  return row ?? null;
+}
+
 /** Creates a student with the status "Обсуждение" and returns its identifier. */
 export async function createStudent(db: Database, teacherId: string, fields: StudentFields): Promise<string> {
   const [row] = await db
@@ -62,7 +81,7 @@ export async function updateStudent(
   db: Database,
   teacherId: string,
   id: string,
-  fields: StudentFields & { status: Status },
+  fields: StudentFields & { status: Status } & Partial<Profile>,
 ): Promise<boolean> {
   const rows = await db
     .update(student)
