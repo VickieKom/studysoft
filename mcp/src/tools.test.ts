@@ -42,4 +42,36 @@ describe("assistant tools", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]!.text).toMatch(/^not found/);
   });
+
+  it("return the homework format with its version", async () => {
+    const tools = createTools(
+      platformAnswering(200, { result: { data: { version: 1, description: "# Homework format, version 1" } } }),
+    );
+    const result = await tools.getHomeworkFormat();
+    expect(result.content[0]!.text).toMatch(/^Homework format, version 1\n\n# Homework format/);
+  });
+
+  it("save a draft with a POST and pass the platform's message about an invalid homework back", async () => {
+    const seen: { url?: string; auth?: string | null } = {};
+    const saved = createTools(
+      platformAnswering(200, { result: { data: { id: "00000000-0000-4000-8000-000000000002" } } }, seen),
+    );
+    const ok = await saved.saveHomeworkDraft({ studentId: "00000000-0000-4000-8000-000000000001", homework: {} });
+    expect(seen.url).toContain("/api/trpc/agent.saveHomeworkDraft");
+    expect(JSON.parse(ok.content[0]!.text)).toMatchObject({ id: "00000000-0000-4000-8000-000000000002", status: "draft" });
+
+    const refused = createTools(
+      platformAnswering(400, {
+        error: {
+          message: "Задание 2, поле type: неизвестный тип «riddle»",
+          code: -32600,
+          data: { code: "BAD_REQUEST", httpStatus: 400 },
+        },
+      }),
+    );
+    const result = await refused.saveHomeworkDraft({ studentId: "00000000-0000-4000-8000-000000000001", homework: {} });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/^invalid homework/);
+    expect(result.content[0]!.text).toContain("Задание 2, поле type");
+  });
 });

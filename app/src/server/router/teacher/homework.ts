@@ -22,6 +22,7 @@ const summary = z.object({
   status: z.enum(HOMEWORK_STATUSES),
   dueDate: z.iso.date().nullable(),
   taskCount: z.number().int(),
+  fromAssistant: z.boolean(),
 });
 
 // Up to 50 tasks, each with a picture of at most 2 MB as base64, would not fit;

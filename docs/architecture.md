@@ -365,7 +365,7 @@ erDiagram
 | `homework_submission`, `homework_answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per attempt, with its idempotency key and score; one current submission per homework (a homework belongs to one student), enforced by a partial unique index. «Открыть заново для ученика» closes the current one, which stays in the history as it was, and starts a blank attempt (#36). One answer row per task and attempt: saved as the student goes, and on submission every task gets one with its topic and skill, the platform's correctness for auto-checked tasks, and later the teacher's mark, which wins (#34, #36) |
 | `blob` | `blob` | With what refers to it; files nothing refers to stay until cleanup exists (#73) | Whose file it is, its type and size; the bytes are in the store under the same id. Homework pictures are stored on import and served at `/api/files/homework/<id>/<task>` after a permission check (#33) |
 | `agent_token` | `access` | Until revoked | The assistant's personal token, hash only; one active per teacher; created and last-used dates (#3) |
-| `draft_origin` | `homework`, `lesson`, `library` | With the draft | Who created the draft (agent or teacher) and a snapshot of the student context at generation time |
+| `draft_origin` | `homework`, `lesson`, `library` | With the draft | Who created the draft (agent or teacher) and a snapshot of the student context at generation time. For homework (#43): one row per assistant draft, and when the teacher first edited it; until then the assistant's next save replaces the draft, after it a new draft is made |
 | `group`, `group_member` | `crm` | Permanent | Tables exist from the first migration; the interface arrives in stage 3 |
 
 Rules for every table:

@@ -7,6 +7,7 @@ type Homework = {
   status: "draft" | "published" | "submitted" | "missed";
   dueDate: string | null;
   taskCount: number;
+  fromAssistant: boolean;
 };
 
 /** The homework section of the student card (#32). */
@@ -32,6 +33,7 @@ export function StudentHomework({ studentId, homework }: { studentId: string; ho
             <li key={item.id} className="py-3">
               <Link href={`/teacher/students/${studentId}/homework/${item.id}`} className="flex items-center gap-4">
                 <span className="flex-1 font-semibold">{item.title}</span>
+                {item.fromAssistant && <span className="text-small text-text-secondary">от ассистента</span>}
                 <span className="text-small text-text-secondary">{tasksLabel(item.taskCount)}</span>
                 {item.dueDate && <span className="text-small text-text-secondary">к {formatDueDate(item.dueDate)}</span>}
                 <span className="rounded-full bg-green-50 px-2 py-0.5 text-caption text-green-700">

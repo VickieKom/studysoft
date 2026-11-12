@@ -7,7 +7,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createPlatform } from "./platform";
-import { createTools, studentIdInput } from "./tools";
+import { createTools, draftInput, studentIdInput } from "./tools";
 
 const url = process.env.STUDYSOFT_URL;
 const token = process.env.STUDYSOFT_TOKEN;
@@ -38,6 +38,42 @@ server.registerTool(
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),
+);
+
+server.registerTool(
+  "get_homework_format",
+  {
+    title: "Homework format",
+    description:
+      "The homework format the platform accepts, with its version: task types, keys, topic, skill, source. " +
+      "Read it before writing a homework.",
+  },
+  () => tools.getHomeworkFormat(),
+);
+
+server.registerTool(
+  "save_homework_draft",
+  {
+    title: "Save a homework draft",
+    description:
+      "Saves a homework for a student as a draft on their card, marked «от ассистента». Saving again replaces " +
+      "your draft until the teacher edits it; after that a new draft is made and hers is kept. Only the teacher " +
+      "publishes. An invalid homework is refused with the task and field to fix.",
+    inputSchema: draftInput,
+  },
+  (input) => tools.saveHomeworkDraft(input),
+);
+
+server.registerTool(
+  "read_homework_draft",
+  {
+    title: "Read your homework draft",
+    description:
+      "Your latest draft for a student, as the teacher may have changed it, to revise it after her remarks. " +
+      "null when there is none.",
+    inputSchema: studentIdInput,
+  },
+  (input) => tools.readHomeworkDraft(input),
 );
 
 await server.connect(new StdioServerTransport());
