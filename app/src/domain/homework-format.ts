@@ -40,8 +40,6 @@ const multipleChoice = z
   .strict()
   .refine((t) => t.answers.every((a) => a < t.options.length), { path: ["answers"], message: "нет варианта с таким номером" });
 
-const GAP = "___";
-const gapCount = (value: string) => value.split(GAP).length - 1;
 
 const gap = z
   .object({
@@ -162,9 +160,36 @@ export function parseHomework(json: string): ParseResult {
 }
 
 /**
+ * A shuffle that gives the same order for the same seed, so the student sees
+ * the tiles in one order on every visit and on every device. It never leaves
+ * the solved order in place when another order exists.
+ */
+function shuffled<T>(items: readonly T[], seed: string): T[] {
+  // FNV-1a over the seed, then mulberry32 as the generator.
+  let state = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) state = Math.imul(state ^ seed.charCodeAt(i), 0x01000193);
+  const random = () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j]!, result[i]!];
+  }
+  const solved = result.every((item, i) => item === items[i]);
+  const allSame = items.every((item) => item === items[0]);
+  return solved && !allSame ? [...result.slice(1), result[0]!] : result;
+}
+
+/**
  * What the student may see of a task: everything except the keys. The server
  * sends only this to students (AGENTS.md, rule 4); the teacher's preview shows
- * the whole task, keys included. Shuffling of match and order happens when the student opens it (#34).
+ * the whole task, keys included. The right column of a match and the words of
+ * an order are shuffled by the seed (the homework and the task), never left
+ * in the solved order.
  */
 export type StudentTask =
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: string[] }
@@ -174,7 +199,7 @@ export type StudentTask =
   | { type: "written" | "voice"; prompt: string; hint?: string }
   | { type: "file"; prompt: string; accept: ("image" | "audio")[]; hint?: string };
 
-export function studentView(task: Task): StudentTask {
+export function studentView(task: Task, seed: string): StudentTask {
   switch (task.type) {
     case "single_choice":
     case "multiple_choice":
@@ -186,10 +211,13 @@ export function studentView(task: Task): StudentTask {
         type: "match",
         prompt: task.prompt,
         left: task.pairs.map((p) => p.left),
-        right: [...task.pairs.map((p) => p.right)].sort(),
+        right: shuffled(
+          task.pairs.map((p) => p.right),
+          seed,
+        ),
       };
     case "order":
-      return { type: "order", prompt: task.prompt, words: [...task.words].sort() };
+      return { type: "order", prompt: task.prompt, words: shuffled(task.words, seed) };
     case "written":
     case "voice":
       return { type: task.type, prompt: task.prompt, ...(task.hint ? { hint: task.hint } : {}) };
@@ -200,5 +228,47 @@ export function studentView(task: Task): StudentTask {
         accept: task.accept ?? ["image", "audio"],
         ...(task.hint ? { hint: task.hint } : {}),
       };
+  }
+}
+
+/** The task types the student answers on the platform and the platform checks (#34). */
+export const AUTO_CHECKED_TYPES = ["single_choice", "multiple_choice", "gap", "match", "order"] as const;
+
+const answerText = z.string().max(500);
+
+/**
+ * A student's answer to an auto-checked task, as the page sends it. Choices
+ * are indexes into the options; gaps, pairs and words are the values shown.
+ */
+export const answerSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("single_choice"), choice: z.number().int().min(0) }).strict(),
+  z.object({ type: z.literal("multiple_choice"), choices: z.array(z.number().int().min(0)).max(8) }).strict(),
+  z.object({ type: z.literal("gap"), gaps: z.array(answerText).max(50) }).strict(),
+  z
+    .object({ type: z.literal("match"), pairs: z.array(z.object({ left: answerText, right: answerText }).strict()).max(10) })
+    .strict(),
+  z.object({ type: z.literal("order"), words: z.array(answerText).max(20) }).strict(),
+]);
+export type Answer = z.infer<typeof answerSchema>;
+
+/** The number of gaps (___) in a gap task's text. */
+export function gapCount(text: string): number {
+  return text.split("___").length - 1;
+}
+
+/** Whether the student has given a full answer: the page warns about the others before «Сдать». */
+export function isAnswered(task: StudentTask, answer: Answer | null | undefined): boolean {
+  if (!answer || answer.type !== task.type) return false;
+  switch (answer.type) {
+    case "single_choice":
+      return true;
+    case "multiple_choice":
+      return answer.choices.length > 0;
+    case "gap":
+      return task.type === "gap" && answer.gaps.length === gapCount(task.text) && answer.gaps.every((g) => g.trim() !== "");
+    case "match":
+      return task.type === "match" && answer.pairs.length === task.left.length;
+    case "order":
+      return task.type === "order" && answer.words.length === task.words.length;
   }
 }

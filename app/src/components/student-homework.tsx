@@ -4,7 +4,7 @@ import { formatDueDate, HOMEWORK_STATUS_LABELS, tasksLabel } from "@/domain/home
 type Homework = {
   id: string;
   title: string;
-  status: "draft" | "published" | "missed";
+  status: "draft" | "published" | "submitted" | "missed";
   dueDate: string | null;
   taskCount: number;
 };

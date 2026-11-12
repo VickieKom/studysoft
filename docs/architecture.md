@@ -361,8 +361,8 @@ erDiagram
 | `textbook`, `textbook_file` | `library` | Permanent | Files are visible to the teacher only |
 | `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed" |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
-| `homework`, `task` | `homework` | Permanent | The document in the homework format (`docs/homework-format.md`), stored as imported. Statuses: draft, published, missed ("не сдана"), done (with submissions). Tasks do not change after publishing; a deadline is a calendar date; at most one published homework per student, kept by a partial unique index |
-| `submission`, `answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per homework and student, enforced by a database constraint |
+| `homework`, `task` | `homework` | Permanent | The document in the homework format (`docs/homework-format.md`), stored as imported. Statuses: draft, published, submitted ("сдана", #34), missed ("не сдана"). Tasks do not change after publishing; a deadline is a calendar date; at most one published homework per student, kept by a partial unique index |
+| `homework_submission`, `homework_answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per homework, enforced by a unique constraint, with its idempotency key and score. One answer row per task: saved as the student goes, and on submission every task gets one with its correctness, topic and skill (#34) |
 | `agent_token` | `access` | Until revoked | The assistant's personal token, hash only; one active per teacher; created and last-used dates (#3) |
 | `draft_origin` | `homework`, `lesson`, `library` | With the draft | Who created the draft (agent or teacher) and a snapshot of the student context at generation time |
 | `group`, `group_member` | `crm` | Permanent | Tables exist from the first migration; the interface arrives in stage 3 |

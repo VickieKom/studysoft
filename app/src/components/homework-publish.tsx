@@ -6,7 +6,7 @@ import { formatDueDate } from "@/domain/homework";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
-type Props = { homeworkId: string; status: "draft" | "published" | "missed"; dueDate: string | null };
+type Props = { homeworkId: string; status: "draft" | "published" | "submitted" | "missed"; dueDate: string | null };
 
 /** Publish a draft with a deadline, or take a published homework back (#32). */
 export function HomeworkPublish({ homeworkId, status, dueDate }: Props) {
@@ -34,7 +34,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate }: Props) {
     await run(() => routerClient.teacher.homework.publish.mutate({ id: homeworkId, dueDate: date }));
   }
 
-  if (status === "missed") return null;
+  if (status === "missed" || status === "submitted") return null;
 
   return (
     <div className="flex flex-col gap-2">
