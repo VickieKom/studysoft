@@ -233,8 +233,8 @@ export const linkSession = pgTable(
 
 // Homework (#32; architecture 5.4). The whole document in the homework
 // format (docs/homework-format.md) is kept as it was imported; a published
-// homework never changes. Statuses: draft, published, missed ("не сдана");
-// "done" arrives with submissions (#34). At most one published homework per
+// homework never changes. Statuses: draft, published, submitted ("сдана",
+// #34), missed ("не сдана"). At most one published homework per
 // student, kept by the database.
 export const homework = pgTable(
   "homework",
@@ -265,6 +265,42 @@ export const homework = pgTable(
       .where(sql`${t.status} = 'published'`),
   ],
 );
+
+// Answers to a homework (#34): one row per task, saved after each task while
+// the homework is published. On submission every task gets a row, with its
+// correctness and the task's topic and skill: the dashboard and the teacher's
+// gaps list read them. The key never leaves the server.
+export const homeworkAnswer = pgTable(
+  "homework_answer",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id),
+    taskIndex: bigint("task_index", { mode: "number" }).notNull(),
+    answer: jsonb("answer"),
+    correct: boolean("correct"),
+    topic: text("topic"),
+    skill: text("skill"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique("homework_answer_homework_id_task_index_key").on(t.homeworkId, t.taskIndex)],
+);
+
+// One submission per homework, kept by the database (#34). A repeated request
+// with the same idempotency key gets the same result back.
+export const homeworkSubmission = pgTable("homework_submission", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  homeworkId: uuid("homework_id")
+    .notNull()
+    .unique()
+    .references(() => homework.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  correctCount: bigint("correct_count", { mode: "number" }).notNull(),
+  wrongCount: bigint("wrong_count", { mode: "number" }).notNull(),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // The assistant's personal token (#3; architecture 8.1). One active token per
 // teacher; creating a new one revokes the old. Only the hash is stored; the

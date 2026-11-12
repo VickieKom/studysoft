@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import allTypes from "../../../deploy/seed/homework/demo-all-types.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
-import { parseHomework, studentView } from "./homework-format";
+import { isAnswered, parseHomework, type StudentTask, studentView } from "./homework-format";
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -43,11 +43,69 @@ describe("parseHomework", () => {
 });
 
 describe("studentView", () => {
+  const parsed = parseHomework(json(allTypes));
+  if (!parsed.ok) throw new Error("fixture must parse");
+  const tasks = parsed.homework.tasks;
+
   it("never carries a key", () => {
-    const parsed = parseHomework(json(allTypes));
-    if (!parsed.ok) throw new Error("fixture must parse");
-    const view = JSON.stringify(parsed.homework.tasks.map(studentView));
+    const view = JSON.stringify(tasks.map((task, i) => studentView(task, `seed:${i}`)));
     expect(view).not.toContain("carrots");
     expect(view).not.toMatch(/"answers?"|"pairs"|"alternatives"/);
+  });
+
+  it("shuffles the same way for the same seed and never leaves the solved order", () => {
+    const order = { type: "order", prompt: "p", words: ["We", "play", "after", "school"] } as const;
+    const match = {
+      type: "match",
+      prompt: "p",
+      pairs: [
+        { left: "hot", right: "cold" },
+        { left: "big", right: "small" },
+      ],
+    } as const;
+    for (let i = 0; i < 50; i++) {
+      const seed = `homework:${i}`;
+      const words = studentView({ ...order, words: [...order.words] }, seed);
+      expect(words).toEqual(studentView({ ...order, words: [...order.words] }, seed));
+      expect(words.type === "order" && words.words).not.toEqual(order.words);
+      expect(words.type === "order" && [...words.words].sort()).toEqual([...order.words].sort());
+
+      const pairs = studentView({ ...match, pairs: match.pairs.map((p) => ({ ...p })) }, seed);
+      expect(pairs.type === "match" && pairs.left).toEqual(["hot", "big"]);
+      expect(pairs.type === "match" && pairs.right).toEqual(["small", "cold"]);
+    }
+  });
+});
+
+describe("studentView with alternatives", () => {
+  it("never shows any of the correct orders of an order task", () => {
+    const words = ["a", "b"];
+    for (let i = 0; i < 30; i++) {
+      // Both orders of two words are correct: nothing else exists, so it stays as it is.
+      const both = studentView({ type: "order", prompt: "p", words, alternatives: [["b", "a"]] }, `seed:${i}`);
+      expect(both.type === "order" && both.words.length).toBe(2);
+      const three = studentView(
+        { type: "order", prompt: "p", words: ["x", "y", "z"], alternatives: [["y", "z", "x"], ["z", "x", "y"]] },
+        `seed:${i}`,
+      );
+      expect(three.type === "order" && [["x", "y", "z"], ["y", "z", "x"], ["z", "x", "y"]]).not.toContainEqual(
+        three.type === "order" && three.words,
+      );
+    }
+  });
+});
+
+describe("isAnswered", () => {
+  it("wants a full answer", () => {
+    const gap: StudentTask = { type: "gap", prompt: "p", text: "___ and ___" };
+    expect(isAnswered(gap, { type: "gap", gaps: ["a", "b"] })).toBe(true);
+    expect(isAnswered(gap, { type: "gap", gaps: ["a", " "] })).toBe(false);
+    expect(isAnswered(gap, null)).toBe(false);
+    const order: StudentTask = { type: "order", prompt: "p", words: ["a", "b"] };
+    expect(isAnswered(order, { type: "order", words: ["b"] })).toBe(false);
+    expect(isAnswered(order, { type: "order", words: ["b", "a"] })).toBe(true);
+    expect(isAnswered({ type: "multiple_choice", prompt: "p", options: ["a", "b"] }, { type: "multiple_choice", choices: [] })).toBe(
+      false,
+    );
   });
 });

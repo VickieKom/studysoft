@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "title": "Demo: to be edited",
+  "tasks": [
+    {
+      "type": "gap",
+      "prompt": "Fil in the gap.",
+      "text": "She ___ happy.",
+      "answers": [["is"]],
+      "topic": "to be",
+      "skill": "grammar"
+    },
+    {
+      "type": "single_choice",
+      "prompt": "Pick a fruit.",
+      "options": ["apple", "chair"],
+      "answer": 0
+    },
+    {
+      "type": "written",
+      "prompt": "Write about your pet."
+    }
+  ]
+}
