@@ -106,6 +106,8 @@ test("the edit form saves every field, and «Отмена» changes nothing", as
   await page.getByLabel("Часовой пояс").selectOption({ label: "Казахстан" });
   await page.getByLabel("Статус").selectOption({ label: "Занимается" });
   await page.getByRole("button", { name: "Сохранить" }).click();
+  // Saving may be a client request; a navigation right away could cut it off.
+  await expect(page.getByRole("heading", { level: 1, name: "Третья изменённая" })).toBeVisible();
 
   await page.goto(card);
   await expect(page.getByRole("heading", { level: 1, name: "Третья изменённая" })).toBeVisible();
