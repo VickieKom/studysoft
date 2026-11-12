@@ -31,9 +31,12 @@ export function deriveToken(linkId: string, role: LinkRole, generation: number):
   return createHmac("sha256", env().LINK_KEY).update(`${linkId}|${role}|${generation}`).digest("base64url");
 }
 
+// Each role has its own route tree: /s for the student, /p for the parent.
+const LINK_PATHS: Record<LinkRole, string> = { student: "/s", parent: "/p" };
+
 /** The link's address: the token travels in the fragment, never to a server log. */
-export function linkUrl(token: string): string {
-  return new URL(`/s#${token}`, env().APP_URL).toString();
+export function linkUrl(token: string, role: LinkRole): string {
+  return new URL(`${LINK_PATHS[role]}#${token}`, env().APP_URL).toString();
 }
 
 /**
@@ -84,7 +87,7 @@ export async function currentLinkUrl(db: Database, teacherId: string, studentId:
   if (tokenHash !== link.tokenHash) {
     await db.update(accessLink).set({ tokenHash }).where(eq(accessLink.id, link.id));
   }
-  return linkUrl(token);
+  return linkUrl(token, role);
 }
 
 /**

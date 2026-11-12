@@ -606,7 +606,7 @@ Permissions are set by the kind of a router procedure: public, teacher, student,
 **Links with a token:**
 
 - A token is 256 bits derived, not stored: `HMAC(LINK_KEY, link id ‖ role ‖ generation)`. `LINK_KEY` is a secret in the environment, never in the database; the database keeps the token's hash for the lookup on exchange and the generation. The card recomputes the same link on every copy, so copying never reissues it; a reissue bumps the generation. Rotating `LINK_KEY` invalidates every link at once (#19).
-- The token travels in the URL fragment (`/s#<token>`). Browsers never send the fragment to a server, so the token does not reach the access logs of the edge proxy or Traefik.
+- The token travels in the URL fragment: `/s#<token>` for the student, `/p#<token>` for the parent (#20). Both links are issued when the student is created; a session opened from one role's link never passes another role's procedures. Browsers never send the fragment to a server, so the token does not reach the access logs of the edge proxy or Traefik.
 - On first open the page script sends the token in a request body to the exchange procedure, receives a session cookie and clears the fragment, so the token does not linger in history and screenshots.
 - A session opened from a link stores a hash of its cookie and the link's generation; it lasts 90 days and is extended on each visit. Reissuing a link revokes the previous one immediately, together with every session of the old generation.
 - A revoked, a foreign and a non-existent token produce the same response.
