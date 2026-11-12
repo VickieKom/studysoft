@@ -102,6 +102,8 @@ test("a task is added, another deleted and one moved up", async ({ page }) => {
   await control(task(page, "Pick a fruit."), "Удалить задание").click();
   await expect(task(page, "Pick a fruit.")).toHaveCount(0);
   await control(task(page, "Pick a colour."), "Выше").click();
+  // The move is saved before the page is reloaded: the teacher sees it in place.
+  await expect(page.getByRole("listitem").nth(1)).toContainText("Pick a colour.");
 
   await page.reload();
   const order = await prompts(page);
