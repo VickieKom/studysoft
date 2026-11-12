@@ -8,6 +8,10 @@ import { TEACHER_SESSION } from "./sessions";
 
 test.use({ storageState: TEACHER_SESSION, permissions: ["clipboard-read", "clipboard-write"] });
 
+// Contexts for the student and for nobody start without the teacher's cookies,
+// which test.use would otherwise give every new context and request.
+const NO_SESSION = { cookies: [], origins: [] };
+
 // A 1×1 PNG, written for this test.
 const PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 const PNG = `data:image/png;base64,${PIXEL_PNG}`;
@@ -65,7 +69,7 @@ async function expectImagesLoaded(page: Page, count: number) {
 }
 
 async function openAsStudent(browser: Browser, link: string): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
+  const page = await (await browser.newContext({ storageState: NO_SESSION })).newPage();
   await page.goto(link);
   await expect(page.getByText("What is in the picture?").or(control(page, "Начать"))).toBeVisible();
   if (await control(page, "Начать").isVisible()) await control(page, "Начать").click();
@@ -114,12 +118,15 @@ test("a picture loads only for its own student's published homework", async ({ p
   expect(missing.status).toBe(404);
 
   // Without any session.
-  const anonymous = await playwright.request.newContext({ baseURL: new URL(student.url()).origin });
+  const anonymous = await playwright.request.newContext({
+    baseURL: new URL(student.url()).origin,
+    storageState: NO_SESSION,
+  });
   expect(await status(anonymous, publishedSrc!)).toEqual(missing);
   await anonymous.dispose();
 
   // With another student's session.
-  const otherStudent = await (await browser.newContext()).newPage();
+  const otherStudent = await (await browser.newContext({ storageState: NO_SESSION })).newPage();
   await otherStudent.goto(other.link);
   await expect(otherStudent.getByText("Домашних заданий пока нет")).toBeVisible();
   expect(await status(otherStudent.request, publishedSrc!)).toEqual(missing);
