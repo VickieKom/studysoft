@@ -63,8 +63,9 @@ db-up: ## Start PostgreSQL in Docker and wait until it is ready
 db-down: ## Stop PostgreSQL; the data volume is kept
 	$(COMPOSE) down
 
-typecheck: install ## Type-check the application, scenarios and configuration
+typecheck: install ## Type-check the application, the MCP server, scenarios and configuration
 	npm run typecheck -w app
+	npm run typecheck -w mcp
 	npx tsc -p tsconfig.json
 
 lint: install ## Lint the application
@@ -75,6 +76,7 @@ migrations: install ## Lint migrations for locking and destructive changes
 
 test-unit: install ## Unit tests
 	npm run test:unit -w app
+	npm run test:unit -w mcp
 
 test-integration: install db-up ## Integration tests against a throwaway PostgreSQL database
 	$(TEST_ENV) npm run test:integration -w app

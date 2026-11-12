@@ -265,3 +265,25 @@ export const homework = pgTable(
       .where(sql`${t.status} = 'published'`),
   ],
 );
+
+// The assistant's personal token (#3; architecture 8.1). One active token per
+// teacher; creating a new one revokes the old. Only the hash is stored; the
+// token is shown to the teacher once.
+export const agentToken = pgTable(
+  "agent_token",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("agent_token_one_active_per_teacher")
+      .on(t.teacherId)
+      .where(sql`${t.revokedAt} is null`),
+  ],
+);
