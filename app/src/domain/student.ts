@@ -61,3 +61,20 @@ export function timeZoneLabel(id: string): string {
 export function isBlank(value: string): boolean {
   return value.trim().length === 0;
 }
+
+// Profile of the student card (#41): plain text, no format checks, teacher
+// only. Order and labels as on the card and in the edit form; "multiline"
+// fields get a text area.
+export const PROFILE_FIELDS = [
+  { key: "age", label: "Возраст", multiline: false },
+  { key: "schoolYear", label: "Класс", multiline: false },
+  { key: "interests", label: "Интересы", multiline: true },
+  { key: "whatWorks", label: "Что заходит", multiline: true },
+  { key: "gaps", label: "Пробелы", multiline: true },
+  { key: "textbook", label: "Учебник", multiline: false },
+  { key: "currentUnit", label: "Текущий юнит", multiline: false },
+] as const;
+
+export type ProfileKey = (typeof PROFILE_FIELDS)[number]["key"];
+export type Profile = Record<ProfileKey, string | null>;
+export const PROFILE_KEYS = PROFILE_FIELDS.map((field) => field.key) as ProfileKey[];

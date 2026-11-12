@@ -1,4 +1,5 @@
-import { StudentForm } from "@/components/student-form";
+import { StudentForm, type StudentFormValues } from "@/components/student-form";
+import { PROFILE_FIELDS } from "@/domain/student";
 import { studentOrNotFound } from "../../student";
 
 export const metadata = { title: "Изменить ученика — StudySoft" };
@@ -20,7 +21,8 @@ export default async function EditStudentPage({ params }: Props) {
           level: student.level,
           timeZone: student.timeZone,
           status: student.status,
-        }}
+          ...Object.fromEntries(PROFILE_FIELDS.map((field) => [field.key, student[field.key] ?? ""])),
+        } as StudentFormValues}
       />
     </main>
   );

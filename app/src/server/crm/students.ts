@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import type { Level, Status, TimeZoneId } from "../../domain/student";
+import type { Level, Profile, Status, TimeZoneId } from "../../domain/student";
 import type { Database } from "../db/client";
 import { student } from "../db/schema";
 
@@ -10,8 +10,8 @@ export type StudentFields = {
   timeZone: TimeZoneId;
 };
 
-/** The teacher's view of a student. Teacher procedures only (#18). */
-export type StudentCard = StudentFields & { id: string; status: Status };
+/** The teacher's view of a student. Teacher procedures only (#18, #41). */
+export type StudentCard = StudentFields & Profile & { id: string; status: Status };
 
 const cardColumns = {
   id: student.id,
@@ -20,6 +20,13 @@ const cardColumns = {
   level: student.level,
   timeZone: student.timeZone,
   status: student.status,
+  age: student.age,
+  schoolYear: student.schoolYear,
+  interests: student.interests,
+  whatWorks: student.whatWorks,
+  gaps: student.gaps,
+  textbook: student.textbook,
+  currentUnit: student.currentUnit,
 };
 
 // Level, time zone and status are plain text columns; the router validates
@@ -62,7 +69,7 @@ export async function updateStudent(
   db: Database,
   teacherId: string,
   id: string,
-  fields: StudentFields & { status: Status },
+  fields: StudentFields & { status: Status } & Partial<Profile>,
 ): Promise<boolean> {
   const rows = await db
     .update(student)
