@@ -7,6 +7,8 @@ import {
   isBlank,
   LEVELS,
   type Level,
+  CONTACT_FIELDS,
+  type ContactKey,
   PROFILE_FIELDS,
   type ProfileKey,
   type Status,
@@ -24,7 +26,8 @@ export type StudentFormValues = {
   level: Level;
   timeZone: TimeZoneId;
   status: Status;
-} & Record<ProfileKey, string>;
+} & Record<ProfileKey, string> &
+  Record<ContactKey, string>;
 type Values = StudentFormValues;
 
 type Props =
@@ -42,6 +45,13 @@ function profileOf(values: Values): Record<ProfileKey, string> {
   return Object.fromEntries(PROFILE_FIELDS.map((field) => [field.key, values[field.key]])) as Record<ProfileKey, string>;
 }
 
+function contactsOf(values: Values): Record<ContactKey, string> {
+  return Object.fromEntries(CONTACT_FIELDS.map((field) => [field.key, values[field.key]])) as Record<ContactKey, string>;
+}
+
+const emptyContacts = () =>
+  Object.fromEntries(CONTACT_FIELDS.map((field) => [field.key, ""])) as Record<ContactKey, string>;
+
 /** One form for creating and editing a student (#18). Editing adds the status. */
 export function StudentForm(props: Props) {
   const router = useRouter();
@@ -55,6 +65,7 @@ export function StudentForm(props: Props) {
           timeZone: DEFAULT_TIME_ZONE,
           status: "discussion",
           ...emptyProfile(),
+          ...emptyContacts(),
         };
   const [values, setValues] = useState(initial);
   const [firstNameMissing, setFirstNameMissing] = useState(false);
@@ -86,6 +97,7 @@ export function StudentForm(props: Props) {
           : await routerClient.teacher.students.update.mutate({
               ...fields,
               ...profileOf(values),
+              ...contactsOf(values),
               id: props.studentId,
               status: values.status,
             });
@@ -219,6 +231,25 @@ export function StudentForm(props: Props) {
             )}
           </div>
         ))}
+      {props.mode === "edit" && (
+        <fieldset className="flex flex-col gap-4 border-t border-border pt-4">
+          <legend className="mb-2 text-small font-semibold text-text-secondary">Контакты — видны только вам</legend>
+          {CONTACT_FIELDS.map((field) => (
+            <div key={field.key} className="flex flex-col gap-1">
+              <label htmlFor={`student-${field.key}`} className="text-small text-text-secondary">
+                {field.label}
+              </label>
+              <input
+                id={`student-${field.key}`}
+                name={field.key}
+                value={values[field.key]}
+                onChange={(event) => set(field.key, event.target.value)}
+                className={fieldClass}
+              />
+            </div>
+          ))}
+        </fieldset>
+      )}
       {error && (
         <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
           {error}

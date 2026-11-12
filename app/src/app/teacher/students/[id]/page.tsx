@@ -4,7 +4,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentNotes } from "@/components/student-notes";
-import { PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
+import { CONTACT_FIELDS, PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../../caller";
 import { studentOrNotFound } from "../student";
 
@@ -51,6 +51,13 @@ export default async function StudentCardPage({ params }: Props) {
             <Fragment key={field.key}>
               <dt className="text-text-secondary">{field.label}</dt>
               <dd className="whitespace-pre-line">{student[field.key]}</dd>
+            </Fragment>
+          ))}
+          {/* Contacts (#84): the teacher's only; empty ones leave no label. */}
+          {CONTACT_FIELDS.filter((field) => student.contacts[field.key]).map((field) => (
+            <Fragment key={field.key}>
+              <dt className="text-text-secondary">{field.label}</dt>
+              <dd>{student.contacts[field.key]}</dd>
             </Fragment>
           ))}
         </dl>

@@ -1,8 +1,18 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { ACTIVE_STATUSES, isBlank, LEVELS, PROFILE_KEYS, type ProfileKey, STATUSES, TIME_ZONE_IDS } from "../../../domain/student";
+import {
+  ACTIVE_STATUSES,
+  CONTACT_KEYS,
+  type ContactKey,
+  isBlank,
+  LEVELS,
+  PROFILE_KEYS,
+  type ProfileKey,
+  STATUSES,
+  TIME_ZONE_IDS,
+} from "../../../domain/student";
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
-import { createStudent, findStudent, listStudents, updateStudent } from "../../crm/students";
+import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
 // No format checks on names (#18): whatever the teacher types is stored as
@@ -35,6 +45,22 @@ const profileOutput = z.object(
   Object.fromEntries(PROFILE_KEYS.map((key) => [key, z.string().nullable()])) as Record<ProfileKey, z.ZodNullable<z.ZodString>>,
 );
 
+// Contacts (#84): optional plain text like the profile, no format checks.
+const contactInput = z.object(
+  Object.fromEntries(CONTACT_KEYS.map((key) => [key, profileValue.optional()])) as Record<
+    ContactKey,
+    z.ZodOptional<typeof profileValue>
+  >,
+);
+const contactOutput = z
+  .object(
+    Object.fromEntries(CONTACT_KEYS.map((key) => [key, z.string().nullable()])) as Record<
+      ContactKey,
+      z.ZodNullable<z.ZodString>
+    >,
+  )
+  .strict();
+
 const fields = z.object({
   firstName,
   lastName,
@@ -60,13 +86,14 @@ export const studentsRouter = router({
     .output(z.array(studentCard))
     .query(({ ctx, input }) => listStudents(ctx.db, ctx.teacherId, input?.status ? [input.status] : ACTIVE_STATUSES)),
 
+  /** The card with the contacts; the list leaves them out. */
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(studentCard)
+    .output(studentCard.extend({ contacts: contactOutput }))
     .query(async ({ ctx, input }) => {
       const card = await findStudent(ctx.db, ctx.teacherId, input.id);
       if (!card) throw notFound();
-      return card;
+      return { ...card, contacts: await findContacts(ctx.db, ctx.teacherId, input.id) };
     }),
 
   create: teacherProcedure
@@ -81,10 +108,15 @@ export const studentsRouter = router({
     }),
 
   update: teacherProcedure
-    .input(fields.extend({ id: z.uuid(), status: z.enum(STATUSES) }).merge(profileInput))
+    .input(fields.extend({ id: z.uuid(), status: z.enum(STATUSES) }).merge(profileInput).merge(contactInput))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { id, ...changes } = input;
+      const { id, parentName, parentEmail, parentMessenger, studentEmail, studentMessenger, ...changes } = input;
+      const contacts = Object.fromEntries(
+        Object.entries({ parentName, parentEmail, parentMessenger, studentEmail, studentMessenger }).filter(
+          ([, value]) => value !== undefined,
+        ),
+      );
       // "Завершили" closes both links (#21), in one transaction with the
       // status that holds the student row: a copy or a reissue waits for it
       // and then sees the student finished (#65). Coming back reissues the
@@ -94,6 +126,7 @@ export const studentsRouter = router({
         return updateStudent(tx, ctx.teacherId, id, changes);
       });
       if (!saved) throw notFound();
+      await saveContacts(ctx.db, ctx.teacherId, id, contacts);
       return { id };
     }),
 });

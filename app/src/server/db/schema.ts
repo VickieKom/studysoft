@@ -384,3 +384,32 @@ export const draftOrigin = pgTable("draft_origin", {
   teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
+
+// The parent's and the student's contacts (#84; architecture 5.4): all
+// optional, one row per student, for the teacher only. Never selected by a
+// student, parent or agent procedure (architecture 6.3, AGENTS.md rule 4).
+export const contact = pgTable(
+  "contact",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull().unique(),
+    parentName: text("parent_name"),
+    parentEmail: text("parent_email"),
+    parentMessenger: text("parent_messenger"),
+    studentEmail: text("student_email"),
+    studentMessenger: text("student_messenger"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "contact_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("contact_teacher_id_idx").on(t.teacherId),
+  ],
+);
