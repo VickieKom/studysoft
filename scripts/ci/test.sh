@@ -210,6 +210,105 @@ flow_case fail "new scenario deleted after the implementation started" flow_scen
 flow_case fail "new scenario renamed after the implementation started" flow_scenario_renamed_after_code
 flow_case pass "another new scenario added after the implementation started" flow_another_scenario_added_after_code
 
+# The reviewed scenario: its draft pull request's branch, feature/<issue>-
+# acceptance-*, is what the product owner reviewed (#31). The implementation
+# branch feature/<issue>-… must keep every scenario file that branch changed
+# byte-identical; content is compared, so a rebase keeps passing.
+
+# reviewed_case <pass|fail> <label> <function that builds the implementation branch>
+reviewed_case() {
+  new_repo
+  write "app/src/login.ts" "original code"
+  write "e2e/acceptance/login.spec.ts" "existing scenario"
+  write "playwright.config.ts" "config v1"
+  commit "base"
+  git -C "$repo" checkout -q -b feature/18-acceptance-students
+  write "e2e/acceptance/students.spec.ts" "reviewed scenario"
+  write "playwright.config.ts" "config v2 with the students project"
+  commit "scenario"
+  # As CI sees it: the scenario pull request's branch on the remote.
+  git -C "$repo" update-ref refs/remotes/origin/feature/18-acceptance-students HEAD
+  "$3"
+  expect "$1" "acceptance-unchanged: $2" "$repo" bash "$here/acceptance-unchanged.sh" main
+}
+
+on_scenario_branch() {
+  git -C "$repo" checkout -q -b feature/18-students feature/18-acceptance-students
+}
+code_on_top() {
+  write "app/src/students.ts" "code"
+  commit "implementation"
+}
+
+reviewed_unchanged() {
+  on_scenario_branch
+  code_on_top
+}
+# The scenario commits were rebased onto main: new commits, same content.
+reviewed_rebased() {
+  git -C "$repo" checkout -q -b feature/18-students main
+  write "e2e/acceptance/students.spec.ts" "reviewed scenario"
+  write "playwright.config.ts" "config v2 with the students project"
+  commit "scenario, rebased"
+  code_on_top
+}
+reviewed_plus_new_scenario() {
+  on_scenario_branch
+  code_on_top
+  write "e2e/acceptance/notes.spec.ts" "another new scenario"
+  commit "add a scenario"
+}
+# Review finding 1: a scenario-only commit between the reviewed scenario and
+# the code freezes the weakened version under the ordering rule alone.
+reviewed_weakened_before_code() {
+  on_scenario_branch
+  write "e2e/acceptance/students.spec.ts" "weakened scenario"
+  commit "fix the test first"
+  code_on_top
+}
+reviewed_amended() {
+  git -C "$repo" checkout -q -b feature/18-students main
+  write "e2e/acceptance/students.spec.ts" "weakened scenario"
+  write "playwright.config.ts" "config v2 with the students project"
+  commit "scenario, amended"
+  code_on_top
+}
+# Review finding 2: the configuration can drop a scenario from the run.
+reviewed_config_changed() {
+  on_scenario_branch
+  write "app/src/students.ts" "code"
+  write "playwright.config.ts" "config v3 that skips students.spec.ts"
+  commit "implementation"
+}
+reviewed_existing_scenario_edited() {
+  on_scenario_branch
+  write "app/src/students.ts" "code"
+  write "e2e/acceptance/login.spec.ts" "weakened existing scenario"
+  commit "implementation"
+}
+# Without a reviewed scenario branch, the configuration is a scenario file too.
+unreviewed_config_with_code() {
+  git -C "$repo" checkout -q -b feature/99-something main
+  write "app/src/students.ts" "code"
+  write "playwright.config.ts" "config v3 that skips a scenario"
+  commit "implementation"
+}
+two_scenario_branches() {
+  git -C "$repo" update-ref refs/remotes/origin/feature/18-acceptance-other HEAD
+  on_scenario_branch
+  code_on_top
+}
+
+reviewed_case pass "implementation on the reviewed scenario branch" reviewed_unchanged
+reviewed_case pass "reviewed scenario rebased onto main" reviewed_rebased
+reviewed_case pass "another scenario added next to the reviewed one" reviewed_plus_new_scenario
+reviewed_case fail "reviewed scenario weakened in a scenario-only commit before the code" reviewed_weakened_before_code
+reviewed_case fail "reviewed scenario amended" reviewed_amended
+reviewed_case fail "playwright.config.ts changed by the implementation" reviewed_config_changed
+reviewed_case fail "existing scenario edited next to a reviewed one" reviewed_existing_scenario_edited
+reviewed_case fail "playwright.config.ts edited together with code, no reviewed scenario" unreviewed_config_with_code
+reviewed_case fail "two scenario branches for one issue is an error" two_scenario_branches
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures guard self-test(s) failed"
   exit 1
