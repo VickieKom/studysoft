@@ -1,6 +1,9 @@
 [
   {
     "teacher": "teacher-b@example.test",
-    "displayName": "Тестовый Т."
+    "firstName": "Тестовый",
+    "lastName": "Тестов",
+    "level": "A2",
+    "timeZone": "Europe/Moscow"
   }
 ]

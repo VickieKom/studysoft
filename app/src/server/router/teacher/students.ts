@@ -1,14 +1,68 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { listStudents } from "../../crm/students";
+import { ACTIVE_STATUSES, isBlank, LEVELS, STATUSES, TIME_ZONE_IDS } from "../../../domain/student";
+import { createStudent, findStudent, listStudents, updateStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
-const studentSummary = z.object({
-  id: z.uuid(),
-  displayName: z.string(),
+// No format checks on names (#18): whatever the teacher types is stored as
+// typed. Only an empty first name is refused. The length cap only keeps a
+// request from carrying megabytes.
+const MAX_NAME_LENGTH = 1000;
+
+const firstName = z
+  .string()
+  .max(MAX_NAME_LENGTH)
+  .refine((value) => !isBlank(value), { message: "first name is required" });
+const lastName = z
+  .string()
+  .max(MAX_NAME_LENGTH)
+  .transform((value) => (isBlank(value) ? null : value));
+
+const fields = z.object({
+  firstName,
+  lastName,
+  level: z.enum(LEVELS),
+  timeZone: z.enum(TIME_ZONE_IDS),
 });
 
+const studentCard = z.object({
+  id: z.uuid(),
+  firstName: z.string(),
+  lastName: z.string().nullable(),
+  level: z.enum(LEVELS),
+  timeZone: z.enum(TIME_ZONE_IDS),
+  status: z.enum(STATUSES),
+});
+
+const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
 export const studentsRouter = router({
+  /** Without a status: every student except "Завершили", which is the archive. */
   list: teacherProcedure
-    .output(z.array(studentSummary))
-    .query(({ ctx }) => listStudents(ctx.db, ctx.teacherId)),
+    .input(z.object({ status: z.enum(STATUSES).optional() }).optional())
+    .output(z.array(studentCard))
+    .query(({ ctx, input }) => listStudents(ctx.db, ctx.teacherId, input?.status ? [input.status] : ACTIVE_STATUSES)),
+
+  get: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(studentCard)
+    .query(async ({ ctx, input }) => {
+      const card = await findStudent(ctx.db, ctx.teacherId, input.id);
+      if (!card) throw notFound();
+      return card;
+    }),
+
+  create: teacherProcedure
+    .input(fields)
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({ id: await createStudent(ctx.db, ctx.teacherId, input) })),
+
+  update: teacherProcedure
+    .input(fields.extend({ id: z.uuid(), status: z.enum(STATUSES) }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...changes } = input;
+      if (!(await updateStudent(ctx.db, ctx.teacherId, id, changes))) throw notFound();
+      return { id };
+    }),
 });

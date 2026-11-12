@@ -349,7 +349,7 @@ erDiagram
 | Entity | Owning module | Retention | Notes |
 |--------|---------------|-----------|-------|
 | `teacher` | `access` | Permanent | Account and settings: time zone, cancellation rule |
-| `student` | `crm` | Permanent, soft delete | First name with an initial, age, school year, time zone, level, interests, gaps, textbook and current unit. No full name, no phone |
+| `student` | `crm` | Permanent, soft delete | First name, optional last name (teacher only), status, age, school year, time zone, level, interests, gaps, textbook and current unit. No phone. Only teacher procedures read the last name |
 | `contact` | `crm` | Until consent is withdrawn | Parent's email only |
 | `access_link` | `access` | Until revoked | Who, role (student or parent), sign-in method, token hash, revocation date |
 | `schedule_slot` | `schedule` | Permanent | Weekday, time, time zone, validity dates |
@@ -626,7 +626,8 @@ Permissions are set by the kind of a router procedure: public, teacher, student,
 
 | Stored | Not stored |
 |--------|-----------|
-| First name with an initial, age, school year, time zone | Full name, date of birth, address, phone |
+| First name, age, school year, time zone | Date of birth, address, phone |
+| Last name, optional, teacher only: never in student, parent or agent responses, never in logs (#18) | — |
 | Parent's email, if they agree to receive reports | Messenger handles of students and parents in stages 1 and 2 |
 | Voice answers, with a retention period from settings | Photos and videos of the child in the profile |
 | Teacher's notes | — |
@@ -753,7 +754,7 @@ All accepted on 2026-11-11. A decision is changed by editing its row in a pull r
 | 3 | AI works through MCP in the teacher's session; the server calls no model | No API key, worker or queue; the server can be hosted anywhere; "drafts only" is enforced on the server | Generation starts from the agent's window, not a button. A teacher without an agent cannot use it | Model calls from the server: revisit when a second teacher arrives (section 8.8) |
 | 4 | Students and parents sign in with a token link | Teenagers will not get past a login screen to homework; less personal data | The link is the key; mitigated by reissue and by exchanging the token for a session | Passwords: recovery, weak passwords and attempt limiting for no better protection. Revisit in stage 3 |
 | 5 | Teacher sign-in through a ready-made authentication library (candidate: Better Auth) | Password hashing, sessions and brute-force protection are not written by agents | A third-party dependency in the most sensitive place | Hand-written sign-in; a separate authentication service |
-| 6 | Store the minimum of personal data; where data is hosted is a deployment decision | A leak exposes little; moving to another country changes no code | The student card is poorer than the requirements ask for; data-residency law is met by whoever deploys | A full card with contacts |
+| 6 | Store the minimum of personal data; where data is hosted is a deployment decision. A student's last name is stored when the teacher enters one, and only teacher procedures read it (changed in #18) | A leak exposes little; moving to another country changes no code; the teacher can tell students with the same first name apart | The student card is poorer than the requirements ask for; data-residency law is met by whoever deploys | A full card with contacts |
 | 7 | Students enter through a reverse proxy in their country; the teacher and MCP connect to the main host directly | A local address for students without moving data; a blocked proxy does not stop the teacher | One more point of failure for students; two places to configure TLS | One name on the main host; a tunnel between hosts |
 | 8 | Files on the server disk behind the `BlobStore` interface | No cost and no external dependency for 10–15 GB; S3 later is a second adapter | The disk is shared and must be watched; large files pass through the application | S3 from day one |
 | 9 | Lesson state is one versioned document; BroadcastChannel carries it now, a small Node.js relay over WebSocket in stage 3 | Stage 1 needs no real-time server; changing the transport does not touch the stage or the control panel | The change format must be designed before stage 3 | A real-time server from day one; a separate language for the relay |

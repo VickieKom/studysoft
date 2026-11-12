@@ -19,7 +19,7 @@ describe("group membership stays inside one teacher", () => {
     const b = await teacherId(emailB!);
     const [groupOfA] = await db().insert(group).values({ teacherId: a, name: "group" }).returning();
     const [studentOfB] = await db().select().from(student).where(eq(student.teacherId, b));
-    const [studentOfA] = await db().insert(student).values({ teacherId: a, displayName: "x" }).returning();
+    const [studentOfA] = await db().insert(student).values({ teacherId: a, firstName: "x" }).returning();
 
     // Whichever teacher the row claims, one of the two composite keys fails.
     for (const claimed of [a, b]) {

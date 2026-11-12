@@ -60,8 +60,11 @@ describe("teacher procedures", () => {
     const listA = await createServerCaller(sessionA).teacher.students.list();
     const listB = await createServerCaller(sessionB).teacher.students.list();
 
-    expect(listA).toEqual([]);
-    expect(listB).toEqual([{ id: expect.any(String), displayName: seedStudents[0]?.displayName }]);
+    // Other test files add students to the first teacher; what matters is that
+    // the two lists never share a student.
+    expect(listB.map((student) => student.firstName)).toEqual([seedStudents[0]?.firstName]);
+    const idsOfB = new Set(listB.map((student) => student.id));
+    expect(listA.filter((student) => idsOfB.has(student.id))).toEqual([]);
   });
 });
 
