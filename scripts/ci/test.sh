@@ -109,12 +109,29 @@ deleted_scenario_with_code() {
 code_alone() {
   write "app/src/login.ts" "new code"
 }
+renamed_scenario_with_code() {
+  git -C "$repo" mv e2e/acceptance/login.spec.ts e2e/acceptance/sign-in.spec.ts
+  write "app/src/login.ts" "new code"
+}
+# With the path limit a move out of e2e/acceptance/ shows up as a deletion.
+moved_out_scenario_with_code() {
+  mkdir -p "$repo/e2e/archive"
+  git -C "$repo" mv e2e/acceptance/login.spec.ts e2e/archive/login.spec.ts
+  write "app/src/login.ts" "new code"
+}
+edited_scenario_with_mcp_code() {
+  write "e2e/acceptance/login.spec.ts" "weakened scenario"
+  write "mcp/src/server.ts" "new code"
+}
 
 acceptance_case pass "new scenario together with code" new_scenario_with_code
 acceptance_case fail "existing scenario edited together with code" edited_scenario_with_code
 acceptance_case pass "existing scenario edited on its own" edited_scenario_alone
 acceptance_case fail "existing scenario deleted together with code" deleted_scenario_with_code
 acceptance_case pass "code change without touching scenarios" code_alone
+acceptance_case fail "existing scenario renamed together with code" renamed_scenario_with_code
+acceptance_case fail "existing scenario moved out of e2e/acceptance/ together with code" moved_out_scenario_with_code
+acceptance_case fail "existing scenario edited together with mcp/ code" edited_scenario_with_mcp_code
 
 new_repo
 write "app/src/login.ts" "code"
