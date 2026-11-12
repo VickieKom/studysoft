@@ -23,7 +23,8 @@ describe("teacher.students", () => {
     const lastName = "Тестова".repeat(30);
     const { id } = await a.teacher.students.create({ ...base, firstName, lastName });
 
-    expect(await a.teacher.students.get({ id })).toEqual({
+    // The card has more fields (the profile, #41); these are the ones set here.
+    expect(await a.teacher.students.get({ id })).toMatchObject({
       id,
       firstName,
       lastName,
@@ -86,5 +87,27 @@ describe("teacher.students", () => {
     }
     expect((await b.teacher.students.list()).map((s) => s.id)).not.toContain(id);
     expect((await a.teacher.students.get({ id })).firstName).toBe("Чужая");
+  });
+
+  it("saves the profile as typed, blank as none, and keeps it when an update leaves it out", async () => {
+    const { id } = await a.teacher.students.create({ ...base, firstName: "Профиль" });
+    const card = await a.teacher.students.get({ id });
+    expect(card).toMatchObject({ age: null, interests: null, gaps: null });
+
+    const profile = {
+      age: "почти 13",
+      schoolYear: "7",
+      interests: "комиксы\nкошки",
+      whatWorks: "игры <на скорость>",
+      gaps: "   ",
+      textbook: "Учебник 2",
+      currentUnit: "Unit 3",
+    };
+    const fields = { firstName: "Профиль", lastName: "", level: "B1" as const, timeZone: "Europe/Moscow" as const, status: "active" as const };
+    await a.teacher.students.update({ id, ...fields, ...profile });
+    expect(await a.teacher.students.get({ id })).toMatchObject({ ...profile, gaps: null });
+
+    await a.teacher.students.update({ id, ...fields, firstName: "Профиль 2" });
+    expect(await a.teacher.students.get({ id })).toMatchObject({ firstName: "Профиль 2", age: "почти 13", currentUnit: "Unit 3" });
   });
 });

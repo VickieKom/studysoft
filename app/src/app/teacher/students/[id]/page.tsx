@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { STATUS_LABELS, timeZoneLabel } from "@/domain/student";
+import { Fragment } from "react";
+import { PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { studentOrNotFound } from "../student";
 
 export const metadata = { title: "Ученик — StudySoft" };
@@ -36,6 +37,12 @@ export default async function StudentCardPage({ params }: Props) {
           <dd>{student.level}</dd>
           <dt className="text-text-secondary">Часовой пояс</dt>
           <dd>{timeZoneLabel(student.timeZone)}</dd>
+          {PROFILE_FIELDS.filter((field) => student[field.key]).map((field) => (
+            <Fragment key={field.key}>
+              <dt className="text-text-secondary">{field.label}</dt>
+              <dd className="whitespace-pre-line">{student[field.key]}</dd>
+            </Fragment>
+          ))}
         </dl>
       </div>
     </main>

@@ -7,6 +7,8 @@ import {
   isBlank,
   LEVELS,
   type Level,
+  PROFILE_FIELDS,
+  type ProfileKey,
   type Status,
   STATUS_LABELS,
   STATUSES,
@@ -16,13 +18,29 @@ import {
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
-type Values = { firstName: string; lastName: string; level: Level; timeZone: TimeZoneId; status: Status };
+export type StudentFormValues = {
+  firstName: string;
+  lastName: string;
+  level: Level;
+  timeZone: TimeZoneId;
+  status: Status;
+} & Record<ProfileKey, string>;
+type Values = StudentFormValues;
 
 type Props =
   | { mode: "create" }
   | { mode: "edit"; studentId: string; initial: Values };
 
 const fieldClass = "h-10 rounded-control border border-border bg-bg px-3 outline-none focus:border-green-500";
+const areaClass = "min-h-20 rounded-control border border-border bg-bg px-3 py-2 outline-none focus:border-green-500";
+
+function emptyProfile(): Record<ProfileKey, string> {
+  return Object.fromEntries(PROFILE_FIELDS.map((field) => [field.key, ""])) as Record<ProfileKey, string>;
+}
+
+function profileOf(values: Values): Record<ProfileKey, string> {
+  return Object.fromEntries(PROFILE_FIELDS.map((field) => [field.key, values[field.key]])) as Record<ProfileKey, string>;
+}
 
 /** One form for creating and editing a student (#18). Editing adds the status. */
 export function StudentForm(props: Props) {
@@ -30,7 +48,14 @@ export function StudentForm(props: Props) {
   const initial: Values =
     props.mode === "edit"
       ? props.initial
-      : { firstName: "", lastName: "", level: "A1", timeZone: DEFAULT_TIME_ZONE, status: "discussion" };
+      : {
+          firstName: "",
+          lastName: "",
+          level: "A1",
+          timeZone: DEFAULT_TIME_ZONE,
+          status: "discussion",
+          ...emptyProfile(),
+        };
   const [values, setValues] = useState(initial);
   const [firstNameMissing, setFirstNameMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +83,12 @@ export function StudentForm(props: Props) {
       const { id } =
         props.mode === "create"
           ? await routerClient.teacher.students.create.mutate(fields)
-          : await routerClient.teacher.students.update.mutate({ ...fields, id: props.studentId, status: values.status });
+          : await routerClient.teacher.students.update.mutate({
+              ...fields,
+              ...profileOf(values),
+              id: props.studentId,
+              status: values.status,
+            });
       router.push(cardUrl(id));
       router.refresh();
     } catch {
@@ -73,9 +103,12 @@ export function StudentForm(props: Props) {
 
   return (
     <form onSubmit={onSubmit} className="flex max-w-md flex-col gap-4">
-      <label className="flex flex-col gap-1">
-        <span className="text-small text-text-secondary">Имя</span>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="student-firstName" className="text-small text-text-secondary">
+          Имя
+        </label>
         <input
+          id="student-firstName"
           name="firstName"
           required
           value={values.firstName}
@@ -92,19 +125,25 @@ export function StudentForm(props: Props) {
             Укажите имя
           </span>
         )}
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-small text-text-secondary">Фамилия</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="student-lastName" className="text-small text-text-secondary">
+          Фамилия
+        </label>
         <input
+          id="student-lastName"
           name="lastName"
           value={values.lastName}
           onChange={(event) => set("lastName", event.target.value)}
           className={fieldClass}
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-small text-text-secondary">Уровень</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="student-level" className="text-small text-text-secondary">
+          Уровень
+        </label>
         <select
+          id="student-level"
           name="level"
           value={values.level}
           onChange={(event) => set("level", event.target.value as Level)}
@@ -116,10 +155,13 @@ export function StudentForm(props: Props) {
             </option>
           ))}
         </select>
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-small text-text-secondary">Часовой пояс</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="student-timeZone" className="text-small text-text-secondary">
+          Часовой пояс
+        </label>
         <select
+          id="student-timeZone"
           name="timeZone"
           value={values.timeZone}
           onChange={(event) => set("timeZone", event.target.value as TimeZoneId)}
@@ -131,11 +173,14 @@ export function StudentForm(props: Props) {
             </option>
           ))}
         </select>
-      </label>
+      </div>
       {props.mode === "edit" && (
-        <label className="flex flex-col gap-1">
-          <span className="text-small text-text-secondary">Статус</span>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="student-status" className="text-small text-text-secondary">
+            Статус
+          </label>
           <select
+            id="student-status"
             name="status"
             value={values.status}
             onChange={(event) => set("status", event.target.value as Status)}
@@ -147,8 +192,33 @@ export function StudentForm(props: Props) {
               </option>
             ))}
           </select>
-        </label>
+        </div>
       )}
+      {props.mode === "edit" &&
+        PROFILE_FIELDS.map((field) => (
+          <div key={field.key} className="flex flex-col gap-1">
+            <label htmlFor={`student-${field.key}`} className="text-small text-text-secondary">
+              {field.label}
+            </label>
+            {field.multiline ? (
+              <textarea
+                id={`student-${field.key}`}
+                name={field.key}
+                value={values[field.key]}
+                onChange={(event) => set(field.key, event.target.value)}
+                className={areaClass}
+              />
+            ) : (
+              <input
+                id={`student-${field.key}`}
+                name={field.key}
+                value={values[field.key]}
+                onChange={(event) => set(field.key, event.target.value)}
+                className={fieldClass}
+              />
+            )}
+          </div>
+        ))}
       {error && (
         <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
           {error}
