@@ -1,8 +1,18 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, exists, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { note } from "../db/schema";
+import { note, student } from "../db/schema";
 
 export type Note = { id: string; body: string; createdAt: Date };
+
+/** A note whose student is still on the card (not soft-deleted). */
+function ofLiveStudent(db: Database) {
+  return exists(
+    db
+      .select({ id: student.id })
+      .from(student)
+      .where(and(eq(student.id, note.studentId), eq(student.teacherId, note.teacherId), isNull(student.deletedAt))),
+  );
+}
 
 const noteColumns = { id: note.id, body: note.body, createdAt: note.createdAt };
 
@@ -27,7 +37,7 @@ export async function updateNote(db: Database, teacherId: string, id: string, bo
   const [row] = await db
     .update(note)
     .set({ body })
-    .where(and(eq(note.id, id), eq(note.teacherId, teacherId)))
+    .where(and(eq(note.id, id), eq(note.teacherId, teacherId), ofLiveStudent(db)))
     .returning(noteColumns);
   return row ?? null;
 }
@@ -36,7 +46,7 @@ export async function updateNote(db: Database, teacherId: string, id: string, bo
 export async function deleteNote(db: Database, teacherId: string, id: string): Promise<boolean> {
   const rows = await db
     .delete(note)
-    .where(and(eq(note.id, id), eq(note.teacherId, teacherId)))
+    .where(and(eq(note.id, id), eq(note.teacherId, teacherId), ofLiveStudent(db)))
     .returning({ id: note.id });
   return rows.length > 0;
 }
