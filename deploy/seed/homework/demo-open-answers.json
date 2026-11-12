@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "title": "Demo: answers the teacher checks",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Pick the colour of grass.",
+      "options": ["green", "pink"],
+      "answer": 0,
+      "topic": "colours",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "written",
+      "prompt": "Write two sentences about your weekend.",
+      "hint": "Use the Past Simple.",
+      "topic": "past simple",
+      "skill": "writing"
+    },
+    {
+      "type": "voice",
+      "prompt": "Say three things you can see in your room.",
+      "topic": "my room",
+      "skill": "speaking"
+    },
+    {
+      "type": "file",
+      "prompt": "Take a photo of your notebook page.",
+      "accept": ["image"],
+      "topic": "notebook",
+      "skill": "writing"
+    }
+  ]
+}
