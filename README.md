@@ -21,6 +21,8 @@ Early. The repository holds the foundation: architecture, decisions, the rules f
 5. **Merge.** The product owner merges ordinary changes. Changes to the paths in [CODEOWNERS](.github/CODEOWNERS) — database schema, access, the checks themselves, deployment — wait for the maintainer. The maintainer's own pull requests there are approved by the product owner.
 6. **Staging.** The merged build appears on staging, where the result is reviewed.
 
+What the platform must do, for whom, and how its sections connect: [docs/product/](docs/product/README.md).
+
 How the system is put together and why: [docs/architecture.md](docs/architecture.md).
 
 ## Development
