@@ -12,6 +12,7 @@ import { studentHomeworkRouter } from "./student/homework";
 import { parentMeRouter } from "./parent/me";
 import { studentMeRouter } from "./student/me";
 import { homeworkRouter } from "./teacher/homework";
+import { reviewRouter } from "./teacher/review";
 import { linksTeacherRouter } from "./teacher/links";
 import { assistantRouter } from "./teacher/assistant";
 import { notesRouter } from "./teacher/notes";
@@ -31,6 +32,7 @@ export const appRouter = router({
     notes: notesRouter,
     links: linksTeacherRouter,
     homework: homeworkRouter,
+    review: reviewRouter,
   }),
 });
 

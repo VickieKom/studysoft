@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "title": "Demo: to be reviewed",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Pick the colour of the sky.",
+      "options": ["blue", "red"],
+      "answer": 0,
+      "topic": "colours",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "gap",
+      "prompt": "Fill in the gap.",
+      "text": "She ___ my friend.",
+      "answers": [["is"]],
+      "topic": "to be",
+      "skill": "grammar"
+    },
+    {
+      "type": "multiple_choice",
+      "prompt": "Pick every animal.",
+      "options": ["cat", "table", "dog"],
+      "answers": [0, 2],
+      "topic": "animals",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "written",
+      "prompt": "Write about your day.",
+      "topic": "my day",
+      "skill": "writing"
+    }
+  ]
+}

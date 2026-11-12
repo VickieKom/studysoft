@@ -362,7 +362,7 @@ erDiagram
 | `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed" |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
 | `homework`, `task` | `homework` | Permanent | The document in the homework format (`docs/homework-format.md`), stored as imported. Statuses: draft, published, submitted ("сдана", #34), missed ("не сдана"). Tasks do not change after publishing; a deadline is a calendar date; at most one published homework per student, kept by a partial unique index |
-| `homework_submission`, `homework_answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per homework, enforced by a unique constraint, with its idempotency key and score. One answer row per task: saved as the student goes, and on submission every task gets one with its correctness, topic and skill (#34) |
+| `homework_submission`, `homework_answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per attempt, with its idempotency key and score; one current submission per homework (a homework belongs to one student), enforced by a partial unique index. «Открыть заново для ученика» closes the current one, which stays in the history as it was, and starts a blank attempt (#36). One answer row per task and attempt: saved as the student goes, and on submission every task gets one with its topic and skill, the platform's correctness for auto-checked tasks, and later the teacher's mark, which wins (#34, #36) |
 | `blob` | `blob` | With what refers to it; files nothing refers to stay until cleanup exists (#73) | Whose file it is, its type and size; the bytes are in the store under the same id. Homework pictures are stored on import and served at `/api/files/homework/<id>/<task>` after a permission check (#33) |
 | `agent_token` | `access` | Until revoked | The assistant's personal token, hash only; one active per teacher; created and last-used dates (#3) |
 | `draft_origin` | `homework`, `lesson`, `library` | With the draft | Who created the draft (agent or teacher) and a snapshot of the student context at generation time |
@@ -403,7 +403,7 @@ sequenceDiagram
     A-->>S: 11. Count of right and wrong answers
 ```
 
-Step 7: correct answers never go to the client; checking happens on the server only, and a dedicated test pins this. Step 8 gives a draft of answers if the student closes the page. Step 9: a repeated request with the same key returns the earlier result; a second submission is impossible at the database constraint level.
+Step 7: correct answers never go to the client; checking happens on the server only, and a dedicated test pins this. Step 8 gives a draft of answers if the student closes the page. Step 9: a repeated request with the same key returns the earlier result; a second submission of the current attempt is impossible at the database constraint level; a new attempt exists only after the teacher reopens the homework (#36).
 
 #### Scenario: the agent prepares a homework draft
 
@@ -779,7 +779,7 @@ All accepted on 2026-11-11. A decision is changed by editing its row in a pull r
 | Speed | First homework screen on mobile data | Under 3 seconds | Planned |
 | Speed | A click on a material in the control panel | The stage changes within 0.5 seconds | Planned |
 | Reliability | The stage window is closed and reopened | The board and the current material are in place | Planned |
-| Reliability | Homework is submitted twice | One submission, the same result | Planned |
+| Reliability | Homework is submitted twice | One submission per attempt, the same result: the idempotency key returns the earlier one | Implemented |
 | Reliability | The server disk is lost | Restore from the nightly backup, at most a day lost | Planned |
 | Developer experience | A clean macOS machine | `make dev` brings the stand up with one command | Planned |
 | Developer experience | A merge into `main` | The change is on staging within 10 minutes | Planned |
