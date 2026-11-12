@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIE } from "../../access/links";
 import { closeDb, db } from "../../db/client";
@@ -62,7 +62,7 @@ describe("student link", () => {
 
   it("stores only a hash of the token", async () => {
     const token = (await studentLink()).split("#")[1]!;
-    const [row] = await db().select().from(accessLink).where(eq(accessLink.studentId, studentId));
+    const [row] = await db().select().from(accessLink).where(and(eq(accessLink.studentId, studentId), eq(accessLink.role, "student")));
     expect(JSON.stringify(row)).not.toContain(token);
   });
 
@@ -119,7 +119,7 @@ describe("student link", () => {
     const caller = createServerCaller(new Headers({ cookie: cookie! }));
     await caller.student.me();
 
-    const [link] = await db().select().from(accessLink).where(eq(accessLink.studentId, studentId));
+    const [link] = await db().select().from(accessLink).where(and(eq(accessLink.studentId, studentId), eq(accessLink.role, "student")));
     await db().update(accessLink).set({ generation: link!.generation + 1 }).where(eq(accessLink.id, link!.id));
     await expect(caller.student.me()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
@@ -127,7 +127,7 @@ describe("student link", () => {
   it("repairs the link after LINK_KEY is rotated", async () => {
     // A rotation leaves the stored hash belonging to the old token. Simulated
     // by giving the row a hash no current token has: the same state.
-    const [link] = await db().select().from(accessLink).where(eq(accessLink.studentId, studentId));
+    const [link] = await db().select().from(accessLink).where(and(eq(accessLink.studentId, studentId), eq(accessLink.role, "student")));
     await db().update(accessLink).set({ tokenHash: "hash-of-a-token-from-the-old-key" }).where(eq(accessLink.id, link!.id));
 
     const cookie = await exchange((await studentLink()).split("#")[1]!);

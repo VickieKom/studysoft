@@ -29,7 +29,8 @@ export default async function StudentCardPage({ params }: Props) {
             {student.lastName && <p className="text-h3 text-text-secondary">{student.lastName}</p>}
           </div>
           <div className="flex items-start gap-2">
-            <CopyLinkButton studentId={student.id} />
+            <CopyLinkButton studentId={student.id} role="student" />
+            <CopyLinkButton studentId={student.id} role="parent" />
             <Link
               href={`/teacher/students/${student.id}/edit`}
               className="inline-flex h-10 items-center rounded-control border border-border px-4 text-button font-semibold hover:bg-surface"

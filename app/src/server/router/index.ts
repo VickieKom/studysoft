@@ -7,6 +7,7 @@ import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, router } from "./core/trpc";
 import { healthRouter } from "./public/health";
 import { linksRouter } from "./public/links";
+import { parentMeRouter } from "./parent/me";
 import { studentMeRouter } from "./student/me";
 import { linksTeacherRouter } from "./teacher/links";
 import { notesRouter } from "./teacher/notes";
@@ -17,6 +18,7 @@ export const appRouter = router({
   health: healthRouter,
   links: linksRouter,
   student: studentMeRouter,
+  parent: parentMeRouter,
   teacher: router({
     session: sessionRouter,
     students: studentsRouter,

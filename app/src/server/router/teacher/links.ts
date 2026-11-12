@@ -13,4 +13,13 @@ export const linksTeacherRouter = router({
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
       return { url: await currentLinkUrl(ctx.db, ctx.teacherId, input.studentId, "student") };
     }),
+
+  /** The parent's permanent link: separate from the student's, with its own rights (#20). */
+  parent: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(z.object({ url: z.url() }))
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
+      return { url: await currentLinkUrl(ctx.db, ctx.teacherId, input.studentId, "parent") };
+    }),
 });

@@ -1,6 +1,6 @@
 // Base procedures. Every procedure is exactly one kind — public, teacher,
 // student, parent or agent — and access is deny-by-default (AGENTS.md, rule 3).
-// The student, parent and agent kinds arrive with their slices.
+// The agent kind arrives with its slice.
 import { initTRPC, TRPCError } from "@trpc/server";
 import { teacherIdFromHeaders } from "../../access/auth";
 import { linkSessionFromHeaders } from "../../access/links";
@@ -54,6 +54,19 @@ export const teacherProcedure = t.procedure.use(async ({ ctx, next }) => {
 export const studentProcedure = t.procedure.use(async ({ ctx, next }) => {
   const session = await linkSessionFromHeaders(ctx.db, ctx.headers);
   if (!session || session.role !== "student") {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({ ctx: { ...ctx, studentId: session.studentId, teacherId: session.teacherId } });
+});
+
+/**
+ * Requires a session opened from a parent link (#20): read only. The child and
+ * the teacher come from the session, never from input. A student session is
+ * not a parent session.
+ */
+export const parentProcedure = t.procedure.use(async ({ ctx, next }) => {
+  const session = await linkSessionFromHeaders(ctx.db, ctx.headers);
+  if (!session || session.role !== "parent") {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, studentId: session.studentId, teacherId: session.teacherId } });

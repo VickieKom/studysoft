@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { routerClient } from "@/components/router-client";
+import { routerClient } from "./router-client";
 
 /**
- * Exchanges the token from the address fragment for a session (architecture
- * 8.1): the fragment never reaches a server log, and it is removed from the
+ * Exchanges the token from the address fragment for a session on the student
+ * and the parent pages (architecture 8.1): the fragment never reaches a server log, and it is removed from the
  * address and the history once read.
  */
 export function LinkExchange() {

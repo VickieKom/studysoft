@@ -74,8 +74,9 @@ export const studentsRouter = router({
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const id = await createStudent(ctx.db, ctx.teacherId, input);
-      // The student link exists from the start (#19); copying it later never changes it.
+      // Both links exist from the start (#19, #20); copying one later never changes it.
       await ensureLink(ctx.db, ctx.teacherId, id, "student");
+      await ensureLink(ctx.db, ctx.teacherId, id, "parent");
       return { id };
     }),
 
