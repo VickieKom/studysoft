@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "title": "Demo: auto-checked tasks",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Pick the colour of the sky.",
+      "options": ["green", "blue", "red"],
+      "answer": 1,
+      "topic": "colours",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "multiple_choice",
+      "prompt": "Pick every animal.",
+      "options": ["cat", "table", "dog", "chair"],
+      "answers": [0, 2],
+      "topic": "animals",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "gap",
+      "prompt": "Fill in the gap.",
+      "text": "___ raining today.",
+      "answers": [["it's", "it is"]],
+      "topic": "to be",
+      "skill": "grammar"
+    },
+    {
+      "type": "match",
+      "prompt": "Match the opposites.",
+      "pairs": [
+        { "left": "hot", "right": "cold" },
+        { "left": "big", "right": "small" }
+      ],
+      "topic": "opposites",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "order",
+      "prompt": "Put the words in order.",
+      "words": ["We", "play", "after", "school"],
+      "topic": "word order",
+      "skill": "grammar"
+    }
+  ]
+}
