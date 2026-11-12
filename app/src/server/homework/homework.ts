@@ -152,9 +152,13 @@ export async function unpublishHomework(db: Database, teacherId: string, id: str
       .update(homework)
       .set({ status: "draft", dueDate: null, publishedAt: null })
       .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "published")))
-      .returning({ id: homework.id });
-    if (rows.length === 0) return false;
-    await tx.delete(homeworkAnswer).where(eq(homeworkAnswer.homeworkId, id));
+      .returning({ attempt: homework.attempt });
+    const [taken] = rows;
+    if (!taken) return false;
+    // Only the attempt in progress: earlier, submitted attempts stay in the history (#36).
+    await tx
+      .delete(homeworkAnswer)
+      .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, taken.attempt)));
     return true;
   });
 }
@@ -163,7 +167,8 @@ export type HomeworkResult = { correct: number; wrong: number };
 
 /**
  * What the student's page shows: the newest published or submitted homework,
- * with the score once it is submitted. A homework past its deadline can still
+ * with the score of the current submission once it is submitted; a reopened
+ * homework is published again and shows its tasks (#36). A homework past its deadline can still
  * be done until the next one is published (product requirements 5.1.3).
  */
 export async function currentHomeworkForStudent(
@@ -180,7 +185,10 @@ export async function currentHomeworkForStudent(
       wrong: homeworkSubmission.wrongCount,
     })
     .from(homework)
-    .leftJoin(homeworkSubmission, eq(homeworkSubmission.homeworkId, homework.id))
+    .leftJoin(
+      homeworkSubmission,
+      and(eq(homeworkSubmission.homeworkId, homework.id), eq(homeworkSubmission.isCurrent, true)),
+    )
     .where(
       and(
         eq(homework.teacherId, teacherId),
@@ -228,13 +236,17 @@ export async function openHomework(
   studentId: string,
   id: string,
 ): Promise<{ tasks: StudentTask[]; answers: (Answer | null)[] } | null> {
-  const [row] = await db.select({ document: homework.document }).from(homework).where(ownPublished(teacherId, studentId, id));
+  const [row] = await db
+    .select({ document: homework.document, attempt: homework.attempt })
+    .from(homework)
+    .where(ownPublished(teacherId, studentId, id));
   if (!row) return null;
   const tasks = (row.document as HomeworkDocument).tasks;
+  // The attempt in progress: a reopened homework starts blank (#36).
   const saved = await db
     .select({ taskIndex: homeworkAnswer.taskIndex, answer: homeworkAnswer.answer })
     .from(homeworkAnswer)
-    .where(eq(homeworkAnswer.homeworkId, id));
+    .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, row.attempt)));
   const answers: (Answer | null)[] = tasks.map(() => null);
   for (const { taskIndex, answer } of saved) {
     const parsed = answerSchema.safeParse(answer);
@@ -266,7 +278,7 @@ export async function saveAnswer(
     // A shared lock: a submission (FOR UPDATE) waits for the save, or the save
     // sees the homework submitted and stops.
     const [row] = await tx
-      .select({ document: homework.document })
+      .select({ document: homework.document, attempt: homework.attempt })
       .from(homework)
       .where(ownPublished(teacherId, studentId, id))
       .for("share");
@@ -276,9 +288,9 @@ export async function saveAnswer(
     if (answer && !fitsTask(task, answer)) return "invalid";
     await tx
       .insert(homeworkAnswer)
-      .values({ homeworkId: id, taskIndex, answer })
+      .values({ homeworkId: id, attempt: row.attempt, taskIndex, answer })
       .onConflictDoUpdate({
-        target: [homeworkAnswer.homeworkId, homeworkAnswer.taskIndex],
+        target: [homeworkAnswer.homeworkId, homeworkAnswer.attempt, homeworkAnswer.taskIndex],
         set: { answer, updatedAt: sql`now()` },
       });
     return "saved";
@@ -288,10 +300,12 @@ export async function saveAnswer(
 const isAutoChecked = (task: Task) => task.type !== "written" && task.type !== "voice" && task.type !== "file";
 
 /**
- * Submits a published homework once and returns the score. Every task gets a
- * stored answer with its correctness, topic and skill; an unanswered task is
- * wrong. A repeat with the same idempotency key returns the same score; any
- * other second submission is "conflict".
+ * Submits the attempt in progress once and returns the score. Every task gets
+ * a stored answer with its topic and skill: an auto-checked one with its
+ * correctness (an unanswered one is wrong), one the teacher checks waits for
+ * her mark (#36). A repeat with the same idempotency key returns the same
+ * score; any other second submission of the attempt is "conflict". A new
+ * attempt exists only after the teacher reopens the homework.
  */
 export async function submitHomework(
   db: Database,
@@ -302,7 +316,7 @@ export async function submitHomework(
 ): Promise<HomeworkResult | "not_found" | "conflict"> {
   return db.transaction(async (tx) => {
     const [row] = await tx
-      .select({ status: homework.status, document: homework.document })
+      .select({ status: homework.status, document: homework.document, attempt: homework.attempt })
       .from(homework)
       .where(
         and(
@@ -322,7 +336,7 @@ export async function submitHomework(
         wrong: homeworkSubmission.wrongCount,
       })
       .from(homeworkSubmission)
-      .where(eq(homeworkSubmission.homeworkId, id));
+      .where(and(eq(homeworkSubmission.homeworkId, id), eq(homeworkSubmission.attempt, row.attempt)));
     if (earlier) return earlier.key === idempotencyKey ? { correct: earlier.correct, wrong: earlier.wrong } : "conflict";
     if (row.status !== "published") return "not_found";
 
@@ -330,30 +344,38 @@ export async function submitHomework(
     const saved = await tx
       .select({ taskIndex: homeworkAnswer.taskIndex, answer: homeworkAnswer.answer })
       .from(homeworkAnswer)
-      .where(eq(homeworkAnswer.homeworkId, id))
+      .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, row.attempt)))
       .orderBy(asc(homeworkAnswer.taskIndex));
     const byIndex = new Map(saved.map((s) => [s.taskIndex, answerSchema.safeParse(s.answer)]));
 
     let correct = 0;
     let wrong = 0;
+    let pending = 0;
     for (const [taskIndex, task] of tasks.entries()) {
-      // shortcut: written, voice and file tasks are not answered or counted yet (#35)
-      if (!isAutoChecked(task)) continue;
       const parsed = byIndex.get(taskIndex);
       const answer = parsed?.success ? parsed.data : null;
-      const isCorrect = answer !== null && checkAnswer(task, answer);
-      if (isCorrect) correct++;
-      else wrong++;
+      // shortcut: written, voice and file answers arrive with #35; until then such a task is stored blank, for the teacher to mark
+      const isCorrect = isAutoChecked(task) ? answer !== null && checkAnswer(task, answer) : null;
+      if (isCorrect === true) correct++;
+      else if (isCorrect === false) wrong++;
+      else pending++;
       const fields = { correct: isCorrect, topic: task.topic ?? null, skill: task.skill ?? null };
       await tx
         .insert(homeworkAnswer)
-        .values({ homeworkId: id, taskIndex, answer, ...fields })
+        .values({ homeworkId: id, attempt: row.attempt, taskIndex, answer, ...fields })
         .onConflictDoUpdate({
-          target: [homeworkAnswer.homeworkId, homeworkAnswer.taskIndex],
+          target: [homeworkAnswer.homeworkId, homeworkAnswer.attempt, homeworkAnswer.taskIndex],
           set: { ...fields, updatedAt: sql`now()` },
         });
     }
-    await tx.insert(homeworkSubmission).values({ homeworkId: id, idempotencyKey, correctCount: correct, wrongCount: wrong });
+    await tx.insert(homeworkSubmission).values({
+      homeworkId: id,
+      attempt: row.attempt,
+      idempotencyKey,
+      correctCount: correct,
+      wrongCount: wrong,
+      pendingCount: pending,
+    });
     await tx.update(homework).set({ status: "submitted" }).where(eq(homework.id, id));
     return { correct, wrong };
   });

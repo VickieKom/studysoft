@@ -249,6 +249,10 @@ export const homework = pgTable(
     status: text("status").notNull().default("draft"),
     dueDate: date("due_date"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    // The attempt the student is on; «Открыть заново для ученика» moves it on (#36).
+    attempt: bigint("attempt", { mode: "number" }).notNull().default(1),
+    // The teacher's one comment on the homework (#36).
+    reviewComment: text("review_comment"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -277,30 +281,54 @@ export const homeworkAnswer = pgTable(
     homeworkId: uuid("homework_id")
       .notNull()
       .references(() => homework.id),
+    // The attempt the answer belongs to: a reopened homework starts a new one (#36).
+    attempt: bigint("attempt", { mode: "number" }).notNull().default(1),
     taskIndex: bigint("task_index", { mode: "number" }).notNull(),
     answer: jsonb("answer"),
+    // Set by the platform on submission for auto-checked tasks; null for the
+    // tasks the teacher checks.
     correct: boolean("correct"),
+    // The teacher's mark (#36): wins over `correct` when set.
+    teacherMark: boolean("teacher_mark"),
     topic: text("topic"),
     skill: text("skill"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [unique("homework_answer_homework_id_task_index_key").on(t.homeworkId, t.taskIndex)],
+  (t) => [unique("homework_answer_attempt_task_key").on(t.homeworkId, t.attempt, t.taskIndex)],
 );
 
-// One submission per homework, kept by the database (#34). A repeated request
-// with the same idempotency key gets the same result back.
-export const homeworkSubmission = pgTable("homework_submission", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  homeworkId: uuid("homework_id")
-    .notNull()
-    .unique()
-    .references(() => homework.id),
-  idempotencyKey: text("idempotency_key").notNull(),
-  correctCount: bigint("correct_count", { mode: "number" }).notNull(),
-  wrongCount: bigint("wrong_count", { mode: "number" }).notNull(),
-  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// Submissions of a homework, one per attempt (#34, #36). Exactly one is
+// current per homework (and so per student), kept by a partial unique index; reopening
+// closes the current one, which stays in the history as it was. A repeated
+// request with the same idempotency key gets the same result back.
+export const homeworkSubmission = pgTable(
+  "homework_submission",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id),
+    attempt: bigint("attempt", { mode: "number" }).notNull().default(1),
+    isCurrent: boolean("is_current").notNull().default(true),
+    idempotencyKey: text("idempotency_key").notNull(),
+    correctCount: bigint("correct_count", { mode: "number" }).notNull(),
+    wrongCount: bigint("wrong_count", { mode: "number" }).notNull(),
+    // Tasks the teacher has not marked yet; with `openedAt`, what «ждёт проверки» means.
+    pendingCount: bigint("pending_count", { mode: "number" }).notNull().default(0),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+    // When the teacher first opened it in «Проверка домашек».
+    openedAt: timestamp("opened_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("homework_submission_homework_id_attempt_key").on(t.homeworkId, t.attempt),
+    // A homework belongs to one student, so one current submission per homework
+    // is one per homework and student.
+    uniqueIndex("homework_submission_one_current")
+      .on(t.homeworkId)
+      .where(sql`${t.isCurrent}`),
+  ],
+);
 
 // The assistant's personal token (#3; architecture 8.1). One active token per
 // teacher; creating a new one revokes the old. Only the hash is stored; the

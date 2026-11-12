@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import type { Task } from "./homework-format";
+import type { Answer, Task } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -68,4 +68,26 @@ export function tasksLabel(count: number): string {
   const word =
     mod10 === 1 && mod100 !== 11 ? "задание" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "задания" : "заданий";
   return `${count} ${word}`;
+}
+
+/** A student's answer as the teacher reads it in the review (#36), or null when there is none. */
+export function answerText(task: Task, answer: Answer | null): string | null {
+  if (!answer || answer.type !== task.type) return null;
+  switch (answer.type) {
+    case "single_choice":
+      return task.type === "single_choice" ? (task.options[answer.choice] ?? null) : null;
+    case "multiple_choice":
+      return task.type === "multiple_choice" ? answer.choices.map((i) => task.options[i]).join(", ") : null;
+    case "gap":
+      return answer.gaps.map((gap) => gap.trim() || "…").join("; ");
+    case "match":
+      return answer.pairs.map((p) => `${p.left} — ${p.right}`).join("; ");
+    case "order":
+      return answer.words.join(" ");
+  }
+}
+
+/** When a homework was submitted, for the teacher: "12 ноября". */
+export function formatReviewDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
