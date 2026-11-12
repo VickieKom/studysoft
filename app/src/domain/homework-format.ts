@@ -161,10 +161,11 @@ export function parseHomework(json: string): ParseResult {
 
 /**
  * A shuffle that gives the same order for the same seed, so the student sees
- * the tiles in one order on every visit and on every device. It never leaves
- * the solved order in place when another order exists.
+ * the tiles in one order on every visit and on every device. It never shows
+ * one of the solved orders when another order exists. The seed must not be
+ * guessable by the student: the server derives it from a secret.
  */
-function shuffled<T>(items: readonly T[], seed: string): T[] {
+function shuffled<T>(items: readonly T[], seed: string, solved: readonly (readonly T[])[]): T[] {
   // FNV-1a over the seed, then mulberry32 as the generator.
   let state = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) state = Math.imul(state ^ seed.charCodeAt(i), 0x01000193);
@@ -179,9 +180,13 @@ function shuffled<T>(items: readonly T[], seed: string): T[] {
     const j = Math.floor(random() * (i + 1));
     [result[i], result[j]] = [result[j]!, result[i]!];
   }
-  const solved = result.every((item, i) => item === items[i]);
-  const allSame = items.every((item) => item === items[0]);
-  return solved && !allSame ? [...result.slice(1), result[0]!] : result;
+  const isSolved = (order: readonly T[]) => solved.some((s) => s.length === order.length && s.every((item, i) => item === order[i]));
+  // The shuffle, its rotations, then the rotations with the first two swapped:
+  // the first of these that is not a solved order. For three items that is
+  // every order there is; longer tasks have far more orders than solutions.
+  const rotations = (order: T[]) => order.map((_, turn) => [...order.slice(turn), ...order.slice(0, turn)]);
+  const swapped = result.length > 1 ? [result[1]!, result[0]!, ...result.slice(2)] : result;
+  return [...rotations(result), ...rotations(swapped)].find((order) => !isSolved(order)) ?? result;
 }
 
 /**
@@ -214,10 +219,15 @@ export function studentView(task: Task, seed: string): StudentTask {
         right: shuffled(
           task.pairs.map((p) => p.right),
           seed,
+          [task.pairs.map((p) => p.right)],
         ),
       };
     case "order":
-      return { type: "order", prompt: task.prompt, words: shuffled(task.words, seed) };
+      return {
+        type: "order",
+        prompt: task.prompt,
+        words: shuffled(task.words, seed, [task.words, ...(task.alternatives ?? [])]),
+      };
     case "written":
     case "voice":
       return { type: task.type, prompt: task.prompt, ...(task.hint ? { hint: task.hint } : {}) };

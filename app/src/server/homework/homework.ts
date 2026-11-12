@@ -2,6 +2,7 @@
 // imported and never changes after publishing. The teacher's preview shows it
 // whole, keys included; a student only ever gets studentView() — without the
 // keys (AGENTS.md, rule 4).
+import { createHmac } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   type Answer,
@@ -14,6 +15,7 @@ import {
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission } from "../db/schema";
+import { env } from "../env";
 import { checkAnswer, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
@@ -191,6 +193,16 @@ const ownPublished = (teacherId: string, studentId: string, id: string) =>
   );
 
 /**
+ * The seed of a task's shuffle: the same on every device, and not something
+ * the student can compute from what they see (the homework id is theirs, the
+ * shuffle is public code), so it is derived from a server secret. Rotating
+ * LINK_KEY reshuffles the tiles, which is harmless: answers hold values.
+ */
+export function shuffleSeed(homeworkId: string, taskIndex: number): string {
+  return createHmac("sha256", env().LINK_KEY).update(`shuffle|${homeworkId}|${taskIndex}`).digest("base64url");
+}
+
+/**
  * The tasks of a published homework as the student sees them — never a key
  * (AGENTS.md, rule 4) — and the answers saved so far, one per task or null.
  * Null when there is no such published homework of this student.
@@ -213,7 +225,7 @@ export async function openHomework(
     const parsed = answerSchema.safeParse(answer);
     if (parsed.success && taskIndex < answers.length) answers[taskIndex] = parsed.data;
   }
-  return { tasks: tasks.map((task, index) => studentView(task, `${id}:${index}`)), answers };
+  return { tasks: tasks.map((task, index) => studentView(task, shuffleSeed(id, index))), answers };
 }
 
 /**
