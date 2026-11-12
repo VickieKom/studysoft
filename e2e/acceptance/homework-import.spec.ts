@@ -46,16 +46,19 @@ async function importHomework(page: Page, homework: unknown) {
   await page.getByRole("button", { name: "Импортировать", exact: true }).click();
 }
 
-/** A deadline a few days ahead, as the date field takes it and as the student sees it. */
+// "к четвергу": the weekday after «к», as the product owner asked.
+const WEEKDAY_AFTER_K = ["воскресенью", "понедельнику", "вторнику", "среде", "четвергу", "пятнице", "субботе"];
+
+/**
+ * A deadline a few days ahead, as the date field takes it and as the student
+ * sees it: "к четвергу, 15 ноября".
+ */
 function deadline(daysAhead: number) {
   const date = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
   const iso = date.toISOString().slice(0, 10);
-  const shown = new Date(`${iso}T00:00:00Z`).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
-  return { iso, shown };
+  const day = new Date(`${iso}T00:00:00Z`);
+  const dayMonth = day.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
+  return { iso, shown: `${WEEKDAY_AFTER_K[day.getUTCDay()]}, ${dayMonth}` };
 }
 
 async function publish(page: Page, iso: string) {
@@ -71,7 +74,7 @@ async function openAsStudent(browser: Browser, link: string): Promise<Page> {
   return page;
 }
 
-test("an imported homework is a draft with a preview and no answers; the student does not see it", async ({
+test("an imported homework is a draft whose preview shows the keys to the teacher; the student does not see it", async ({
   page,
   browser,
 }) => {
@@ -82,13 +85,14 @@ test("an imported homework is a draft with a preview and no answers; the student
   await expect(page.getByRole("heading", { level: 1, name: allTypes.title })).toBeVisible();
   await expect(page.getByText("Черновик", { exact: true })).toBeVisible();
 
-  // The preview lists every task in order, without the keys.
+  // The preview lists every task in order, and shows the teacher the keys so
+  // that a wrong one is caught before publishing (product owner's decision).
   const tasks = page.getByRole("listitem");
   await expect(tasks).toHaveCount(allTypes.tasks.length);
   for (const [index, task] of allTypes.tasks.entries()) {
     await expect(tasks.nth(index)).toContainText(task.prompt);
   }
-  await expect(page.locator("body")).not.toContainText("carrots");
+  await expect(tasks.nth(2)).toContainText("carrots");
 
   await page.goto(card);
   await expect(homeworkOnCard(page).filter({ hasText: allTypes.title })).toContainText("Черновик");
