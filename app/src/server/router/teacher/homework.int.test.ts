@@ -42,14 +42,12 @@ beforeAll(async () => {
 afterAll(closeDb);
 
 describe("teacher.homework", () => {
-  it("imports a valid homework as a draft and previews it without keys", async () => {
+  it("imports a valid homework as a draft and previews it with the keys for the teacher", async () => {
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(allTypes) });
     const preview = await teacher.teacher.homework.get({ id });
     expect(preview).toMatchObject({ title: allTypes.title, status: "draft", dueDate: null, taskCount: 8 });
     expect(preview.tasks.map((t) => t.prompt)).toEqual(allTypes.tasks.map((t) => t.prompt));
-    const raw = json(preview);
-    expect(raw).not.toContain("carrots");
-    expect(raw).not.toMatch(/"answers?"|"pairs"|"alternatives"/);
+    expect(preview.tasks).toEqual(allTypes.tasks);
   });
 
   it("refuses an invalid homework with a message naming the task and the field, and saves nothing", async () => {

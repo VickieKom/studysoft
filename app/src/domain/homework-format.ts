@@ -164,7 +164,7 @@ export function parseHomework(json: string): ParseResult {
 /**
  * What the student may see of a task: everything except the keys. The server
  * sends only this to students (AGENTS.md, rule 4); the teacher's preview shows
- * the same. Shuffling of match and order happens when the student opens it (#34).
+ * the whole task, keys included. Shuffling of match and order happens when the student opens it (#34).
  */
 export type StudentTask =
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: string[] }

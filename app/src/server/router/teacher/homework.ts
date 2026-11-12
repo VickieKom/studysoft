@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { parseHomework } from "../../../domain/homework-format";
+import { parseHomework, taskSchema } from "../../../domain/homework-format";
 import { findStudent } from "../../crm/students";
 import {
   findHomework,
@@ -13,23 +13,6 @@ import {
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
-
-// The preview is the student's view: never a key, even for the teacher (#32).
-const studentTask = z.discriminatedUnion("type", [
-  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: z.string(), options: z.array(z.string()) }).strict(),
-  z.object({ type: z.literal("gap"), prompt: z.string(), text: z.string(), options: z.array(z.string()).optional() }).strict(),
-  z.object({ type: z.literal("match"), prompt: z.string(), left: z.array(z.string()), right: z.array(z.string()) }).strict(),
-  z.object({ type: z.literal("order"), prompt: z.string(), words: z.array(z.string()) }).strict(),
-  z.object({ type: z.enum(["written", "voice"]), prompt: z.string(), hint: z.string().optional() }).strict(),
-  z
-    .object({
-      type: z.literal("file"),
-      prompt: z.string(),
-      accept: z.array(z.enum(["image", "audio"])),
-      hint: z.string().optional(),
-    })
-    .strict(),
-]);
 
 const summary = z.object({
   id: z.uuid(),
@@ -61,9 +44,10 @@ export const homeworkRouter = router({
       return (await listHomework(ctx.db, ctx.teacherId, input.studentId)).map(({ createdAt: _c, ...rest }) => rest);
     }),
 
+  /** The preview for the teacher: tasks with their keys, so a wrong key is caught before publishing. */
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(studentTask) }))
+    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema) }))
     .query(async ({ ctx, input }) => {
       const found = await findHomework(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();

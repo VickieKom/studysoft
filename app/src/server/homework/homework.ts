@@ -1,8 +1,9 @@
 // Homework drafts and their publication (#32). The document is stored as
-// imported and never changes after publishing; what a student may see of it
-// is studentView() — without the keys (AGENTS.md, rule 4).
+// imported and never changes after publishing. The teacher's preview shows it
+// whole, keys included; a student only ever gets studentView() — without the
+// keys (AGENTS.md, rule 4).
 import { and, desc, eq, sql } from "drizzle-orm";
-import { type HomeworkDocument, homeworkSchema, type StudentTask, studentView } from "../../domain/homework-format";
+import { type HomeworkDocument, homeworkSchema, type Task } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework } from "../db/schema";
 
@@ -69,12 +70,12 @@ export async function listHomework(db: Database, teacherId: string, studentId: s
   return rows.map(toSummary);
 }
 
-/** One homework of this teacher for the preview: tasks as the student sees them. */
+/** One homework of this teacher for the preview: the tasks with their keys, for the teacher only. */
 export async function findHomework(
   db: Database,
   teacherId: string,
   id: string,
-): Promise<(HomeworkSummary & { studentId: string; tasks: StudentTask[] }) | null> {
+): Promise<(HomeworkSummary & { studentId: string; tasks: Task[] }) | null> {
   const [row] = await db
     .select({ ...summaryColumns, studentId: homework.studentId })
     .from(homework)
@@ -83,7 +84,7 @@ export async function findHomework(
   return {
     ...toSummary(row),
     studentId: row.studentId,
-    tasks: (row.document as HomeworkDocument).tasks.map(studentView),
+    tasks: (row.document as HomeworkDocument).tasks,
   };
 }
 
