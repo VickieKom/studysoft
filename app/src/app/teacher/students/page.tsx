@@ -31,12 +31,17 @@ export default async function StudentsPage({ searchParams }: Props) {
     <main>
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-h1 font-bold">Ученики</h1>
-        <Link
-          href="/teacher/students/new"
-          className="inline-flex h-10 items-center rounded-control bg-green-600 px-4 text-button font-semibold text-on-accent hover:bg-green-700"
-        >
-          Новый ученик
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/teacher/assistant" className="text-small text-green-600 hover:text-green-700">
+            Ассистент
+          </Link>
+          <Link
+            href="/teacher/students/new"
+            className="inline-flex h-10 items-center rounded-control bg-green-600 px-4 text-button font-semibold text-on-accent hover:bg-green-700"
+          >
+            Новый ученик
+          </Link>
+        </div>
       </header>
       <nav aria-label="Статус" className="mb-6 flex flex-wrap gap-2">
         {filters.map((filter) => (

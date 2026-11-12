@@ -4,7 +4,7 @@ Operating manual for coding agents working in this repository. It is terse on pu
 
 StudySoft is a platform for private language tutors: students and payments, schedule, a library of learning materials, a two-window lesson mode, homework with automatic checking. One Next.js application in TypeScript over PostgreSQL, plus an MCP server that lets the teacher's own AI agent read context and save drafts.
 
-**Status:** the walking skeleton is being built. `app/`, `e2e/acceptance/` and `deploy/` exist; the student card (#18) is the nearest slice to copy for a list, a card and a form that saves through the router; the teacher sign-in (#17) for anything around teacher sessions; the student link (#19) for screens behind a link (`app/src/app/s/`) and student procedures (`studentProcedure`, `app/src/server/router/student/`). `mcp/` and `e2e/smoke/` appear with their slices. Do not invent a different layout.
+**Status:** the walking skeleton is being built. `app/`, `e2e/acceptance/` and `deploy/` exist; the student card (#18) is the nearest slice to copy for a list, a card and a form that saves through the router; the teacher sign-in (#17) for anything around teacher sessions; the student link (#19) for screens behind a link (`app/src/app/s/`) and student procedures (`studentProcedure`, `app/src/server/router/student/`); the assistant (#3) for agent procedures (`agentProcedure`, `app/src/server/router/agent/`), the student context (`app/src/server/crm/context.ts`) and MCP tools (`mcp/`). `e2e/smoke/` appears with its slice. Do not invent a different layout.
 
 ## How we work
 

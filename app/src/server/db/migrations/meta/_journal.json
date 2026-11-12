@@ -50,6 +50,13 @@
       "when": 1794471172098,
       "tag": "0006_homework",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794475223394,
+      "tag": "0007_agent_token",
+      "breakpoints": true
     }
   ]
 }

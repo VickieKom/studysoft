@@ -1,0 +1,23 @@
+{
+  "name": "@studysoft/mcp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "MCP server for the teacher's assistant: a thin wrapper over the platform's agent procedures",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@trpc/client": "11.19.0",
+    "zod": "4.6.7"
+  }
+}

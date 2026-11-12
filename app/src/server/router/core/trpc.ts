@@ -2,6 +2,7 @@
 // student, parent or agent — and access is deny-by-default (AGENTS.md, rule 3).
 // The student, parent and agent kinds arrive with their slices.
 import { initTRPC, TRPCError } from "@trpc/server";
+import { teacherIdFromAgentToken } from "../../access/agent-tokens";
 import { teacherIdFromHeaders } from "../../access/auth";
 import { linkSessionFromHeaders } from "../../access/links";
 import { db, type Database } from "../../db/client";
@@ -58,4 +59,17 @@ export const studentProcedure = t.procedure.use(async ({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, studentId: session.studentId, teacherId: session.teacherId } });
+});
+
+/**
+ * Requires the assistant's personal token (#3). The teacher comes from the
+ * token, never from input. Agent procedures read, and later only create
+ * drafts; publishing stays a teacher procedure (AGENTS.md, rule 5).
+ */
+export const agentProcedure = t.procedure.use(async ({ ctx, next }) => {
+  const teacherId = await teacherIdFromAgentToken(ctx.db, ctx.headers);
+  if (!teacherId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({ ctx: { ...ctx, teacherId } });
 });
