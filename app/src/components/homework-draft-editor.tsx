@@ -32,7 +32,11 @@ export function HomeworkDraftEditor({ homeworkId, tasks: initial }: { homeworkId
       setTasks(saved.tasks);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error && cause.message ? cause.message : "Не получилось сохранить. Попробуйте ещё раз");
+      const code = (cause as { data?: { code?: string } } | null)?.data?.code;
+      // The server's own messages are in Russian only for an invalid homework.
+      if (code === "BAD_REQUEST" && cause instanceof Error) setError(cause.message);
+      else if (code === "NOT_FOUND") setError("Домашка уже опубликована в другой вкладке. Обновите страницу");
+      else setError("Не получилось сохранить. Попробуйте ещё раз");
       return false;
     } finally {
       setPending(false);
