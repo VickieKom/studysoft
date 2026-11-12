@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ACTIVE_STATUSES, isBlank, LEVELS, PROFILE_KEYS, type ProfileKey, STATUSES, TIME_ZONE_IDS } from "../../../domain/student";
-import { ensureLink, revokeLinks } from "../../access/links";
+import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { createStudent, findStudent, listStudents, updateStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -85,11 +85,15 @@ export const studentsRouter = router({
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...changes } = input;
-      // "Завершили" closes both links (#21). Revoked before the status is
-      // saved: if saving fails, access is closed anyway, and the next copy
-      // reissues the link. Coming back reissues them on the first copy.
-      if (changes.status === "finished") await revokeLinks(ctx.db, ctx.teacherId, id);
-      if (!(await updateStudent(ctx.db, ctx.teacherId, id, changes))) throw notFound();
+      // "Завершили" closes both links (#21), in one transaction with the
+      // status that holds the student row: a copy or a reissue waits for it
+      // and then sees the student finished (#65). Coming back reissues the
+      // links on the first copy.
+      const saved = await withStudentLocked(ctx.db, ctx.teacherId, id, async (tx) => {
+        if (changes.status === "finished") await revokeLinks(tx, ctx.teacherId, id);
+        return updateStudent(tx, ctx.teacherId, id, changes);
+      });
+      if (!saved) throw notFound();
       return { id };
     }),
 });

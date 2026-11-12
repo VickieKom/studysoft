@@ -142,4 +142,23 @@ describe("«Завершили»", () => {
     expect(await link(id, "student")).toBe(url);
     expect(await as(cookie!).student.me()).toEqual({ firstName: "Пауза" });
   });
+
+  it("never leaves a link open when a copy or a reissue races «Завершили»", async () => {
+    // Without the shared lock, a reissue that read the student as open could
+    // lift the revocation «Завершили» had just made (#65). Run the race a few
+    // times: whichever comes first, the finished student's links stay closed.
+    for (let round = 0; round < 8; round++) {
+      const id = await newStudent(`Гонка ${round}`);
+      await link(id, "student");
+      await link(id, "parent");
+      await Promise.allSettled([
+        setStatus(id, "finished"),
+        teacher.teacher.links.reissue({ studentId: id, role: "student" }),
+        teacher.teacher.links.parent({ studentId: id }),
+      ]);
+      const rows = await db().select().from(accessLink).where(eq(accessLink.studentId, id));
+      expect(rows).toHaveLength(2);
+      expect(rows.every((row) => row.revokedAt !== null)).toBe(true);
+    }
+  });
 });

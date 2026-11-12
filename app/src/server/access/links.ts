@@ -49,6 +49,9 @@ export function linkUrl(token: string, role: LinkRole): string {
   return new URL(`${LINK_PATHS[role]}#${token}`, env().APP_URL).toString();
 }
 
+/** What these functions need of the database: the pool or a transaction. */
+type Queries = Pick<Database, "select" | "insert" | "update">;
+
 type LinkRow = { id: string; generation: number; tokenHash: string; revokedAt: Date | null };
 
 const linkColumns = {
@@ -58,7 +61,7 @@ const linkColumns = {
   revokedAt: accessLink.revokedAt,
 };
 
-async function findLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow | undefined> {
+async function findLink(db: Queries, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow | undefined> {
   const [row] = await db
     .select(linkColumns)
     .from(accessLink)
@@ -71,7 +74,7 @@ async function findLink(db: Database, teacherId: string, studentId: string, role
  * revoked. Students created before links existed get theirs when the teacher
  * first copies it.
  */
-export async function ensureLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow> {
+export async function ensureLink(db: Queries, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow> {
   const existing = await findLink(db, teacherId, studentId, role);
   if (existing) return existing;
 
@@ -97,7 +100,7 @@ export async function ensureLink(db: Database, teacherId: string, studentId: str
  * point of rotating; sessions survive, because they are bound to the
  * generation, not to the token.
  */
-export async function currentLinkUrl(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<string> {
+export async function currentLinkUrl(db: Queries, teacherId: string, studentId: string, role: LinkRole): Promise<string> {
   const found = await ensureLink(db, teacherId, studentId, role);
   // A revoked link belongs to a student who has come back from "Завершили":
   // the card offers a new one. The caller refuses while the student is there.
@@ -119,7 +122,7 @@ export async function currentLinkUrl(db: Database, teacherId: string, studentId:
  * between the read and the update is not lifted by a reissue. Exported for
  * the test of that interleaving; callers use reissueLink and currentLinkUrl.
  */
-export async function bumpGeneration(db: Database, link: LinkRow, role: LinkRole): Promise<LinkRow> {
+export async function bumpGeneration(db: Queries, link: LinkRow, role: LinkRole): Promise<LinkRow> {
   const generation = link.generation + 1;
   const [next] = await db
     .update(accessLink)
@@ -139,12 +142,12 @@ export async function bumpGeneration(db: Database, link: LinkRow, role: LinkRole
 }
 
 /** "Перевыпустить": the student's or the parent's link gets a new token (#21). */
-export async function reissueLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<void> {
+export async function reissueLink(db: Queries, teacherId: string, studentId: string, role: LinkRole): Promise<void> {
   await bumpGeneration(db, await ensureLink(db, teacherId, studentId, role), role);
 }
 
 /** Closes both links of a student and every session opened from them (#21, "Завершили"). */
-export async function revokeLinks(db: Database, teacherId: string, studentId: string): Promise<void> {
+export async function revokeLinks(db: Queries, teacherId: string, studentId: string): Promise<void> {
   await db
     .update(accessLink)
     .set({ revokedAt: new Date() })
@@ -231,4 +234,50 @@ export async function linkSessionFromHeaders(
       .where(eq(linkSession.id, row.sessionId));
   }
   return { role: row.role as LinkRole, studentId: row.studentId, teacherId: row.teacherId };
+}
+
+/**
+ * Runs `work` in a transaction that holds the student row FOR SHARE, so a
+ * change of status (which holds it FOR UPDATE, #21) cannot land in between:
+ * a copy or a reissue never reopens the link of a student just moved to
+ * «Завершили» (#65). "missing" for another teacher's or a deleted student,
+ * "finished" for a student in «Завершили».
+ */
+export async function withOpenStudent<T>(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  work: (tx: Queries) => Promise<T>,
+): Promise<T | "missing" | "finished"> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ status: student.status })
+      .from(student)
+      .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt)))
+      .for("share");
+    if (!row) return "missing";
+    if (row.status === "finished") return "finished";
+    return work(tx);
+  });
+}
+
+/**
+ * Runs `work` in a transaction that holds the student row FOR UPDATE: a
+ * status change and the revocation it brings land together, and copies or
+ * reissues of the links wait for them (#21, #65).
+ */
+export async function withStudentLocked<T>(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  work: (tx: Queries) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx
+      .select({ id: student.id })
+      .from(student)
+      .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId)))
+      .for("update");
+    return work(tx);
+  });
 }
