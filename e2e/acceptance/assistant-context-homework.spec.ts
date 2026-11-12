@@ -52,10 +52,14 @@ async function createToken(page: Page): Promise<string> {
   return token.inputValue();
 }
 
+// A synthetic last name: its value must never reach the assistant.
+const LAST_NAME = "Скрытова-Контекстная";
+
 async function createStudent(page: Page, firstName: string) {
   await page.goto("/teacher/students");
   await control(page, "Новый ученик").click();
   await page.getByLabel("Имя").fill(firstName);
+  await page.getByLabel("Фамилия").fill(LAST_NAME);
   await page.getByRole("button", { name: "Сохранить" }).click();
   await expect(page.getByRole("heading", { level: 1, name: firstName })).toBeVisible();
   const card = page.url();
@@ -138,7 +142,7 @@ test("the context has the submitted homework, newest first, with answers and rig
   const mistakes = Object.fromEntries(context.mistakesByTopic.map((m) => [m.topic, m.count]));
   expect(mistakes).toEqual({ animals: 2, "to be": 2, opposites: 2, "word order": 2 });
 
-  for (const hidden of ["Context: not submitted", "Context: another student", "lastName", "/s#"]) {
+  for (const hidden of ["Context: not submitted", "Context: another student", LAST_NAME, "lastName", "/s#"]) {
     expect(text).not.toContain(hidden);
   }
 });
