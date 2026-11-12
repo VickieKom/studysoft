@@ -139,10 +139,13 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
     return results.every((r) => r.status === "fulfilled");
   }
 
-  async function go(to: number) {
-    setBusy(true);
-    await flush();
-    setBusy(false);
+  /**
+   * Moves to another task at once; what is still unsaved goes on saving in
+   * the background (#35: a typed answer or an upload must not hold the
+   * student on the task). «Сдать» waits for every save.
+   */
+  function go(to: number) {
+    void flush();
     setUnanswered(null);
     setIndex(to);
   }

@@ -96,7 +96,7 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
       return answer.words.join(" ");
     case "written":
       return answer.text.trim() || null;
-    // shortcut: the review names a recording or a file but does not play or show it yet; the teacher opens it at its address (#35)
+    // shortcut: the review names a recording or a file but does not play or show it, until the review plays them (#93)
     case "voice":
       return "Голосовая запись";
     case "file":
