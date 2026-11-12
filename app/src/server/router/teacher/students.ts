@@ -13,6 +13,7 @@ import {
 } from "../../../domain/student";
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
+import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
 
 // No format checks on names (#18): whatever the teacher types is stored as
@@ -129,6 +130,10 @@ export const studentsRouter = router({
         return updated;
       });
       if (!saved) throw notFound();
+      // «На паузе» and «Завершили» take the future lessons off the schedule;
+      // back in «Занимается» they come again from the slots (#80).
+      if (changes.status === "paused" || changes.status === "finished") await removeFutureLessons(ctx.db, ctx.teacherId, id);
+      else await topUpLessons(ctx.db, ctx.teacherId, new Date(), id);
       return { id };
     }),
 });

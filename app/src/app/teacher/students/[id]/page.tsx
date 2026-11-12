@@ -3,6 +3,7 @@ import { Fragment } from "react";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { StudentHomework } from "@/components/student-homework";
+import { StudentSlots } from "@/components/schedule-controls";
 import { StudentNotes } from "@/components/student-notes";
 import { CONTACT_FIELDS, PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../../caller";
@@ -16,6 +17,7 @@ export default async function StudentCardPage({ params }: Props) {
   const student = await studentOrNotFound((await params).id);
   const { caller } = await teacherCaller();
   const notes = await caller.teacher.notes.list({ studentId: student.id });
+  const slots = await caller.teacher.schedule.slots({ studentId: student.id });
   const homework = await caller.teacher.homework.list({ studentId: student.id });
 
   return (
@@ -61,6 +63,7 @@ export default async function StudentCardPage({ params }: Props) {
             </Fragment>
           ))}
         </dl>
+        <StudentSlots studentId={student.id} slots={slots} />
         <section aria-label="Ссылки" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
           {student.status === "finished" ? (
             // "Завершили" closes both links (#21); coming back gives new ones.

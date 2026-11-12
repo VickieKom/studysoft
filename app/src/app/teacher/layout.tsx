@@ -15,6 +15,9 @@ export default async function TeacherLayout({ children }: { children: ReactNode 
         <Link href="/teacher/students" className={item}>
           Ученики
         </Link>
+        <Link href="/teacher/schedule" className={item}>
+          Расписание
+        </Link>
         <Link href="/teacher/homework-review" className={`${item} inline-flex items-center gap-2`}>
           Проверка домашек
           {waiting > 0 && (
@@ -23,6 +26,9 @@ export default async function TeacherLayout({ children }: { children: ReactNode 
         </Link>
         <Link href="/teacher/assistant" className={item}>
           Ассистент
+        </Link>
+        <Link href="/teacher/settings" className={item}>
+          Настройки
         </Link>
       </nav>
       {children}
