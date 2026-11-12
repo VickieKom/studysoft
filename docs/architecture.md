@@ -583,7 +583,7 @@ Estimates, not measurements.
 
 A single small virtual server (2 vCPU, 4 GB of memory) runs production with room to spare; it can be shared with other workloads at the start.
 
-**Backups.** Every night a PostgreSQL dump and an archive of files leave the host: students' work and the author's library materials (games, warm-ups, images). Only original textbook files are not backed up: the teacher has them and can upload them again. Restore is verified with `make restore-check`.
+**Backups.** Every night a PostgreSQL dump and an archive of files leave the host: students' work and the author's library materials (games, warm-ups, images). Only original textbook files are not backed up: the teacher has them and can upload them again. Backups are encrypted before they leave the host, with a key kept apart from them; only the operator can restore one (section 11). Restore is verified with `make restore-check`.
 
 ---
 
@@ -799,7 +799,7 @@ All accepted on 2026-11-11. A decision is changed by editing its row in a pull r
 | A vulnerable or hijacked npm package | Low | High | Lockfile, installs strictly from it, reviewer approval for new dependencies, automated update pull requests |
 | The address of the edge host is throttled or blocked | Medium | High for students | A probe from the students' country; moving the proxy to another host within an hour |
 | The chosen deployment does not meet legal requirements on where personal data is stored | Low with a handful of students | Medium | Parental consent; moving the database and files to the required country is a deployment task and changes no code |
-| A leak of the database or a backup exposes children's and parents' personal data and contacts; the more fields, the more it exposes | Low | High | Teacher-only fields never leave teacher procedures; logs carry identifiers only; parental consent. Dropping fields is decided separately, or case by case in production (decision 6) |
+| A leak of the database or a backup exposes children's and parents' personal data and contacts; the more fields, the more it exposes | Low | High | Against the leak itself (deployment, #4): PostgreSQL is reachable only inside the host, never on a public port; backups are encrypted on the host before they leave it, and the key is not kept with the backups; only the operator can read a backup or restore one; staging and local stands hold synthetic data only. Against exposure through the application: teacher-only fields never leave teacher procedures; logs carry identifiers only. Dropping fields is decided separately, or case by case in production (decision 6) |
 | The agent subscription quota is not enough for development and content generation at once | Medium | Medium | Small slices; a manual path for every feature with AI |
 | The student cannot hear a track when the stage window is shared in the video call | Medium | Medium | Verify in practice before building the lesson mode: share a tab with sound or a window |
 | Voice recording on iOS Safari yields a different format than Chrome | Medium | Low | Store as is together with the media type; verify playback on the teacher's side; transcoding later |
