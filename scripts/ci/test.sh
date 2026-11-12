@@ -4,6 +4,10 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
+# The guards read the pull request's branch from the CI environment. The
+# throwaway repositories below have branches of their own, so the real
+# pull request's values must not leak into them.
+unset GITHUB_HEAD_REF HEAD_BRANCH SCENARIO_REF
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 failures=0
