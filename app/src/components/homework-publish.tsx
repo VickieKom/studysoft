@@ -21,8 +21,14 @@ export function HomeworkPublish({ homeworkId, status, dueDate }: Props) {
     try {
       await action();
       router.refresh();
-    } catch {
-      setError("Не получилось. Обновите страницу и попробуйте ещё раз");
+    } catch (cause) {
+      const code = (cause as { data?: { code?: string } } | null)?.data?.code;
+      // The server's message is meant for the teacher only for a wrong deadline.
+      setError(
+        code === "BAD_REQUEST" && cause instanceof Error
+          ? cause.message
+          : "Не получилось. Обновите страницу и попробуйте ещё раз",
+      );
     } finally {
       setPending(false);
     }

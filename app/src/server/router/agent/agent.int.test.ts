@@ -102,4 +102,15 @@ describe("agent procedures", () => {
     await agent(token).agent.listStudents();
     expect((await teacher.teacher.assistant.status())?.lastUsedAt).not.toBeNull();
   });
+
+  it("create two tokens at the same moment without an error, leaving one active", async () => {
+    const results = await Promise.allSettled([
+      teacher.teacher.assistant.createToken(),
+      teacher.teacher.assistant.createToken(),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    const tokens = results.map((r) => (r as PromiseFulfilledResult<{ token: string }>).value.token);
+    const answers = await Promise.allSettled(tokens.map((token) => agent(token).agent.listStudents()));
+    expect(answers.filter((a) => a.status === "fulfilled")).toHaveLength(1);
+  });
 });

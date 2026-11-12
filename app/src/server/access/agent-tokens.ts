@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { agentToken } from "../db/schema";
+import { agentToken, teacher } from "../db/schema";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 // Record use at most once a minute, not on every call.
@@ -34,6 +34,10 @@ export async function revokeAgentToken(db: Database, teacherId: string): Promise
 export async function createAgentToken(db: Database, teacherId: string): Promise<string> {
   const token = randomBytes(32).toString("base64url");
   await db.transaction(async (tx) => {
+    // One creation per teacher at a time: two clicks at once both succeed,
+    // the later revoking the earlier, instead of the second meeting the
+    // one-active-token index (#65).
+    await tx.select({ id: teacher.id }).from(teacher).where(eq(teacher.id, teacherId)).for("update");
     await tx
       .update(agentToken)
       .set({ revokedAt: new Date() })

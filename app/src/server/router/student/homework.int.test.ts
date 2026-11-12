@@ -4,7 +4,7 @@ import autoChecked from "../../../../../deploy/seed/homework/demo-auto-checked.j
 import { type Answer, studentView, type Task } from "../../../domain/homework-format";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
-import { homeworkAnswer, homeworkSubmission } from "../../db/schema";
+import { homework, homeworkAnswer, homeworkSubmission } from "../../db/schema";
 import { shuffleSeed } from "../../homework/homework";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
@@ -160,9 +160,9 @@ describe("student.homework", () => {
 
   it("can still be done past the deadline, until the next homework is published", async () => {
     const { id, studentId, student } = await studentWithHomework("Просрочка");
-    // The deadline has passed: the homework is still open.
-    await teacher.teacher.homework.unpublish({ id });
-    await teacher.teacher.homework.publish({ id, dueDate: inDays(-2) });
+    // The deadline has passed: the homework is still open. A deadline in the
+    // past can no longer be set (#65), so time moves on in the database.
+    await db().update(homework).set({ dueDate: inDays(-2) }).where(eq(homework.id, id));
     await student.student.homework.saveAnswer({ id, taskIndex: 0, answer: right[0]! });
     expect((await student.student.homework.open({ id })).answers[0]).toEqual(right[0]);
 

@@ -173,4 +173,29 @@ describe("teacher.homework.updateTasks", () => {
       wrong: 1,
     });
   });
+
+  it("refuses a deadline before the student's today and takes today", async () => {
+    const { id } = await teacher.teacher.homework.import({ studentId, json: json(short) });
+    await expect(teacher.teacher.homework.publish({ id, dueDate: today(-1) })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Срок не может быть раньше сегодняшнего дня",
+    });
+    expect((await teacher.teacher.homework.get({ id })).status).toBe("draft");
+    // Today in the student's time zone (Moscow here), whatever the server's is.
+    const moscowToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow" }).format(new Date());
+    await teacher.teacher.homework.publish({ id, dueDate: moscowToday });
+    expect((await teacher.teacher.homework.get({ id })).status).toBe("published");
+  });
+
+  it("publishes two drafts at the same moment one after the other, without an error", async () => {
+    const { id: first } = await teacher.teacher.homework.import({ studentId, json: json(short) });
+    const { id: second } = await teacher.teacher.homework.import({ studentId, json: json(short) });
+    const results = await Promise.allSettled([
+      teacher.teacher.homework.publish({ id: first, dueDate: today(2) }),
+      teacher.teacher.homework.publish({ id: second, dueDate: today(3) }),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    const statuses = [(await teacher.teacher.homework.get({ id: first })).status, (await teacher.teacher.homework.get({ id: second })).status];
+    expect(statuses.sort()).toEqual(["missed", "published"]);
+  });
 });

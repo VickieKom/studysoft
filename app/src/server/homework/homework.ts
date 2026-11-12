@@ -14,9 +14,9 @@ import {
   type Task,
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
-import { homework, homeworkAnswer, homeworkSubmission } from "../db/schema";
+import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
-import { homeworkImageUrl } from "../../domain/homework";
+import { homeworkImageUrl, todayIn } from "../../domain/homework";
 import { checkAnswer, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
@@ -119,14 +119,29 @@ export async function updateDraftTasks(db: Database, teacherId: string, id: stri
  * homework is closed as "missed" in the same transaction (product
  * requirements 5.1.6, item 4). Returns false when there is no such draft.
  */
-export async function publishHomework(db: Database, teacherId: string, id: string, dueDate: string): Promise<boolean> {
+export async function publishHomework(
+  db: Database,
+  teacherId: string,
+  id: string,
+  dueDate: string,
+): Promise<"published" | "not_found" | "past"> {
   return db.transaction(async (tx) => {
     const [draft] = await tx
       .select({ studentId: homework.studentId })
       .from(homework)
       .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
       .for("update");
-    if (!draft) return false;
+    if (!draft) return "not_found";
+    // Publishing for one student goes one at a time: two drafts published at
+    // the same moment both succeed, the later one closing the earlier, instead
+    // of the second meeting the one-published index (#65).
+    const [owner] = await tx
+      .select({ timeZone: student.timeZone })
+      .from(student)
+      .where(eq(student.id, draft.studentId))
+      .for("update");
+    // A deadline is a date in the student's time zone; one before their today is a mistake.
+    if (!owner || dueDate < todayIn(owner.timeZone)) return "past";
     // A submitted homework has the status "submitted", so "published" is unsubmitted.
     await tx
       .update(homework)
@@ -136,7 +151,7 @@ export async function publishHomework(db: Database, teacherId: string, id: strin
       .update(homework)
       .set({ status: "published", dueDate, publishedAt: sql`now()` })
       .where(eq(homework.id, id));
-    return true;
+    return "published";
   });
 }
 

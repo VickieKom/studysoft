@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerKey, formatDueDate, tasksLabel } from "./homework";
+import { answerKey, formatDueDate, tasksLabel, todayIn } from "./homework";
 import type { Task } from "./homework-format";
 
 describe("homework labels", () => {
@@ -37,5 +37,13 @@ describe("homework labels", () => {
       ] satisfies Task[]
     ).map(answerKey);
     expect(keys).toEqual(["b", "a, c", "is / 's; am", "hot — cold; up — down", "a b / b a", null, null, null]);
+  });
+
+  it("tells today's date in a time zone", () => {
+    // 22:30 UTC on 14 November: 15 November in Moscow and Kaliningrad, still the 14th in New York.
+    const late = new Date("2026-11-14T22:30:00Z");
+    expect(todayIn("Europe/Moscow", late)).toBe("2026-11-15");
+    expect(todayIn("Europe/Kaliningrad", late)).toBe("2026-11-15");
+    expect(todayIn("America/New_York", late)).toBe("2026-11-14");
   });
 });
