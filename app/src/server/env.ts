@@ -6,6 +6,9 @@ const schema = z.object({
   // Derives access-link tokens (#19). Rotating it invalidates every link at once.
   LINK_KEY: z.string().min(32, "LINK_KEY must be at least 32 characters"),
   APP_URL: z.url({ protocol: /^https?$/ }),
+  // Where the file adapter of the blob store keeps files (#33; architecture,
+  // decision 8). An absolute path on a persistent volume.
+  FILES_DIR: z.string().startsWith("/", "FILES_DIR must be an absolute path"),
   // Required: an image built without it must fail to start, not report "dev".
   BUILD_SHA: z.string().min(1),
 });

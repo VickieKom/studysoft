@@ -6,6 +6,7 @@ const valid = {
   AUTH_SECRET: "x".repeat(32),
   LINK_KEY: "k".repeat(32),
   APP_URL: "http://localhost:3000",
+  FILES_DIR: "/var/lib/studysoft/files",
   BUILD_SHA: "0123abc",
 };
 
@@ -28,6 +29,6 @@ describe("parseEnv", () => {
   });
 
   it("names missing variables without echoing values", () => {
-    expect(() => parseEnv({ AUTH_SECRET: "short" })).toThrow(/DATABASE_URL, AUTH_SECRET, LINK_KEY, APP_URL, BUILD_SHA/);
+    expect(() => parseEnv({ AUTH_SECRET: "short" })).toThrow(/DATABASE_URL, AUTH_SECRET, LINK_KEY, APP_URL, FILES_DIR, BUILD_SHA/);
   });
 });

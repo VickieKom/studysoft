@@ -16,6 +16,7 @@ import {
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission } from "../db/schema";
 import { env } from "../env";
+import { homeworkImageUrl } from "../../domain/homework";
 import { checkAnswer, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
@@ -239,7 +240,13 @@ export async function openHomework(
     const parsed = answerSchema.safeParse(answer);
     if (parsed.success && taskIndex < answers.length) answers[taskIndex] = parsed.data;
   }
-  return { tasks: tasks.map((task, index) => studentView(task, shuffleSeed(id, index))), answers };
+  return {
+    tasks: tasks.map((task, index) => ({
+      ...studentView(task, shuffleSeed(id, index)),
+      ...(task.image ? { image: homeworkImageUrl(id, index) } : {}),
+    })),
+    answers,
+  };
 }
 
 /**

@@ -19,15 +19,20 @@ describe("parseHomework", () => {
     expect(result).toEqual({ ok: false, errors: [expect.stringMatching(/^Задание 2, поле type: неизвестный тип «riddle»/)] });
   });
 
-  it("refuses another version, broken JSON, an image and a key outside the options", () => {
+  it("refuses another version, broken JSON, an unsupported or oversized image and a key outside the options", () => {
     const version = parseHomework(json({ ...short, version: 2 }));
     expect(!version.ok && version.errors[0]).toMatch(/version/);
     expect(parseHomework("{ not json").ok).toBe(false);
 
     const withImage = structuredClone(short);
-    (withImage.tasks[0] as Record<string, unknown>).image = "data:image/png;base64,AAAA";
+    (withImage.tasks[0] as Record<string, unknown>).image = "data:image/gif;base64,R0lGODlh";
     const image = parseHomework(json(withImage));
     expect(!image.ok && image.errors[0]).toMatch(/^Задание 1, поле image/);
+    (withImage.tasks[0] as Record<string, unknown>).image = `data:image/png;base64,${"A".repeat(2_796_204)}`;
+    const big = parseHomework(json(withImage));
+    expect(!big.ok && big.errors[0]).toMatch(/^Задание 1, поле image: картинка больше 2 МБ/);
+    (withImage.tasks[0] as Record<string, unknown>).image = "data:image/png;base64,AAAA";
+    expect(parseHomework(json(withImage)).ok).toBe(true);
 
     const badKey = structuredClone(short);
     (badKey.tasks[0] as { answer: number }).answer = 7;

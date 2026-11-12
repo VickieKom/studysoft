@@ -20,10 +20,11 @@ LOCAL_AUTH_SECRET := local-stand-only-auth-secret-never-used-elsewhere
 LOCAL_LINK_KEY := local-stand-only-link-key-never-used-anywhere-else
 BUILD_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 
-DEV_ENV := DATABASE_URL=$(DB_ROOT)/studysoft AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:3000 BUILD_SHA=$(BUILD_SHA)
-TEST_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_test AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:3000 BUILD_SHA=test
+# Files of the local stand live in the ignored data/ folder, one per database.
+DEV_ENV := DATABASE_URL=$(DB_ROOT)/studysoft AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:3000 FILES_DIR=$(CURDIR)/data/files BUILD_SHA=$(BUILD_SHA)
+TEST_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_test AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:3000 FILES_DIR=$(CURDIR)/data/files-test BUILD_SHA=test
 E2E_PORT ?= 3100
-E2E_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_e2e AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:$(E2E_PORT) BUILD_SHA=$(BUILD_SHA) E2E_PORT=$(E2E_PORT)
+E2E_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_e2e AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:$(E2E_PORT) FILES_DIR=$(CURDIR)/data/files-e2e BUILD_SHA=$(BUILD_SHA) E2E_PORT=$(E2E_PORT)
 
 # Pass --with-deps on a machine that lacks the browser's system libraries. CI
 # does not: the runner image already has them, and apt there only adds optional
