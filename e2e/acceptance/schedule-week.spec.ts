@@ -64,9 +64,14 @@ async function addSlot(page: Page, weekday: string, time: string, duration?: str
 async function openWeekWith(page: Page, date: Date) {
   await page.goto("/teacher/students");
   await control(page, "Расписание").click();
+  // The week is on screen before looking for the day in it.
+  await expect(page.getByRole("heading", { level: 1, name: "Расписание" })).toBeVisible();
   const day = page.getByRole("region", { name: dayLabel(date) });
   for (let i = 0; i < 6 && !(await day.isVisible()); i++) {
+    const shown = await page.getByRole("region").first().getAttribute("aria-label");
     await page.getByRole("button", { name: "Следующая неделя", exact: true }).click();
+    // The next week has replaced this one before looking again.
+    await expect(page.getByRole("region").first()).not.toHaveAttribute("aria-label", shown ?? "");
   }
   await expect(day).toBeVisible();
   return day;
