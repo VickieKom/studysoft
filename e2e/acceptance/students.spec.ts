@@ -171,6 +171,8 @@ test("a form without a first name is not saved and points at the field", async (
   await openStudents(page);
   const entriesBefore = await listEntry(page).count();
   await newStudentControl(page).click();
+  // A link navigates to the form; read the address only once the form is there.
+  await expect(page.getByLabel("Имя")).toBeVisible();
   const form = page.url();
   await page.getByLabel("Уровень").selectOption({ label: "A1" });
   await page.getByRole("button", { name: "Сохранить" }).click();
