@@ -74,7 +74,7 @@ Words to put in order; shown shuffled.
 
 ### `written`
 
-A sentence or a text. Checked by the teacher.
+A sentence or a text, up to 5000 characters. Checked by the teacher.
 
 | Field | Meaning |
 |-------|---------|
@@ -82,7 +82,7 @@ A sentence or a text. Checked by the teacher.
 
 ### `voice`
 
-A recording made in the browser. Checked by the teacher.
+A recording made in the browser, up to 5 minutes, stored as recorded (WebM or MP4). Checked by the teacher.
 
 | Field | Meaning |
 |-------|---------|
@@ -90,7 +90,7 @@ A recording made in the browser. Checked by the teacher.
 
 ### `file`
 
-A photo or an audio file. Checked by the teacher.
+A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 MB. Checked by the teacher.
 
 | Field | Meaning |
 |-------|---------|

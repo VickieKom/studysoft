@@ -1,0 +1,114 @@
+// Synthetic recordings for tests (#35): containers with a given length and
+// silence for content, built here byte by byte. Not real audio.
+
+const u32 = (value: number) => {
+  const bytes = Buffer.alloc(4);
+  bytes.writeUInt32BE(value);
+  return bytes;
+};
+
+// --- WebM ---------------------------------------------------------------------
+
+const UNKNOWN_SIZE = Buffer.from([0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+
+/** An EBML size as an 8-byte variable-length integer. */
+function size(value: number): Buffer {
+  const bytes = Buffer.alloc(8);
+  bytes.writeUInt32BE(Math.floor(value / 2 ** 32), 0);
+  bytes.writeUInt32BE(value >>> 0, 4);
+  bytes[0] = (bytes[0] ?? 0) | 0x01;
+  return bytes;
+}
+
+function element(id: number[], ...content: Buffer[]): Buffer {
+  const body = Buffer.concat(content);
+  return Buffer.concat([Buffer.from(id), size(body.length), body]);
+}
+
+/**
+ * A WebM as a browser writes it while recording: the segment and clusters of
+ * unknown size, no duration in the header, a block every second, the last
+ * one at `seconds`.
+ */
+export function webmRecording(seconds: number): Buffer {
+  const parts: Buffer[] = [
+    element([0x1a, 0x45, 0xdf, 0xa3], element([0x42, 0x82], Buffer.from("webm"))),
+    Buffer.from([0x18, 0x53, 0x80, 0x67]),
+    UNKNOWN_SIZE,
+    element([0x15, 0x49, 0xa9, 0x66], element([0x2a, 0xd7, 0xb1], Buffer.from([0x0f, 0x42, 0x40]))),
+  ];
+  const lastMs = Math.round(seconds * 1000);
+  const times = [...Array.from({ length: Math.ceil(lastMs / 1000) }, (_, i) => i * 1000), lastMs];
+  // A cluster every 10 seconds, as a block's offset is a 16-bit number of milliseconds.
+  let cluster = -1;
+  for (const time of times) {
+    if (Math.floor(time / 10_000) * 10_000 !== cluster) {
+      cluster = Math.floor(time / 10_000) * 10_000;
+      parts.push(Buffer.from([0x1f, 0x43, 0xb6, 0x75]), UNKNOWN_SIZE, element([0xe7], u32(cluster)));
+    }
+    const block = Buffer.alloc(4 + 20);
+    block[0] = 0x81;
+    block.writeInt16BE(time - cluster, 1);
+    block[3] = 0x80;
+    parts.push(element([0xa3], block));
+  }
+  return Buffer.concat(parts);
+}
+
+// --- MP4 ----------------------------------------------------------------------
+
+function box(type: string, ...content: Buffer[]): Buffer {
+  const body = Buffer.concat(content);
+  return Buffer.concat([u32(body.length + 8), Buffer.from(type, "latin1"), body]);
+}
+
+const FTYP = box("ftyp", Buffer.from("M4A ", "latin1"), u32(0), Buffer.from("isomM4A ", "latin1"));
+const header = (timescale: number, duration: number, length: number) =>
+  Buffer.concat([u32(0), u32(0), u32(0), u32(timescale), u32(duration), Buffer.alloc(length - 20)]);
+
+/** A whole MP4 whose movie header states its length. */
+export function mp4Recording(seconds: number): Buffer {
+  return Buffer.concat([
+    FTYP,
+    box("moov", box("mvhd", header(1000, Math.round(seconds * 1000), 100)), box("trak", box("mdia", box("mdhd", header(48_000, 0, 24))))),
+    box("mdat", Buffer.alloc(32)),
+  ]);
+}
+
+/**
+ * A fragmented MP4 as Safari may record it: the movie header says 0, and the
+ * length is in the fragments, one per second, 1024-sample frames at 48 kHz.
+ */
+export function fragmentedMp4Recording(seconds: number): Buffer {
+  const scale = 48_000;
+  const frame = 1024;
+  const parts = [
+    FTYP,
+    box(
+      "moov",
+      box("mvhd", header(1000, 0, 100)),
+      box("trak", box("mdia", box("mdhd", header(scale, 0, 24)))),
+      box("mvex", box("trex", u32(0), u32(1), u32(1), u32(frame), u32(0), u32(0))),
+    ),
+  ];
+  const total = Math.round((seconds * scale) / frame);
+  for (let start = 0; start < total; start += 47) {
+    const count = Math.min(47, total - start);
+    // Every other fragment states each sample's duration; the rest use the default.
+    const explicit = (start / 47) % 2 === 0;
+    const samples = explicit ? Array.from({ length: count }, () => u32(frame)) : [];
+    parts.push(
+      box(
+        "moof",
+        box(
+          "traf",
+          box("tfhd", u32(0), u32(1)),
+          box("tfdt", u32(0), u32(start * frame)),
+          box("trun", u32(explicit ? 0x100 : 0), u32(count), ...samples),
+        ),
+      ),
+      box("mdat", Buffer.alloc(16)),
+    );
+  }
+  return Buffer.concat(parts);
+}

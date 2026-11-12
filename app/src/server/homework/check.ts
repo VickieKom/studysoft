@@ -71,6 +71,8 @@ export function fitsTask(task: Task, answer: Answer): boolean {
         usedLeft.size === answer.pairs.length && answer.pairs.every((p) => lefts.has(p.left) && rights.has(p.right))
       );
     }
+    case "written":
+      return task.type === "written";
     case "order": {
       if (task.type !== "order") return false;
       const left = [...task.words];

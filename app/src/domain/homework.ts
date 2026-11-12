@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import type { Answer, Task } from "./homework-format";
+import type { StoredAnswer, Task } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -61,6 +61,11 @@ export function homeworkImageUrl(homeworkId: string, taskIndex: number): string 
   return `/api/files/homework/${homeworkId}/${taskIndex}`;
 }
 
+/** Where the student's recording or file for a task is uploaded and served, after a permission check (#35). */
+export function answerFileUrl(homeworkId: string, taskIndex: number): string {
+  return `/api/files/answers/${homeworkId}/${taskIndex}`;
+}
+
 /** Today's calendar date in a time zone, as YYYY-MM-DD: what "today" is for the student. */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -76,7 +81,7 @@ export function tasksLabel(count: number): string {
 }
 
 /** A student's answer as the teacher reads it in the review (#36), or null when there is none. */
-export function answerText(task: Task, answer: Answer | null): string | null {
+export function answerText(task: Task, answer: StoredAnswer | null): string | null {
   if (!answer || answer.type !== task.type) return null;
   switch (answer.type) {
     case "single_choice":
@@ -89,6 +94,13 @@ export function answerText(task: Task, answer: Answer | null): string | null {
       return answer.pairs.map((p) => `${p.left} — ${p.right}`).join("; ");
     case "order":
       return answer.words.join(" ");
+    case "written":
+      return answer.text.trim() || null;
+    // shortcut: the review names a recording or a file but does not play or show it yet; the teacher opens it at its address (#35)
+    case "voice":
+      return "Голосовая запись";
+    case "file":
+      return answer.contentType.startsWith("image/") ? "Фото" : "Аудиофайл";
   }
 }
 

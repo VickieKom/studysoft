@@ -1,7 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { type Answer, gapCount, isAnswered, type StudentTask } from "@/domain/homework-format";
+import { useEffect, useRef, useState } from "react";
+import { answerFileUrl } from "@/domain/homework";
+import {
+  type Answer,
+  gapCount,
+  isAnswered,
+  MAX_ANSWER_FILE_BYTES,
+  MAX_VOICE_SECONDS,
+  MAX_WRITTEN_CHARS,
+  type StudentAnswer,
+  type StudentTask,
+} from "@/domain/homework-format";
 import { HomeworkResult } from "./homework-result";
 import { routerClient } from "./router-client";
 
@@ -11,7 +21,7 @@ type Props = {
   dueLabel: string;
   tasksLabel: string;
   tasks: StudentTask[];
-  answers: (Answer | null)[];
+  answers: (StudentAnswer | null)[];
 };
 
 const tile =
@@ -22,6 +32,8 @@ const tileState = (on: boolean) =>
 // Typed gaps are saved a moment after the student stops typing; choices at once.
 const TYPING_PAUSE_MS = 600;
 
+const UPLOAD_FAILED = "Не получилось сохранить. Проверьте интернет и попробуйте ещё раз";
+
 /**
  * The student does a published homework (#34): a start screen, one task per
  * screen with a progress bar, «Сдать» once. Every answer is saved on the
@@ -30,9 +42,9 @@ const TYPING_PAUSE_MS = 600;
  */
 export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, tasks, answers: saved }: Props) {
   const [index, setIndex] = useState(-1);
-  const [answers, setAnswers] = useState<(Answer | null)[]>(saved);
+  const [answers, setAnswers] = useState<(StudentAnswer | null)[]>(saved);
   const [unanswered, setUnanswered] = useState<number[] | null>(null);
-  const [result, setResult] = useState<{ correct: number; wrong: number } | null>(null);
+  const [result, setResult] = useState<{ correct: number; wrong: number; pending: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,7 +57,10 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
 
   function save(taskIndex: number): Promise<void> {
     dirty.current.delete(taskIndex);
-    const answer = latest.current[taskIndex] ?? null;
+    const current = latest.current[taskIndex] ?? null;
+    // A recording or a file is saved by its upload; there is nothing to send here.
+    const answer: Answer | null = current?.type === "voice" || current?.type === "file" ? null : current;
+    if (current && !answer) return chains.current.get(taskIndex) ?? Promise.resolve();
     const previous = chains.current.get(taskIndex) ?? Promise.resolve();
     const next = previous
       .catch(() => undefined)
@@ -62,14 +77,57 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
     return next;
   }
 
-  function update(taskIndex: number, answer: Answer | null, typing = false) {
+  function remember(taskIndex: number, answer: StudentAnswer | null) {
     latest.current = latest.current.map((a, i) => (i === taskIndex ? answer : a));
     setAnswers(latest.current);
     setUnanswered(null);
+  }
+
+  function update(taskIndex: number, answer: Answer | null, typing = false) {
+    remember(taskIndex, answer);
     dirty.current.add(taskIndex);
     clearTimeout(timers.current.get(taskIndex));
     if (typing) timers.current.set(taskIndex, setTimeout(() => void save(taskIndex).catch(() => undefined), TYPING_PAUSE_MS));
     else void save(taskIndex).catch(() => undefined);
+  }
+
+  /**
+   * Uploads a recording or a file as the answer to a task (#35). The upload is
+   * the save: the server keeps the file and the answer. Resolves to the
+   * message to show when it was refused or failed, or null. «Дальше» and
+   * «Сдать» wait for it like for any save.
+   */
+  function upload(taskIndex: number, body: Blob): Promise<string | null> {
+    const task = tasks[taskIndex]!;
+    const previous = chains.current.get(taskIndex) ?? Promise.resolve();
+    const run = previous
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const response = await fetch(answerFileUrl(homeworkId, taskIndex), {
+            method: "PUT",
+            body,
+            headers: { "Content-Type": body.type || "application/octet-stream" },
+          });
+          const payload = (await response.json().catch(() => null)) as
+            | { url?: string; contentType?: string; error?: string }
+            | null;
+          if (response.ok && payload?.url && payload.contentType && (task.type === "voice" || task.type === "file")) {
+            remember(taskIndex, { type: task.type, url: payload.url, contentType: payload.contentType });
+            return null;
+          }
+          // Submitted from another device, or taken back by the teacher: the page shows what is current now.
+          if (response.status === 404) window.location.reload();
+          return payload?.error ?? UPLOAD_FAILED;
+        } catch {
+          return UPLOAD_FAILED;
+        }
+      });
+    chains.current.set(
+      taskIndex,
+      run.then(() => undefined),
+    );
+    return run;
   }
 
   /** Saves whatever is still unsaved and waits for every save in flight. */
@@ -93,7 +151,7 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
     setBusy(true);
     try {
       if (!(await flush())) return;
-      const missing = tasks.flatMap((task, i) => (needsAnswer(task) && !isAnswered(task, latest.current[i]) ? [i + 1] : []));
+      const missing = tasks.flatMap((task, i) => (isAnswered(task, latest.current[i]) ? [] : [i + 1]));
       if (missing.length > 0 && !confirmed) {
         setUnanswered(missing);
         return;
@@ -111,7 +169,7 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
     }
   }
 
-  if (result) return <HomeworkResult firstName={firstName} correct={result.correct} wrong={result.wrong} />;
+  if (result) return <HomeworkResult firstName={firstName} {...result} />;
 
   if (index < 0) {
     return (
@@ -164,6 +222,7 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
         task={task}
         answer={answers[index] ?? null}
         onChange={(answer, typing) => update(index, answer, typing)}
+        upload={(body) => upload(index, body)}
       />
       <p className="text-small text-text-secondary">Ответы проверим вместе на уроке</p>
 
@@ -208,9 +267,6 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
   );
 }
 
-/** Tasks the student answers here; written, voice and file arrive with #35. */
-const needsAnswer = (task: StudentTask) => task.type !== "written" && task.type !== "voice" && task.type !== "file";
-
 function NavButton({
   children,
   onClick,
@@ -236,9 +292,13 @@ function NavButton({
   );
 }
 
-type BodyProps = { task: StudentTask; answer: Answer | null; onChange: (answer: Answer | null, typing?: boolean) => void };
+type BodyProps = {
+  task: StudentTask;
+  answer: StudentAnswer | null;
+  onChange: (answer: Answer | null, typing?: boolean) => void;
+};
 
-function TaskBody({ task, answer, onChange }: BodyProps) {
+function TaskBody({ task, answer, onChange, upload }: BodyProps & { upload: (body: Blob) => Promise<string | null> }) {
   switch (task.type) {
     case "single_choice":
     case "multiple_choice":
@@ -249,9 +309,12 @@ function TaskBody({ task, answer, onChange }: BodyProps) {
       return <Match task={task} answer={answer} onChange={onChange} />;
     case "order":
       return <Order task={task} answer={answer} onChange={onChange} />;
-    default:
-      // shortcut: written, voice and file answers arrive with Homework D (#35)
-      return <p className="rounded-card bg-surface p-4 text-text-secondary">Это задание сделаем на уроке</p>;
+    case "written":
+      return <Written task={task} answer={answer} onChange={onChange} />;
+    case "voice":
+      return <Voice hint={task.hint} answer={answer} upload={upload} />;
+    case "file":
+      return <Attachment task={task} answer={answer} upload={upload} />;
   }
 }
 
@@ -431,6 +494,202 @@ function Order({ task, answer, onChange }: BodyProps & { task: { type: "order"; 
         <button type="button" onClick={() => emit([])} className="self-start text-small text-text-secondary underline">
           Очистить
         </button>
+      )}
+    </div>
+  );
+}
+
+function Written({ task, answer, onChange }: BodyProps & { task: { hint?: string } }) {
+  const text = answer?.type === "written" ? answer.text : "";
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-small text-text-secondary">Ваш ответ</span>
+      {task.hint && <span className="text-small text-text-secondary">{task.hint}</span>}
+      <textarea
+        rows={6}
+        maxLength={MAX_WRITTEN_CHARS}
+        value={text}
+        onChange={(event) => onChange(event.target.value === "" ? null : { type: "written", text: event.target.value }, true)}
+        className="rounded-control border-2 border-border bg-bg p-3 text-answer"
+      />
+    </label>
+  );
+}
+
+const minutes = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+// What browsers record in: WebM in Chrome and Firefox, MP4 in Safari. Stored as recorded (architecture 11.1).
+const RECORDING_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+
+const notice = "rounded-control bg-danger-bg px-3 py-2 text-small text-danger";
+const actionButton =
+  "h-12 rounded-task border-2 border-accent-600 bg-bg px-6 text-answer font-semibold text-accent-900 hover:bg-accent-50 disabled:opacity-60";
+
+/**
+ * A voice answer (#35): «Записать», «Остановить», listen, «Записать заново».
+ * The recording is uploaded as soon as it stops, and stops by itself at the
+ * limit; the server refuses a longer one anyway.
+ */
+function Voice({
+  hint,
+  answer,
+  upload,
+}: {
+  hint?: string;
+  answer: StudentAnswer | null;
+  upload: (body: Blob) => Promise<string | null>;
+}) {
+  const [state, setState] = useState<"idle" | "recording" | "saving">("idle");
+  const [seconds, setSeconds] = useState(0);
+  const [message, setMessage] = useState<string | null>(null);
+  // A new recording keeps the address: a fresh <audio> asks the server again.
+  const [version, setVersion] = useState(0);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const stop = () => {
+    clearInterval(timer.current);
+    if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
+  };
+  // Leaving the task while recording stops and keeps what was said.
+  useEffect(() => stop, []);
+
+  async function start() {
+    setMessage(null);
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setMessage("Этот браузер не умеет записывать звук. Откройте ссылку в Chrome или Safari");
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setMessage("Нет доступа к микрофону. Разрешите его в настройках браузера");
+      return;
+    }
+    const mimeType = RECORDING_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
+    const media = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks: Blob[] = [];
+    media.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    media.onstop = async () => {
+      clearInterval(timer.current);
+      for (const track of stream.getTracks()) track.stop();
+      setState("saving");
+      const error = await upload(new Blob(chunks, { type: media.mimeType || mimeType || "audio/webm" }));
+      setMessage(error);
+      setVersion((v) => v + 1);
+      setState("idle");
+    };
+    recorder.current = media;
+    const startedAt = Date.now();
+    setSeconds(0);
+    timer.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      setSeconds(Math.min(elapsed, MAX_VOICE_SECONDS));
+      if (elapsed >= MAX_VOICE_SECONDS) stop();
+    }, 250);
+    media.start();
+    setState("recording");
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {hint && <p className="text-small text-text-secondary">{hint}</p>}
+      {state === "recording" ? (
+        <>
+          <p className="text-answer text-text-secondary">
+            Идёт запись {minutes(seconds)} из {minutes(MAX_VOICE_SECONDS)}
+          </p>
+          <button type="button" onClick={stop} className={actionButton}>
+            Остановить
+          </button>
+        </>
+      ) : state === "saving" ? (
+        <p className="text-answer text-text-secondary">Сохраняем запись…</p>
+      ) : (
+        <>
+          {answer?.type === "voice" && (
+            <>
+              <audio key={version} controls preload="metadata" src={answer.url} className="w-full" />
+              <p className="text-small text-text-secondary">Запись сохранена</p>
+            </>
+          )}
+          <button type="button" onClick={() => void start()} className={actionButton}>
+            {answer?.type === "voice" ? "Записать заново" : "Записать"}
+          </button>
+          <p className="text-small text-text-secondary">До {minutes(MAX_VOICE_SECONDS).replace(":00", "")} минут</p>
+        </>
+      )}
+      {message && (
+        <p role="alert" className={notice}>
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A photo of a notebook page or an audio file, from the camera or the files (#35). */
+function Attachment({
+  task,
+  answer,
+  upload,
+}: {
+  task: { type: "file"; accept: ("image" | "audio")[]; hint?: string };
+  answer: StudentAnswer | null;
+  upload: (body: Blob) => Promise<string | null>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+
+  async function attach(file: File | undefined) {
+    if (!file) return;
+    setMessage(null);
+    if (file.size > MAX_ANSWER_FILE_BYTES) {
+      setMessage("Файл больше 10 МБ. Выберите файл поменьше");
+      return;
+    }
+    setSaving(true);
+    setMessage(await upload(file));
+    setVersion((v) => v + 1);
+    setSaving(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {task.hint && <p className="text-small text-text-secondary">{task.hint}</p>}
+      {answer?.type === "file" &&
+        !saving &&
+        (answer.contentType.startsWith("image/") ? (
+          // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
+          // eslint-disable-next-line @next/next/no-img-element -- same reason as above
+          <img key={version} src={answer.url} alt="Ваше фото" className="max-h-72 w-full rounded-task object-contain" />
+        ) : (
+          <audio key={version} controls preload="metadata" src={answer.url} className="w-full" />
+        ))}
+      {saving && <p className="text-answer text-text-secondary">Сохраняем файл…</p>}
+      <label className={`${actionButton} flex cursor-pointer items-center justify-center`}>
+        Прикрепить фото или аудио
+        <input
+          type="file"
+          accept={task.accept.map((kind) => `${kind}/*`).join(",")}
+          disabled={saving}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            void attach(file);
+          }}
+          className="sr-only"
+        />
+      </label>
+      <p className="text-small text-text-secondary">До 10 МБ</p>
+      {message && (
+        <p role="alert" className={notice}>
+          {message}
+        </p>
       )}
     </div>
   );

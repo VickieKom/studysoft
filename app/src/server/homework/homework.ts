@@ -6,17 +6,19 @@ import { createHmac } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   type Answer,
-  answerSchema,
   type HomeworkDocument,
   homeworkSchema,
+  type StoredAnswer,
+  type StudentAnswer,
   type StudentTask,
+  storedAnswerSchema,
   studentView,
   type Task,
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
-import { homeworkImageUrl, todayIn } from "../../domain/homework";
+import { answerFileUrl, homeworkImageUrl, todayIn } from "../../domain/homework";
 import { checkAnswer, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
@@ -178,7 +180,8 @@ export async function unpublishHomework(db: Database, teacherId: string, id: str
   });
 }
 
-export type HomeworkResult = { correct: number; wrong: number };
+/** The score: right and wrong auto-checked tasks, and the tasks the teacher checks (#35). */
+export type HomeworkResult = { correct: number; wrong: number; pending: number };
 
 /**
  * What the student's page shows: the newest published or submitted homework,
@@ -218,8 +221,17 @@ export async function currentHomeworkForStudent(
     id: row.id,
     dueDate: row.dueDate,
     taskCount: taskCount(row.document),
-    result: row.correct === null || row.wrong === null ? null : { correct: row.correct, wrong: row.wrong },
+    result: row.correct === null || row.wrong === null ? null : score(row.document, row.correct, row.wrong),
   };
+}
+
+/**
+ * Every task is either checked by the platform or by the teacher, so the
+ * tasks the teacher checks are the rest. Counted from the document rather
+ * than the submission's pending count, which falls as the teacher marks.
+ */
+function score(document: unknown, correct: number, wrong: number): HomeworkResult {
+  return { correct, wrong, pending: taskCount(document) - correct - wrong };
 }
 
 const ownPublished = (teacherId: string, studentId: string, id: string) =>
@@ -250,7 +262,7 @@ export async function openHomework(
   teacherId: string,
   studentId: string,
   id: string,
-): Promise<{ tasks: StudentTask[]; answers: (Answer | null)[] } | null> {
+): Promise<{ tasks: StudentTask[]; answers: (StudentAnswer | null)[] } | null> {
   const [row] = await db
     .select({ document: homework.document, attempt: homework.attempt })
     .from(homework)
@@ -262,10 +274,16 @@ export async function openHomework(
     .select({ taskIndex: homeworkAnswer.taskIndex, answer: homeworkAnswer.answer })
     .from(homeworkAnswer)
     .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, row.attempt)));
-  const answers: (Answer | null)[] = tasks.map(() => null);
+  const answers: (StudentAnswer | null)[] = tasks.map(() => null);
   for (const { taskIndex, answer } of saved) {
-    const parsed = answerSchema.safeParse(answer);
-    if (parsed.success && taskIndex < answers.length) answers[taskIndex] = parsed.data;
+    const parsed = storedAnswerSchema.safeParse(answer);
+    if (!parsed.success || taskIndex >= answers.length) continue;
+    const stored = parsed.data;
+    // A recording or a file goes out as its address, never as the stored reference.
+    answers[taskIndex] =
+      stored.type === "voice" || stored.type === "file"
+        ? { type: stored.type, url: answerFileUrl(id, taskIndex), contentType: stored.contentType }
+        : stored;
   }
   return {
     tasks: tasks.map((task, index) => ({
@@ -281,13 +299,52 @@ export async function openHomework(
  * "not_found" for anything that is not this student's published homework,
  * and "invalid" for an answer that cannot belong to the task.
  */
-export async function saveAnswer(
+export function saveAnswer(
   db: Database,
   teacherId: string,
   studentId: string,
   id: string,
   taskIndex: number,
   answer: Answer | null,
+): Promise<"saved" | "not_found" | "invalid"> {
+  return storeAnswer(db, teacherId, studentId, id, taskIndex, answer, (task) => !answer || fitsTask(task, answer));
+}
+
+/**
+ * Saves a recording or a file the server has just kept in the blob store
+ * (#35). Only the upload calls this: the page can never name a stored file.
+ */
+export function saveFileAnswer(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+  taskIndex: number,
+  answer: StoredAnswer & { type: "voice" | "file" },
+): Promise<"saved" | "not_found" | "invalid"> {
+  return storeAnswer(db, teacherId, studentId, id, taskIndex, answer, (task) => task.type === answer.type);
+}
+
+/** The task of this student's published homework that a file may answer, or null. */
+export async function publishedTask(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+  taskIndex: number,
+): Promise<Task | null> {
+  const [row] = await db.select({ document: homework.document }).from(homework).where(ownPublished(teacherId, studentId, id));
+  return (row?.document as HomeworkDocument | undefined)?.tasks[taskIndex] ?? null;
+}
+
+async function storeAnswer(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+  taskIndex: number,
+  answer: StoredAnswer | null,
+  fits: (task: Task) => boolean,
 ): Promise<"saved" | "not_found" | "invalid"> {
   return db.transaction(async (tx) => {
     // A shared lock: a submission (FOR UPDATE) waits for the save, or the save
@@ -299,8 +356,7 @@ export async function saveAnswer(
       .for("share");
     if (!row) return "not_found";
     const task = (row.document as HomeworkDocument).tasks[taskIndex];
-    if (!task) return "invalid";
-    if (answer && !fitsTask(task, answer)) return "invalid";
+    if (!task || !fits(task)) return "invalid";
     await tx
       .insert(homeworkAnswer)
       .values({ homeworkId: id, attempt: row.attempt, taskIndex, answer })
@@ -352,7 +408,7 @@ export async function submitHomework(
       })
       .from(homeworkSubmission)
       .where(and(eq(homeworkSubmission.homeworkId, id), eq(homeworkSubmission.attempt, row.attempt)));
-    if (earlier) return earlier.key === idempotencyKey ? { correct: earlier.correct, wrong: earlier.wrong } : "conflict";
+    if (earlier) return earlier.key === idempotencyKey ? score(row.document, earlier.correct, earlier.wrong) : "conflict";
     if (row.status !== "published") return "not_found";
 
     const tasks = (row.document as HomeworkDocument).tasks;
@@ -361,7 +417,7 @@ export async function submitHomework(
       .from(homeworkAnswer)
       .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, row.attempt)))
       .orderBy(asc(homeworkAnswer.taskIndex));
-    const byIndex = new Map(saved.map((s) => [s.taskIndex, answerSchema.safeParse(s.answer)]));
+    const byIndex = new Map(saved.map((s) => [s.taskIndex, storedAnswerSchema.safeParse(s.answer)]));
 
     let correct = 0;
     let wrong = 0;
@@ -369,8 +425,8 @@ export async function submitHomework(
     for (const [taskIndex, task] of tasks.entries()) {
       const parsed = byIndex.get(taskIndex);
       const answer = parsed?.success ? parsed.data : null;
-      // shortcut: written, voice and file answers arrive with #35; until then such a task is stored blank, for the teacher to mark
-      const isCorrect = isAutoChecked(task) ? answer !== null && checkAnswer(task, answer) : null;
+      // Written, voice and file answers are kept as they are, for the teacher to mark (#36).
+      const isCorrect = isAutoChecked(task) ? answer !== null && answer.type !== "voice" && answer.type !== "file" && checkAnswer(task, answer) : null;
       if (isCorrect === true) correct++;
       else if (isCorrect === false) wrong++;
       else pending++;
@@ -392,6 +448,6 @@ export async function submitHomework(
       pendingCount: pending,
     });
     await tx.update(homework).set({ status: "submitted" }).where(eq(homework.id, id));
-    return { correct, wrong };
+    return { correct, wrong, pending };
   });
 }

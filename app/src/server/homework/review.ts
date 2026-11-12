@@ -4,7 +4,7 @@
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { answerKey, answerText } from "../../domain/homework";
-import { answerSchema, type HomeworkDocument } from "../../domain/homework-format";
+import { type HomeworkDocument, storedAnswerSchema } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 
@@ -150,7 +150,7 @@ export async function findSubmission(db: Database, teacherId: string, id: string
 
   const tasks: ReviewTask[] = (row.document as HomeworkDocument).tasks.map((task, index) => {
     const stored = byIndex.get(index);
-    const parsed = answerSchema.safeParse(stored?.answer);
+    const parsed = storedAnswerSchema.safeParse(stored?.answer);
     const autoChecked = task.type !== "written" && task.type !== "voice" && task.type !== "file";
     return {
       index,
