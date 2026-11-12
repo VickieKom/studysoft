@@ -3,15 +3,18 @@
 // The student, parent and agent kinds arrive with their slices.
 import { initTRPC, TRPCError } from "@trpc/server";
 import { teacherIdFromHeaders } from "../../access/auth";
+import { linkSessionFromHeaders } from "../../access/links";
 import { db, type Database } from "../../db/client";
 
 export type Context = {
   headers: Headers;
   db: Database;
+  /** Response headers over HTTP (to set a cookie); absent for the server caller. */
+  resHeaders?: Headers;
 };
 
-export function createContext(headers: Headers): Context {
-  return { headers, db: db() };
+export function createContext(headers: Headers, resHeaders?: Headers): Context {
+  return { headers, db: db(), resHeaders };
 }
 
 export const INTERNAL_ERROR_MESSAGE = "Internal server error";
@@ -41,4 +44,17 @@ export const teacherProcedure = t.procedure.use(async ({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, teacherId } });
+});
+
+/**
+ * Requires a session opened from a student link (#19). The student and the
+ * teacher come from the session, never from input. A parent session is not
+ * a student session.
+ */
+export const studentProcedure = t.procedure.use(async ({ ctx, next }) => {
+  const session = await linkSessionFromHeaders(ctx.db, ctx.headers);
+  if (!session || session.role !== "student") {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({ ctx: { ...ctx, studentId: session.studentId, teacherId: session.teacherId } });
 });

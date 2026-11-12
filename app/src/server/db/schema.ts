@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { boolean, foreignKey, index, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, foreignKey, index, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -180,4 +180,53 @@ export const note = pgTable(
     index("note_student_id_created_at_idx").on(t.studentId, t.createdAt),
     index("note_teacher_id_idx").on(t.teacherId),
   ],
+);
+
+// Access links (#19; architecture 8.1). One row per student and role; the
+// token itself is never stored: it is derived from the row (HMAC with the
+// LINK_KEY secret over id, role and generation), and only its hash is kept for
+// the lookup on exchange. A reissue (#21) bumps the generation.
+export const accessLink = pgTable(
+  "access_link",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    role: text("role").notNull(),
+    generation: bigint("generation", { mode: "number" }).notNull().default(1),
+    tokenHash: text("token_hash").notNull().unique(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "access_link_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    unique("access_link_student_id_role_key").on(t.studentId, t.role),
+    index("access_link_teacher_id_idx").on(t.teacherId),
+  ],
+);
+
+// Sessions opened from an access link. The cookie holds a random value; only
+// its hash is stored. A session belongs to one generation of its link, so a
+// reissue ends every session opened from the old link.
+export const linkSession = pgTable(
+  "link_session",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    linkId: uuid("link_id")
+      .notNull()
+      .references(() => accessLink.id, { onDelete: "cascade" }),
+    generation: bigint("generation", { mode: "number" }).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("link_session_link_id_idx").on(t.linkId)],
 );

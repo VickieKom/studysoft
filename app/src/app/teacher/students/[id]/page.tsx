@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { StudentNotes } from "@/components/student-notes";
 import { PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../../caller";
@@ -27,12 +28,15 @@ export default async function StudentCardPage({ params }: Props) {
             <h1 className="text-h1 font-bold">{student.firstName}</h1>
             {student.lastName && <p className="text-h3 text-text-secondary">{student.lastName}</p>}
           </div>
-          <Link
-            href={`/teacher/students/${student.id}/edit`}
-            className="inline-flex h-10 items-center rounded-control border border-border px-4 text-button font-semibold hover:bg-surface"
-          >
-            Изменить
-          </Link>
+          <div className="flex items-start gap-2">
+            <CopyLinkButton studentId={student.id} />
+            <Link
+              href={`/teacher/students/${student.id}/edit`}
+              className="inline-flex h-10 items-center rounded-control border border-border px-4 text-button font-semibold hover:bg-surface"
+            >
+              Изменить
+            </Link>
+          </div>
         </header>
         <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
           <dt className="text-text-secondary">Статус</dt>

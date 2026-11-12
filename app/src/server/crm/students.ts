@@ -54,6 +54,18 @@ export async function findStudent(db: Database, teacherId: string, id: string): 
   return row ? toCard(row) : null;
 }
 
+/**
+ * What the student's own page may show: the first name only. Never selects the
+ * last name or anything else of the card (#18, #19).
+ */
+export async function studentPageView(db: Database, teacherId: string, id: string): Promise<{ firstName: string } | null> {
+  const [row] = await db
+    .select({ firstName: student.firstName })
+    .from(student)
+    .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt)));
+  return row ?? null;
+}
+
 /** Creates a student with the status "Обсуждение" and returns its identifier. */
 export async function createStudent(db: Database, teacherId: string, fields: StudentFields): Promise<string> {
   const [row] = await db
