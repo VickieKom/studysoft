@@ -104,18 +104,19 @@ test("an invalid homework is not saved and the message names the task and the fi
   const unknownType = structuredClone(allTypes);
   (unknownType.tasks[1] as { type: string }).type = "riddle";
   await importHomework(page, unknownType);
-  const alert = page.getByRole("alert");
-  await expect(alert).toContainText("2");
-  await expect(alert).toContainText("type");
+  // Next.js keeps its own "alert" region for route announcements, so the
+  // message is found by its text among the alerts.
+  const alert = page.getByRole("alert").filter({ hasText: "2" }).filter({ hasText: "type" });
+  await expect(alert).toBeVisible();
 
   const wrongVersion = { ...short, version: 99 };
   await page.getByLabel("JSON домашки").fill(JSON.stringify(wrongVersion));
   await page.getByRole("button", { name: "Импортировать", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("version");
+  await expect(page.getByRole("alert").filter({ hasText: "version" })).toBeVisible();
 
   await page.getByLabel("JSON домашки").fill("{ not json");
   await page.getByRole("button", { name: "Импортировать", exact: true }).click();
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "JSON" })).toBeVisible();
 
   await page.goBack();
   await page.reload();
