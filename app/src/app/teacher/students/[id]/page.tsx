@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Fragment } from "react";
+import { StudentNotes } from "@/components/student-notes";
 import { PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
+import { teacherCaller } from "../../caller";
 import { studentOrNotFound } from "../student";
 
 export const metadata = { title: "Ученик — StudySoft" };
@@ -9,6 +11,8 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function StudentCardPage({ params }: Props) {
   const student = await studentOrNotFound((await params).id);
+  const { caller } = await teacherCaller();
+  const notes = await caller.teacher.notes.list({ studentId: student.id });
 
   return (
     <main>
@@ -45,6 +49,7 @@ export default async function StudentCardPage({ params }: Props) {
           ))}
         </dl>
       </div>
+      <StudentNotes studentId={student.id} notes={notes} />
     </main>
   );
 }

@@ -155,3 +155,29 @@ export const groupMember = pgTable(
     index("group_member_teacher_id_idx").on(t.teacherId),
   ],
 );
+
+// Notes of the teacher (#42; architecture 5.4). Attached to a student now; a
+// lesson reference arrives with the schedule. The composite key keeps a note
+// inside the teacher who owns the student.
+export const note = pgTable(
+  "note",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "note_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("note_student_id_created_at_idx").on(t.studentId, t.createdAt),
+    index("note_teacher_id_idx").on(t.teacherId),
+  ],
+);
