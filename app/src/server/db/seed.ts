@@ -6,13 +6,22 @@ import { fileURLToPath } from "node:url";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { LEVELS, TIME_ZONE_IDS } from "../../domain/student";
 import type { Database } from "./client";
 import { account, student, teacher } from "./schema";
 
 const seedDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../deploy/seed");
 
 const teachersFile = z.array(z.object({ name: z.string(), email: z.email(), password: z.string().min(8) }));
-const studentsFile = z.array(z.object({ teacher: z.email(), displayName: z.string() }));
+const studentsFile = z.array(
+  z.object({
+    teacher: z.email(),
+    firstName: z.string(),
+    lastName: z.string().nullable().default(null),
+    level: z.enum(LEVELS),
+    timeZone: z.enum(TIME_ZONE_IDS),
+  }),
+);
 
 async function readSeed<T>(file: string, schema: z.ZodType<T>): Promise<T> {
   return schema.parse(JSON.parse(await readFile(path.join(seedDir, file), "utf8")));
@@ -56,9 +65,10 @@ export async function seed(db: Database): Promise<void> {
       const [existing] = await tx
         .select({ id: student.id })
         .from(student)
-        .where(and(eq(student.teacherId, teacherId), eq(student.displayName, entry.displayName)));
+        .where(and(eq(student.teacherId, teacherId), eq(student.firstName, entry.firstName)));
       if (!existing) {
-        await tx.insert(student).values({ teacherId, displayName: entry.displayName });
+        const { teacher: _teacher, ...fields } = entry;
+        await tx.insert(student).values({ teacherId, ...fields });
       }
     }
   });

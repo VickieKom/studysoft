@@ -73,8 +73,9 @@ export const verification = pgTable("verification", {
   updatedAt: updatedAt(),
 });
 
-// The student card grows in the next slices (#18). The skeleton needs the
-// table so the student list reads real rows and the groups can refer to it.
+// The student card (#18). Level, status and time zone hold values from
+// src/domain/student.ts; the router validates them. The last name is optional
+// and teacher-only: student, parent and agent procedures never select it.
 export const student = pgTable(
   "student",
   {
@@ -82,8 +83,13 @@ export const student = pgTable(
     teacherId: uuid("teacher_id")
       .notNull()
       .references(() => teacher.id),
-    displayName: text("display_name").notNull(),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name"),
+    level: text("level").notNull().default("A1"),
+    timeZone: text("time_zone").notNull().default("Europe/Moscow"),
+    status: text("status").notNull().default("discussion"),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [

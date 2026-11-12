@@ -41,3 +41,8 @@ export { handleAuthRequest };
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof TRPCError && error.code === "UNAUTHORIZED";
 }
+
+/** True when a procedure answered "not found" — which also covers "not yours". */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof TRPCError && error.code === "NOT_FOUND";
+}

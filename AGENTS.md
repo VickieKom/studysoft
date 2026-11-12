@@ -4,7 +4,7 @@ Operating manual for coding agents working in this repository. It is terse on pu
 
 StudySoft is a platform for private language tutors: students and payments, schedule, a library of learning materials, a two-window lesson mode, homework with automatic checking. One Next.js application in TypeScript over PostgreSQL, plus an MCP server that lets the teacher's own AI agent read context and save drafts.
 
-**Status:** the walking skeleton is being built. `app/`, `e2e/acceptance/` and `deploy/` exist; the teacher sign-in and the student list (#17) are the nearest slice to copy. `mcp/` and `e2e/smoke/` appear with their slices. Do not invent a different layout.
+**Status:** the walking skeleton is being built. `app/`, `e2e/acceptance/` and `deploy/` exist; the student card (#18) is the nearest slice to copy for a list, a card and a form that saves through the router; the teacher sign-in (#17) for anything around sessions. `mcp/` and `e2e/smoke/` appear with their slices. Do not invent a different layout.
 
 ## How we work
 
@@ -80,6 +80,8 @@ Order of work inside a slice: schema, then server module and procedure, then scr
 Schema changes: edit `app/src/server/db/schema.ts`, then `npm run db:generate -w app -- --name <what>`. Start every migration with `SET LOCAL lock_timeout` and `SET LOCAL statement_timeout` like the first one; `make migrations` checks it.
 
 Screens of the teacher's workspace get their router caller from `app/src/app/teacher/caller.ts`. It redirects to sign-in without a session; the layout alone does not protect a page, because Next renders them in parallel.
+
+Client components call the router through `app/src/components/router-client.ts`; values shared by screens and server validation (levels, statuses, time zones) live in `app/src/domain/`, which holds plain data only. A missing record and another teacher's record end in the same `notFound()` page (see `app/src/app/teacher/students/student.ts`).
 
 ## Tests
 

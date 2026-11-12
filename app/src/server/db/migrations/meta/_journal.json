@@ -8,6 +8,20 @@
       "when": 1794414054310,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794458116692,
+      "tag": "0001_student_card",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794458121887,
+      "tag": "0002_student_first_name",
+      "breakpoints": true
     }
   ]
 }
