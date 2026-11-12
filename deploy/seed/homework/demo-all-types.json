@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "title": "Demo: every task type",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Pick the colour of the sky.",
+      "options": ["green", "blue", "red"],
+      "answer": 1,
+      "topic": "colours",
+      "skill": "vocabulary",
+      "source": { "book": "Demo book", "unit": "1", "page": "4", "exercise": "1" }
+    },
+    {
+      "type": "multiple_choice",
+      "prompt": "Pick every animal.",
+      "options": ["cat", "table", "dog", "chair"],
+      "answers": [0, 2],
+      "topic": "animals",
+      "skill": "vocabulary",
+      "source": { "book": "Demo book", "unit": "1" }
+    },
+    {
+      "type": "gap",
+      "prompt": "Fill in the gap.",
+      "text": "Rabbits like ___ very much.",
+      "answers": [["carrots"]],
+      "topic": "food",
+      "skill": "grammar",
+      "source": "own"
+    },
+    {
+      "type": "match",
+      "prompt": "Match the words.",
+      "pairs": [
+        { "left": "hot", "right": "cold" },
+        { "left": "big", "right": "small" }
+      ],
+      "topic": "opposites",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "order",
+      "prompt": "Put the words in order.",
+      "words": ["We", "play", "after", "school"],
+      "topic": "word order",
+      "skill": "grammar"
+    },
+    {
+      "type": "written",
+      "prompt": "Write two sentences about your weekend.",
+      "hint": "Use the Past Simple.",
+      "skill": "writing",
+      "source": "own"
+    },
+    {
+      "type": "voice",
+      "prompt": "Say three things you can see from your window.",
+      "skill": "speaking",
+      "source": "own"
+    },
+    {
+      "type": "file",
+      "prompt": "Send a photo of your drawing.",
+      "accept": ["image"],
+      "source": "own"
+    }
+  ]
+}

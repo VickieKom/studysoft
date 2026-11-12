@@ -32,6 +32,7 @@ const t = initTRPC.context<Context>().create({
 });
 
 export const router = t.router;
+export const mergeRouters = t.mergeRouters;
 export const createCallerFactory = t.createCallerFactory;
 
 /** Reachable without a session. Adding one is a guarded change. */

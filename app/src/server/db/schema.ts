@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { bigint, boolean, foreignKey, index, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -229,4 +229,39 @@ export const linkSession = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("link_session_link_id_idx").on(t.linkId)],
+);
+
+// Homework (#32; architecture 5.4). The whole document in the homework
+// format (docs/homework-format.md) is kept as it was imported; a published
+// homework never changes. Statuses: draft, published, missed ("не сдана");
+// "done" arrives with submissions (#34). At most one published homework per
+// student, kept by the database.
+export const homework = pgTable(
+  "homework",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    title: text("title").notNull(),
+    document: jsonb("document").notNull(),
+    status: text("status").notNull().default("draft"),
+    dueDate: date("due_date"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "homework_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("homework_student_id_idx").on(t.studentId),
+    index("homework_teacher_id_idx").on(t.teacherId),
+    uniqueIndex("homework_one_published_per_student")
+      .on(t.studentId)
+      .where(sql`${t.status} = 'published'`),
+  ],
 );

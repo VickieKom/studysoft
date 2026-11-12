@@ -4,10 +4,12 @@
 import { TRPCError } from "@trpc/server";
 import { handleAuthRequest } from "../access/auth";
 import { logProcedureError, serveRouter } from "./core/errors";
-import { createCallerFactory, createContext, router } from "./core/trpc";
+import { createCallerFactory, createContext, mergeRouters, router } from "./core/trpc";
 import { healthRouter } from "./public/health";
 import { linksRouter } from "./public/links";
+import { studentHomeworkRouter } from "./student/homework";
 import { studentMeRouter } from "./student/me";
+import { homeworkRouter } from "./teacher/homework";
 import { linksTeacherRouter } from "./teacher/links";
 import { notesRouter } from "./teacher/notes";
 import { sessionRouter } from "./teacher/session";
@@ -16,12 +18,13 @@ import { studentsRouter } from "./teacher/students";
 export const appRouter = router({
   health: healthRouter,
   links: linksRouter,
-  student: studentMeRouter,
+  student: mergeRouters(studentMeRouter, router({ homework: studentHomeworkRouter })),
   teacher: router({
     session: sessionRouter,
     students: studentsRouter,
     notes: notesRouter,
     links: linksTeacherRouter,
+    homework: homeworkRouter,
   }),
 });
 

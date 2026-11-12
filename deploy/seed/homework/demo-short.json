@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "title": "Demo: a short one",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Pick the odd one out.",
+      "options": ["one", "two", "apple"],
+      "answer": 2
+    },
+    {
+      "type": "written",
+      "prompt": "Write one sentence about a pet."
+    }
+  ]
+}
