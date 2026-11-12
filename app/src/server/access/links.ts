@@ -40,16 +40,19 @@ export function linkUrl(token: string): string {
  * The current link of a student for a role, issued on first use. Students
  * created before links existed get theirs when the teacher first copies it.
  */
-export async function ensureLink(
-  db: Database,
-  teacherId: string,
-  studentId: string,
-  role: LinkRole,
-): Promise<{ id: string; generation: number }> {
-  const [existing] = await db
-    .select({ id: accessLink.id, generation: accessLink.generation })
+type LinkRow = { id: string; generation: number; tokenHash: string };
+
+async function findLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow | undefined> {
+  const [row] = await db
+    .select({ id: accessLink.id, generation: accessLink.generation, tokenHash: accessLink.tokenHash })
     .from(accessLink)
     .where(and(eq(accessLink.studentId, studentId), eq(accessLink.teacherId, teacherId), eq(accessLink.role, role)));
+  return row;
+}
+
+// Revocation (revoked_at) is not handled here yet: #21 brings it.
+export async function ensureLink(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<LinkRow> {
+  const existing = await findLink(db, teacherId, studentId, role);
   if (existing) return existing;
 
   const id = crypto.randomUUID();
@@ -58,16 +61,30 @@ export async function ensureLink(
     .insert(accessLink)
     .values({ id, teacherId, studentId, role, generation: 1, tokenHash })
     .onConflictDoNothing({ target: [accessLink.studentId, accessLink.role] })
-    .returning({ id: accessLink.id, generation: accessLink.generation });
+    .returning({ id: accessLink.id, generation: accessLink.generation, tokenHash: accessLink.tokenHash });
   if (created) return created;
-  // Two copies at once: the other request won the insert.
-  return ensureLink(db, teacherId, studentId, role);
+  // Two copies at once: the other request won the insert. Read it once; if
+  // it is still not this teacher's, the caller asked for someone else's student.
+  const winner = await findLink(db, teacherId, studentId, role);
+  if (!winner) throw new Error("ensureLink: the link belongs to another teacher");
+  return winner;
 }
 
-/** The address of a student's current link for a role. */
+/**
+ * The address of a student's current link for a role. After LINK_KEY is
+ * rotated, the stored hash belongs to the old token: it is replaced here, so
+ * the card copies a working link again. Old tokens stop working, which is the
+ * point of rotating; sessions survive, because they are bound to the
+ * generation, not to the token.
+ */
 export async function currentLinkUrl(db: Database, teacherId: string, studentId: string, role: LinkRole): Promise<string> {
   const link = await ensureLink(db, teacherId, studentId, role);
-  return linkUrl(deriveToken(link.id, role, link.generation));
+  const token = deriveToken(link.id, role, link.generation);
+  const tokenHash = sha256(token);
+  if (tokenHash !== link.tokenHash) {
+    await db.update(accessLink).set({ tokenHash }).where(eq(accessLink.id, link.id));
+  }
+  return linkUrl(token);
 }
 
 /**

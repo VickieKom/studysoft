@@ -123,4 +123,22 @@ describe("student link", () => {
     await db().update(accessLink).set({ generation: link!.generation + 1 }).where(eq(accessLink.id, link!.id));
     await expect(caller.student.me()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
+
+  it("repairs the link after LINK_KEY is rotated", async () => {
+    // A rotation leaves the stored hash belonging to the old token. Simulated
+    // by giving the row a hash no current token has: the same state.
+    const [link] = await db().select().from(accessLink).where(eq(accessLink.studentId, studentId));
+    await db().update(accessLink).set({ tokenHash: "hash-of-a-token-from-the-old-key" }).where(eq(accessLink.id, link!.id));
+
+    const cookie = await exchange((await studentLink()).split("#")[1]!);
+    expect(cookie).not.toBeNull();
+    expect(await createServerCaller(new Headers({ cookie: cookie! })).student.me()).toEqual({ firstName: "Ссылка" });
+  });
+
+  it("creates no session when there is no way to hand it over", async () => {
+    const before = (await db().select().from(linkSession)).length;
+    const token = (await studentLink()).split("#")[1]!;
+    await expect(createServerCaller(new Headers()).links.exchange({ token })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await db().select().from(linkSession)).toHaveLength(before);
+  });
 });
