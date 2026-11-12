@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { HOMEWORK_FORMAT_VERSION, parseHomework, taskSchema, validateHomework } from "../../../domain/homework-format";
+import { imageRefs, storeImages } from "../../homework/images";
 import { findStudent } from "../../crm/students";
 import {
   findHomework,
@@ -23,7 +24,10 @@ const summary = z.object({
   taskCount: z.number().int(),
 });
 
-const MAX_IMPORT_LENGTH = 1_000_000;
+// Up to 50 tasks, each with a picture of at most 2 MB as base64, would not fit;
+// a homework with a few pictures does, and an oversized one still gets a
+// message naming the task.
+const MAX_IMPORT_LENGTH = 25_000_000;
 
 export const homeworkRouter = router({
   /** Validates the pasted JSON and saves it as a draft; the message names the task and the field. */
@@ -34,7 +38,10 @@ export const homeworkRouter = router({
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
       const parsed = parseHomework(input.json);
       if (!parsed.ok) throw new TRPCError({ code: "BAD_REQUEST", message: parsed.errors.join("\n") });
-      return { id: await importDraft(ctx.db, ctx.teacherId, input.studentId, parsed.homework) };
+      // Pictures arrive as data URLs only: a pasted reference to a stored file is refused.
+      const stored = await storeImages(ctx.db, ctx.teacherId, parsed.homework, new Set());
+      if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
+      return { id: await importDraft(ctx.db, ctx.teacherId, input.studentId, stored.homework) };
     }),
 
   list: teacherProcedure
@@ -68,8 +75,12 @@ export const homeworkRouter = router({
       if (!draft || draft.status !== "draft") throw notFound();
       const checked = validateHomework({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: input.tasks });
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
-      if (!(await updateDraftTasks(ctx.db, ctx.teacherId, input.id, checked.homework))) throw notFound();
-      return { tasks: checked.homework.tasks };
+      // New pictures come as data URLs; a stored one may stay only if this draft already has it.
+      const keep = imageRefs({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: draft.tasks });
+      const stored = await storeImages(ctx.db, ctx.teacherId, checked.homework, keep);
+      if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
+      if (!(await updateDraftTasks(ctx.db, ctx.teacherId, input.id, stored.homework))) throw notFound();
+      return { tasks: stored.homework.tasks };
     }),
 
   publish: teacherProcedure

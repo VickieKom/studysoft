@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TASK_TYPE_LABELS } from "@/domain/homework";
+import { homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
 import { TASK_TYPES, type Task, type TaskType } from "@/domain/homework-format";
 import { HomeworkTaskForm } from "./homework-task-form";
 import { HomeworkTaskPreview } from "./homework-task-preview";
@@ -63,6 +63,7 @@ export function HomeworkDraftEditor({ homeworkId, tasks: initial }: { homeworkId
   const form = (task: Task | null) => (
     <HomeworkTaskForm
       key={String(editing)}
+      imageUrl={task?.image && typeof editing === "number" ? homeworkImageUrl(homeworkId, editing) : null}
       type={task?.type ?? newType}
       task={task}
       pending={pending}
@@ -81,7 +82,7 @@ export function HomeworkDraftEditor({ homeworkId, tasks: initial }: { homeworkId
               form(task)
             ) : (
               <>
-                <HomeworkTaskPreview task={task} number={index + 1} />
+                <HomeworkTaskPreview task={task} number={index + 1} homeworkId={homeworkId} />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className={control} disabled={pending} onClick={() => openForm(index)}>
                     Изменить задание

@@ -323,3 +323,20 @@ export const agentToken = pgTable(
       .where(sql`${t.revokedAt} is null`),
   ],
 );
+
+// Files kept by the blob store (#33; architecture, decision 8). The bytes are
+// in the store under the row's id; the row says whose file it is and what it
+// is. There are no direct links: every file is served after a permission check.
+export const blob = pgTable(
+  "blob",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    contentType: text("content_type").notNull(),
+    size: bigint("size", { mode: "number" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("blob_teacher_id_idx").on(t.teacherId)],
+);

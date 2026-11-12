@@ -56,6 +56,11 @@ export function answerKey(task: Task): string | null {
   }
 }
 
+/** Where a task's picture is served, after a permission check (#33). */
+export function homeworkImageUrl(homeworkId: string, taskIndex: number): string {
+  return `/api/files/homework/${homeworkId}/${taskIndex}`;
+}
+
 /** "1 задание", "3 задания", "8 заданий". */
 export function tasksLabel(count: number): string {
   const mod10 = count % 10;

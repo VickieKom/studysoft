@@ -298,7 +298,7 @@ Dependency rules:
 | `library` | Textbooks, files, units, page images, games, warm-ups, videos; textbook parsing and its confirmation; export and import of materials | `blob`, `db` |
 | `lesson` | Lesson plan by stages, stage state, the "finish lesson" command with all its consequences | `schedule`, `homework`, `db` |
 | `homework` | Homework, task types, draft answers, single attempt, automatic checking, manual review | `library`, `db` |
-| `blob` | The `BlobStore` interface: put, read, delete a file. A `file` adapter now, `s3` later | Disk |
+| `blob` | The `BlobStore` interface: put and read a file by id (delete arrives with retention). A `file` adapter in the `FILES_DIR` directory now, `s3` later. Who may read a file is decided by the caller | Disk |
 | `db` | Schema, migrations and transactions; every query takes the teacher identifier | PostgreSQL |
 
 Repository layout:
@@ -363,6 +363,7 @@ erDiagram
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
 | `homework`, `task` | `homework` | Permanent | The document in the homework format (`docs/homework-format.md`), stored as imported. Statuses: draft, published, submitted ("сдана", #34), missed ("не сдана"). Tasks do not change after publishing; a deadline is a calendar date; at most one published homework per student, kept by a partial unique index |
 | `homework_submission`, `homework_answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per homework, enforced by a unique constraint, with its idempotency key and score. One answer row per task: saved as the student goes, and on submission every task gets one with its correctness, topic and skill (#34) |
+| `blob` | `blob` | With what refers to it; files nothing refers to stay until cleanup exists (#73) | Whose file it is, its type and size; the bytes are in the store under the same id. Homework pictures are stored on import and served at `/api/files/homework/<id>/<task>` after a permission check (#33) |
 | `agent_token` | `access` | Until revoked | The assistant's personal token, hash only; one active per teacher; created and last-used dates (#3) |
 | `draft_origin` | `homework`, `lesson`, `library` | With the draft | Who created the draft (agent or teacher) and a snapshot of the student context at generation time |
 | `group`, `group_member` | `crm` | Permanent | Tables exist from the first migration; the interface arrives in stage 3 |

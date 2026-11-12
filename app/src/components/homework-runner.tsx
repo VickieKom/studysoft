@@ -154,6 +154,11 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
       </header>
 
       <h1 className="text-task-title font-bold">{task.prompt}</h1>
+      {task.image && (
+        // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
+        // eslint-disable-next-line @next/next/no-img-element -- same reason as above
+        <img src={task.image} alt="Картинка к заданию" className="max-h-72 w-full rounded-task object-contain" />
+      )}
       <TaskBody
         key={index}
         task={task}

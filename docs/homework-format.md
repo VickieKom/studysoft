@@ -21,7 +21,7 @@ Content lives in the platform's database, never in this repository. The example 
 | `topic` | no | Free text, for grouping mistakes and gaps, for example "Present Simple" |
 | `skill` | no | `grammar`, `vocabulary`, `reading`, `writing`, `speaking` or `listening` |
 | `source` | no | Where the task comes from: `{ "book": "Workbook", "unit": "0", "page": "6", "exercise": "2" }` (every key optional except `book`), or the string `"own"` for the teacher's own task |
-| `image` | no | Not accepted yet: images arrive with #33, and a task with `image` is refused until then |
+| `image` | no | A picture next to the task, as a data URL: `data:image/png;base64,…`. PNG, JPEG or WebP, at most 2 MB. One picture per task. The platform keeps the file and serves it only to the teacher and to the student whose published homework it is (#33) |
 
 ## Task types
 

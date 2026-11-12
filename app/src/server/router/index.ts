@@ -54,6 +54,9 @@ export function handleRouterRequest(request: Request): Promise<Response> {
 
 export { handleAuthRequest };
 
+/** Pictures of homework tasks, served after a permission check (#33). */
+export { handleHomeworkImageRequest } from "../homework/images";
+
 /** True when a procedure refused because there is no valid session. */
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof TRPCError && error.code === "UNAUTHORIZED";

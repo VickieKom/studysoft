@@ -16,13 +16,43 @@ const source = z.union([
     .strict(),
 ]);
 
+/** The largest picture a task may carry (#33): plenty for a picture next to an exercise. */
+export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export type ImageType = (typeof IMAGE_TYPES)[number];
+
+// A picture comes in the JSON as a data URL, so one paste brings everything.
+// Once saved, the platform keeps a reference to the stored file instead.
+const IMAGE_DATA_URL = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]*={0,2})$/;
+const IMAGE_REF = /^blob:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The type and the bytes of a picture's data URL, or null when it is not one the format accepts. */
+export function imageDataUrl(value: string): { type: ImageType; base64: string; bytes: number } | null {
+  const match = IMAGE_DATA_URL.exec(value);
+  if (!match) return null;
+  const base64 = match[2]!;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return { type: match[1] as ImageType, base64, bytes: Math.floor((base64.length * 3) / 4) - padding };
+}
+
+/** The stored file a task's picture refers to, or null. */
+export function imageRef(value: string): string | null {
+  return IMAGE_REF.test(value) ? value.slice("blob:".length) : null;
+}
+
+const image = z
+  .string()
+  .refine((value) => imageRef(value) !== null || imageDataUrl(value) !== null, {
+    error: "картинка — PNG, JPEG или WebP в виде data:image/…;base64,…",
+  })
+  .refine((value) => (imageDataUrl(value)?.bytes ?? 0) <= MAX_IMAGE_BYTES, { error: "картинка больше 2 МБ" });
+
 const common = {
   prompt: text,
   topic: z.string().optional(),
   skill: z.enum(SKILLS).optional(),
   source: source.optional(),
-  // Images arrive with #33; until then a task that names one is refused.
-  image: z.never({ error: "картинки появятся позже (#33), уберите поле image" }).optional(),
+  image: image.optional(),
 };
 
 const singleChoice = z
@@ -201,13 +231,17 @@ function shuffled<T>(items: readonly T[], seed: string, solved: readonly (readon
  * an order are shuffled by the seed (the homework and the task), never left
  * in the solved order.
  */
-export type StudentTask =
+export type StudentTask = (
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: string[] }
   | { type: "gap"; prompt: string; text: string; options?: string[] }
   | { type: "match"; prompt: string; left: string[]; right: string[] }
   | { type: "order"; prompt: string; words: string[] }
   | { type: "written" | "voice"; prompt: string; hint?: string }
-  | { type: "file"; prompt: string; accept: ("image" | "audio")[]; hint?: string };
+  | { type: "file"; prompt: string; accept: ("image" | "audio")[]; hint?: string }
+) & {
+  /** The address of the task's picture, served after a permission check (#33). */
+  image?: string;
+};
 
 export function studentView(task: Task, seed: string): StudentTask {
   switch (task.type) {

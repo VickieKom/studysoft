@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useId, useState } from "react";
-import { gapCount, SKILLS, type Task, type TaskType } from "@/domain/homework-format";
+import { gapCount, IMAGE_TYPES, MAX_IMAGE_BYTES, SKILLS, type Task, type TaskType } from "@/domain/homework-format";
 import { Button } from "./button";
 
 const SKILL_LABELS: Record<(typeof SKILLS)[number], string> = {
@@ -21,6 +21,8 @@ const lines = (value: string) =>
     .filter((line) => line !== "");
 
 type Props = {
+  /** Where the task's stored picture is served, to show it while editing. */
+  imageUrl: string | null;
   type: TaskType;
   task: Task | null;
   pending: boolean;
@@ -34,7 +36,7 @@ type Props = {
  * line. What is missing is said here before saving; the server checks the
  * whole homework against the format again.
  */
-export function HomeworkTaskForm({ type, task, pending, error, onSave, onCancel }: Props) {
+export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave, onCancel }: Props) {
   const id = useId();
   const [prompt, setPrompt] = useState(task?.prompt ?? "");
   const [topic, setTopic] = useState(task?.topic ?? "");
@@ -58,7 +60,21 @@ export function HomeworkTaskForm({ type, task, pending, error, onSave, onCancel 
   const [accept, setAccept] = useState<("image" | "audio")[]>(
     task?.type === "file" ? (task.accept ?? ["image", "audio"]) : ["image", "audio"],
   );
+  // The stored reference, a new data URL, or nothing.
+  const [image, setImage] = useState<string | undefined>(task?.image);
   const [problem, setProblem] = useState<string | null>(null);
+
+  function pickImage(file: File | undefined) {
+    if (!file) return;
+    if (!(IMAGE_TYPES as readonly string[]).includes(file.type)) return setProblem("Картинка — PNG, JPEG или WebP");
+    if (file.size > MAX_IMAGE_BYTES) return setProblem("Картинка больше 2 МБ");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProblem(null);
+      setImage(String(reader.result));
+    };
+    reader.readAsDataURL(file);
+  }
 
   const options = lines(optionsText);
   const gaps = gapCount(gapText);
@@ -70,6 +86,7 @@ export function HomeworkTaskForm({ type, task, pending, error, onSave, onCancel 
       ...(topic.trim() ? { topic: topic.trim() } : {}),
       ...(skill ? { skill: skill as (typeof SKILLS)[number] } : {}),
       ...(task?.source ? { source: task.source } : {}),
+      ...(image ? { image } : {}),
     };
     const withHint = hint.trim() ? { hint: hint.trim() } : {};
     switch (type) {
@@ -129,6 +146,36 @@ export function HomeworkTaskForm({ type, task, pending, error, onSave, onCancel 
       <Labelled id={`${id}-prompt`} label="Текст задания">
         <input id={`${id}-prompt`} value={prompt} onChange={(e) => setPrompt(e.target.value)} className={field} />
       </Labelled>
+
+      <div className="flex flex-col gap-2">
+        {image && (
+          // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
+          // eslint-disable-next-line @next/next/no-img-element -- same reason as above
+          <img
+            src={image.startsWith("data:") ? image : (imageUrl ?? undefined)}
+            alt="Картинка к заданию"
+            className="max-h-48 self-start rounded-control border border-border"
+          />
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor={`${id}-image`} className="text-small text-text-secondary">
+            {image ? "Заменить картинку" : "Картинка"}
+            <span className="text-text-muted"> — необязательно, PNG, JPEG или WebP до 2 МБ</span>
+          </label>
+          <input
+            id={`${id}-image`}
+            type="file"
+            accept={IMAGE_TYPES.join(",")}
+            onChange={(e) => pickImage(e.target.files?.[0])}
+            className="text-small"
+          />
+          {image && (
+            <Button variant="secondary" onClick={() => setImage(undefined)} disabled={pending}>
+              Убрать картинку
+            </Button>
+          )}
+        </div>
+      </div>
 
       {(type === "single_choice" || type === "multiple_choice") && (
         <>

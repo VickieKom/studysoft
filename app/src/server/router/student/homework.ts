@@ -16,14 +16,22 @@ const current = z
   .nullable();
 
 const text = z.string();
+// A picture goes out as the address it is served at, never as the stored reference.
+const image = z.string().startsWith("/api/files/homework/").optional();
 const studentTask = z.discriminatedUnion("type", [
-  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text) }).strict(),
-  z.object({ type: z.literal("gap"), prompt: text, text, options: z.array(text).optional() }).strict(),
-  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text) }).strict(),
-  z.object({ type: z.literal("order"), prompt: text, words: z.array(text) }).strict(),
-  z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional() }).strict(),
+  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image }).strict(),
+  z.object({ type: z.literal("gap"), prompt: text, text, options: z.array(text).optional(), image }).strict(),
+  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image }).strict(),
+  z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image }).strict(),
+  z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image }).strict(),
   z
-    .object({ type: z.literal("file"), prompt: text, accept: z.array(z.enum(["image", "audio"])), hint: text.optional() })
+    .object({
+      type: z.literal("file"),
+      prompt: text,
+      accept: z.array(z.enum(["image", "audio"])),
+      hint: text.optional(),
+      image,
+    })
     .strict(),
 ]);
 

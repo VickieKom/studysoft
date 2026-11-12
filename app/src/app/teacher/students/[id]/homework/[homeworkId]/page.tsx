@@ -55,7 +55,7 @@ export default async function HomeworkPage({ params }: Props) {
         <ol className="flex flex-col gap-4">
           {homework.tasks.map((task, index) => (
             <li key={index} className="rounded-card border border-border p-4">
-              <HomeworkTaskPreview task={task} number={index + 1} />
+              <HomeworkTaskPreview task={task} number={index + 1} homeworkId={homework.id} />
             </li>
           ))}
         </ol>
