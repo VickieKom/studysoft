@@ -53,7 +53,7 @@ export const teacherProcedure = t.procedure.use(async ({ ctx, next }) => {
  * a student session.
  */
 export const studentProcedure = t.procedure.use(async ({ ctx, next }) => {
-  const session = await linkSessionFromHeaders(ctx.db, ctx.headers);
+  const session = await linkSessionFromHeaders(ctx.db, ctx.headers, "student");
   if (!session || session.role !== "student") {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
@@ -66,7 +66,7 @@ export const studentProcedure = t.procedure.use(async ({ ctx, next }) => {
  * not a parent session.
  */
 export const parentProcedure = t.procedure.use(async ({ ctx, next }) => {
-  const session = await linkSessionFromHeaders(ctx.db, ctx.headers);
+  const session = await linkSessionFromHeaders(ctx.db, ctx.headers, "parent");
   if (!session || session.role !== "parent") {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }

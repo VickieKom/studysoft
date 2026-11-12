@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LINK_SESSION_COOKIE } from "../../access/links";
+import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb } from "../../db/client";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
@@ -24,7 +24,7 @@ async function exchange(url: string): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token: url.split("#")[1] }),
   });
-  const cookie = response.headers.getSetCookie().find((value) => value.startsWith(`${LINK_SESSION_COOKIE}=`));
+  const cookie = response.headers.getSetCookie().find((value) => Object.values(LINK_SESSION_COOKIES).some((name) => value.startsWith(`${name}=`)));
   return response.ok && cookie ? cookie.split(";")[0]! : null;
 }
 
@@ -75,5 +75,22 @@ describe("parent link", () => {
     await expect(as(parentCookie!).teacher.students.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(as(studentCookie!).parent.me()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(teacher.parent.me()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("keeps both sessions on one shared device", async () => {
+    const studentCookie = await exchange((await teacher.teacher.links.student({ studentId })).url);
+    const parentCookie = await exchange((await teacher.teacher.links.parent({ studentId })).url);
+    expect(studentCookie!.split("=")[0]).not.toBe(parentCookie!.split("=")[0]);
+
+    // One cookie jar holds both: neither session pushes the other out.
+    const device = as(`${studentCookie}; ${parentCookie}`);
+    expect(await device.student.me()).toEqual({ firstName: "Родитель" });
+    expect(await device.parent.me()).toEqual({ firstName: "Родитель" });
+  });
+
+  it("does not accept one role's session under the other role's cookie", async () => {
+    const studentCookie = await exchange((await teacher.teacher.links.student({ studentId })).url);
+    const value = studentCookie!.split("=").slice(1).join("=");
+    await expect(as(`${LINK_SESSION_COOKIES.parent}=${value}`).parent.me()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });

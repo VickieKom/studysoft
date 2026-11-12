@@ -17,7 +17,12 @@ import { env } from "../env";
 
 export type LinkRole = "student" | "parent";
 
-export const LINK_SESSION_COOKIE = "studysoft_link";
+// One cookie per role: a family often shares one device, and opening the
+// parent link there must not end the child's session, nor the other way round.
+export const LINK_SESSION_COOKIES: Record<LinkRole, string> = {
+  student: "studysoft_link_student",
+  parent: "studysoft_link_parent",
+};
 const SESSION_DAYS = 90;
 // The browser keeps the cookie longer than the session lives; the server
 // decides when a session is over.
@@ -113,29 +118,31 @@ export async function exchangeToken(db: Database, token: string): Promise<{ cook
   return { cookie, role: link.role as LinkRole };
 }
 
-export function sessionCookieHeader(value: string): string {
+export function sessionCookieHeader(value: string, role: LinkRole): string {
   const secure = env().APP_URL.startsWith("https:") ? "; Secure" : "";
-  return `${LINK_SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_SECONDS}${secure}`;
+  return `${LINK_SESSION_COOKIES[role]}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_SECONDS}${secure}`;
 }
 
-function cookieFrom(headers: Headers): string | null {
+function cookieFrom(headers: Headers, cookieName: string): string | null {
   for (const part of (headers.get("cookie") ?? "").split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name === LINK_SESSION_COOKIE) return rest.join("=") || null;
+    if (name === cookieName) return rest.join("=") || null;
   }
   return null;
 }
 
 /**
- * Who a link session belongs to, or null. A session is valid while it has not
+ * Who the session of one role belongs to, or null. Only that role's cookie is
+ * read, and the link must be of that role. A session is valid while it has not
  * expired, its link is not revoked, its generation is the link's current one,
  * and the student is not deleted. A valid session is extended.
  */
 export async function linkSessionFromHeaders(
   db: Database,
   headers: Headers,
+  role: LinkRole,
 ): Promise<{ role: LinkRole; studentId: string; teacherId: string } | null> {
-  const cookie = cookieFrom(headers);
+  const cookie = cookieFrom(headers, LINK_SESSION_COOKIES[role]);
   if (!cookie) return null;
 
   const now = new Date();
@@ -150,7 +157,12 @@ export async function linkSessionFromHeaders(
     .from(linkSession)
     .innerJoin(
       accessLink,
-      and(eq(accessLink.id, linkSession.linkId), eq(accessLink.generation, linkSession.generation), isNull(accessLink.revokedAt)),
+      and(
+        eq(accessLink.id, linkSession.linkId),
+        eq(accessLink.role, role),
+        eq(accessLink.generation, linkSession.generation),
+        isNull(accessLink.revokedAt),
+      ),
     )
     .innerJoin(student, and(eq(student.id, accessLink.studentId), isNull(student.deletedAt)))
     .where(and(eq(linkSession.tokenHash, sha256(cookie)), gt(linkSession.expiresAt, now)));

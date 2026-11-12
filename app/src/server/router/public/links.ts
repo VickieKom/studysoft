@@ -17,7 +17,7 @@ export const linksRouter = router({
       if (!ctx.resHeaders) throw new TRPCError({ code: "NOT_FOUND" });
       const session = await exchangeToken(ctx.db, input.token);
       if (!session) throw new TRPCError({ code: "NOT_FOUND" });
-      ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(session.cookie));
+      ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(session.cookie, session.role));
       return { ok: true as const };
     }),
 });

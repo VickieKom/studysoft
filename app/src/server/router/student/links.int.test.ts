@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LINK_SESSION_COOKIE } from "../../access/links";
+import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
 import { accessLink, linkSession } from "../../db/schema";
 import { env } from "../../env";
@@ -27,7 +27,7 @@ async function exchange(token: string): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
-  const cookie = response.headers.getSetCookie().find((value) => value.startsWith(`${LINK_SESSION_COOKIE}=`));
+  const cookie = response.headers.getSetCookie().find((value) => Object.values(LINK_SESSION_COOKIES).some((name) => value.startsWith(`${name}=`)));
   return response.ok && cookie ? cookie.split(";")[0]! : null;
 }
 
