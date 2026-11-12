@@ -79,7 +79,7 @@ export async function createStudent(db: Database, teacherId: string, fields: Stu
 
 /** Updates a student of this teacher; false when there is no such student. */
 export async function updateStudent(
-  db: Database,
+  db: Pick<Database, "update">,
   teacherId: string,
   id: string,
   fields: StudentFields & { status: Status } & Partial<Profile>,

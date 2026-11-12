@@ -87,7 +87,10 @@ export const homeworkRouter = router({
     .input(z.object({ id: z.uuid(), dueDate: z.iso.date() }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      if (!(await publishHomework(ctx.db, ctx.teacherId, input.id, input.dueDate))) throw notFound();
+      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.dueDate);
+      if (published === "not_found") throw notFound();
+      if (published === "past")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Срок не может быть раньше сегодняшнего дня" });
       return { id: input.id };
     }),
 

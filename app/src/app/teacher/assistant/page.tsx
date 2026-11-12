@@ -16,9 +16,13 @@ export default async function AssistantPage() {
         </Link>
       </p>
       <h1 className="mb-2 text-h1 font-bold">Ассистент</h1>
-      <p className="mb-6 text-text-secondary">
+      <p className="mb-2 text-text-secondary">
         Ассистент на вашем компьютере читает контекст ученика — уровень, юнит, интересы, пробелы, последние заметки —
         и готовит черновики. Фамилии, контакты и ссылки ему не передаются. Публикуете всегда вы.
+      </p>
+      {/* Notes go to the assistant as typed: whatever a note says, it says there too (#65). */}
+      <p className="mb-6 text-text-secondary">
+        Ассистент видит последние заметки об ученике целиком, такими, как вы их написали.
       </p>
       <AssistantToken status={status} />
     </main>

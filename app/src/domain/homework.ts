@@ -61,6 +61,11 @@ export function homeworkImageUrl(homeworkId: string, taskIndex: number): string 
   return `/api/files/homework/${homeworkId}/${taskIndex}`;
 }
 
+/** Today's calendar date in a time zone, as YYYY-MM-DD: what "today" is for the student. */
+export function todayIn(timeZone: string, now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
 /** "1 задание", "3 задания", "8 заданий". */
 export function tasksLabel(count: number): string {
   const mod10 = count % 10;
