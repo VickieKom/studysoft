@@ -58,6 +58,8 @@ async function addSlot(page: Page, weekday: string, time: string, duration?: str
   await page.getByLabel("Время").fill(time);
   if (duration) await page.getByLabel("Длительность").selectOption({ label: duration });
   await page.getByRole("button", { name: "Сохранить слот", exact: true }).click();
+  // Saved before the scenario moves on: the card lists the slot.
+  await expect(page.getByText(new RegExp(`${weekday}, ${time}`))).toBeVisible();
 }
 
 /** Opens «Расписание» and moves forward until the week shows this date. */
