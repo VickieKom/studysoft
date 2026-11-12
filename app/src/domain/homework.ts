@@ -5,6 +5,7 @@ import type { Task } from "./homework-format";
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
   published: "Опубликована",
+  submitted: "Сдана",
   missed: "Не сдана",
 } as const;
 

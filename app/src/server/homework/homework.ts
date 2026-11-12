@@ -2,12 +2,21 @@
 // imported and never changes after publishing. The teacher's preview shows it
 // whole, keys included; a student only ever gets studentView() — without the
 // keys (AGENTS.md, rule 4).
-import { and, desc, eq, sql } from "drizzle-orm";
-import { type HomeworkDocument, homeworkSchema, type Task } from "../../domain/homework-format";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  type Answer,
+  answerSchema,
+  type HomeworkDocument,
+  homeworkSchema,
+  type StudentTask,
+  studentView,
+  type Task,
+} from "../../domain/homework-format";
 import type { Database } from "../db/client";
-import { homework } from "../db/schema";
+import { homework, homeworkAnswer, homeworkSubmission } from "../db/schema";
+import { checkAnswer, fitsTask } from "./check";
 
-export const HOMEWORK_STATUSES = ["draft", "published", "missed"] as const;
+export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
 export type HomeworkStatus = (typeof HOMEWORK_STATUSES)[number];
 
 export type HomeworkSummary = {
@@ -101,7 +110,7 @@ export async function publishHomework(db: Database, teacherId: string, id: strin
       .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
       .for("update");
     if (!draft) return false;
-    // shortcut: every published homework counts as unsubmitted until submissions exist (#34)
+    // A submitted homework has the status "submitted", so "published" is unsubmitted.
     await tx
       .update(homework)
       .set({ status: "missed" })
@@ -116,28 +125,203 @@ export async function publishHomework(db: Database, teacherId: string, id: strin
 
 /**
  * Takes a published homework back to a draft before the student submits.
- * Returns false when there is no such published homework.
+ * Returns false when there is no such published homework: a submitted one
+ * has the status "submitted" and stays. The student's unsubmitted answers
+ * go with it, because the draft may change before it is published again.
  */
 export async function unpublishHomework(db: Database, teacherId: string, id: string): Promise<boolean> {
-  // shortcut: nothing can be submitted yet; #34 must refuse this once a submission exists
-  const rows = await db
-    .update(homework)
-    .set({ status: "draft", dueDate: null, publishedAt: null })
-    .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "published")))
-    .returning({ id: homework.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(homework)
+      .set({ status: "draft", dueDate: null, publishedAt: null })
+      .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "published")))
+      .returning({ id: homework.id });
+    if (rows.length === 0) return false;
+    await tx.delete(homeworkAnswer).where(eq(homeworkAnswer.homeworkId, id));
+    return true;
+  });
 }
 
-/** What the student's page shows: the current published homework, without its tasks yet (#34). */
+export type HomeworkResult = { correct: number; wrong: number };
+
+/**
+ * What the student's page shows: the newest published or submitted homework,
+ * with the score once it is submitted. A homework past its deadline can still
+ * be done until the next one is published (product requirements 5.1.3).
+ */
 export async function currentHomeworkForStudent(
   db: Database,
   teacherId: string,
   studentId: string,
-): Promise<{ dueDate: string; taskCount: number } | null> {
+): Promise<{ id: string; dueDate: string; taskCount: number; result: HomeworkResult | null } | null> {
   const [row] = await db
-    .select({ dueDate: homework.dueDate, document: homework.document })
+    .select({
+      id: homework.id,
+      dueDate: homework.dueDate,
+      document: homework.document,
+      correct: homeworkSubmission.correctCount,
+      wrong: homeworkSubmission.wrongCount,
+    })
     .from(homework)
-    .where(and(eq(homework.teacherId, teacherId), eq(homework.studentId, studentId), eq(homework.status, "published")));
+    .leftJoin(homeworkSubmission, eq(homeworkSubmission.homeworkId, homework.id))
+    .where(
+      and(
+        eq(homework.teacherId, teacherId),
+        eq(homework.studentId, studentId),
+        inArray(homework.status, ["published", "submitted"]),
+      ),
+    )
+    .orderBy(desc(homework.publishedAt))
+    .limit(1);
   if (!row || !row.dueDate) return null;
-  return { dueDate: row.dueDate, taskCount: taskCount(row.document) };
+  return {
+    id: row.id,
+    dueDate: row.dueDate,
+    taskCount: taskCount(row.document),
+    result: row.correct === null || row.wrong === null ? null : { correct: row.correct, wrong: row.wrong },
+  };
+}
+
+const ownPublished = (teacherId: string, studentId: string, id: string) =>
+  and(
+    eq(homework.id, id),
+    eq(homework.teacherId, teacherId),
+    eq(homework.studentId, studentId),
+    eq(homework.status, "published"),
+  );
+
+/**
+ * The tasks of a published homework as the student sees them — never a key
+ * (AGENTS.md, rule 4) — and the answers saved so far, one per task or null.
+ * Null when there is no such published homework of this student.
+ */
+export async function openHomework(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+): Promise<{ tasks: StudentTask[]; answers: (Answer | null)[] } | null> {
+  const [row] = await db.select({ document: homework.document }).from(homework).where(ownPublished(teacherId, studentId, id));
+  if (!row) return null;
+  const tasks = (row.document as HomeworkDocument).tasks;
+  const saved = await db
+    .select({ taskIndex: homeworkAnswer.taskIndex, answer: homeworkAnswer.answer })
+    .from(homeworkAnswer)
+    .where(eq(homeworkAnswer.homeworkId, id));
+  const answers: (Answer | null)[] = tasks.map(() => null);
+  for (const { taskIndex, answer } of saved) {
+    const parsed = answerSchema.safeParse(answer);
+    if (parsed.success && taskIndex < answers.length) answers[taskIndex] = parsed.data;
+  }
+  return { tasks: tasks.map((task, index) => studentView(task, `${id}:${index}`)), answers };
+}
+
+/**
+ * Saves the answer to one task while the homework is published. Returns
+ * "not_found" for anything that is not this student's published homework,
+ * and "invalid" for an answer that cannot belong to the task.
+ */
+export async function saveAnswer(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+  taskIndex: number,
+  answer: Answer | null,
+): Promise<"saved" | "not_found" | "invalid"> {
+  return db.transaction(async (tx) => {
+    // A shared lock: a submission (FOR UPDATE) waits for the save, or the save
+    // sees the homework submitted and stops.
+    const [row] = await tx
+      .select({ document: homework.document })
+      .from(homework)
+      .where(ownPublished(teacherId, studentId, id))
+      .for("share");
+    if (!row) return "not_found";
+    const task = (row.document as HomeworkDocument).tasks[taskIndex];
+    if (!task) return "invalid";
+    if (answer && !fitsTask(task, answer)) return "invalid";
+    await tx
+      .insert(homeworkAnswer)
+      .values({ homeworkId: id, taskIndex, answer })
+      .onConflictDoUpdate({
+        target: [homeworkAnswer.homeworkId, homeworkAnswer.taskIndex],
+        set: { answer, updatedAt: sql`now()` },
+      });
+    return "saved";
+  });
+}
+
+const isAutoChecked = (task: Task) => task.type !== "written" && task.type !== "voice" && task.type !== "file";
+
+/**
+ * Submits a published homework once and returns the score. Every task gets a
+ * stored answer with its correctness, topic and skill; an unanswered task is
+ * wrong. A repeat with the same idempotency key returns the same score; any
+ * other second submission is "conflict".
+ */
+export async function submitHomework(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+  idempotencyKey: string,
+): Promise<HomeworkResult | "not_found" | "conflict"> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ status: homework.status, document: homework.document })
+      .from(homework)
+      .where(
+        and(
+          eq(homework.id, id),
+          eq(homework.teacherId, teacherId),
+          eq(homework.studentId, studentId),
+          inArray(homework.status, ["published", "submitted"]),
+        ),
+      )
+      .for("update");
+    if (!row) return "not_found";
+
+    const [earlier] = await tx
+      .select({
+        key: homeworkSubmission.idempotencyKey,
+        correct: homeworkSubmission.correctCount,
+        wrong: homeworkSubmission.wrongCount,
+      })
+      .from(homeworkSubmission)
+      .where(eq(homeworkSubmission.homeworkId, id));
+    if (earlier) return earlier.key === idempotencyKey ? { correct: earlier.correct, wrong: earlier.wrong } : "conflict";
+    if (row.status !== "published") return "not_found";
+
+    const tasks = (row.document as HomeworkDocument).tasks;
+    const saved = await tx
+      .select({ taskIndex: homeworkAnswer.taskIndex, answer: homeworkAnswer.answer })
+      .from(homeworkAnswer)
+      .where(eq(homeworkAnswer.homeworkId, id))
+      .orderBy(asc(homeworkAnswer.taskIndex));
+    const byIndex = new Map(saved.map((s) => [s.taskIndex, answerSchema.safeParse(s.answer)]));
+
+    let correct = 0;
+    let wrong = 0;
+    for (const [taskIndex, task] of tasks.entries()) {
+      // shortcut: written, voice and file tasks are not answered or counted yet (#35)
+      if (!isAutoChecked(task)) continue;
+      const parsed = byIndex.get(taskIndex);
+      const answer = parsed?.success ? parsed.data : null;
+      const isCorrect = answer !== null && checkAnswer(task, answer);
+      if (isCorrect) correct++;
+      else wrong++;
+      const fields = { correct: isCorrect, topic: task.topic ?? null, skill: task.skill ?? null };
+      await tx
+        .insert(homeworkAnswer)
+        .values({ homeworkId: id, taskIndex, answer, ...fields })
+        .onConflictDoUpdate({
+          target: [homeworkAnswer.homeworkId, homeworkAnswer.taskIndex],
+          set: { ...fields, updatedAt: sql`now()` },
+        });
+    }
+    await tx.insert(homeworkSubmission).values({ homeworkId: id, idempotencyKey, correctCount: correct, wrongCount: wrong });
+    await tx.update(homework).set({ status: "submitted" }).where(eq(homework.id, id));
+    return { correct, wrong };
+  });
 }

@@ -68,7 +68,7 @@ describe("teacher.homework", () => {
     const student = createServerCaller(new Headers({ cookie: studentCookie }));
     const { id: first } = await teacher.teacher.homework.import({ studentId, json: json(allTypes) });
     await teacher.teacher.homework.publish({ id: first, dueDate: today(2) });
-    expect(await student.student.homework.current()).toEqual({ dueDate: today(2), taskCount: 8 });
+    expect(await student.student.homework.current()).toMatchObject({ dueDate: today(2), taskCount: 8, result: null });
 
     const { id: second } = await teacher.teacher.homework.import({ studentId, json: json(short) });
     await teacher.teacher.homework.publish({ id: second, dueDate: today(5) });
@@ -76,7 +76,7 @@ describe("teacher.homework", () => {
     const list = await teacher.teacher.homework.list({ studentId });
     expect(list.find((h) => h.id === first)?.status).toBe("missed");
     expect(list.find((h) => h.id === second)?.status).toBe("published");
-    expect(await student.student.homework.current()).toEqual({ dueDate: today(5), taskCount: 2 });
+    expect(await student.student.homework.current()).toMatchObject({ id: second, dueDate: today(5), taskCount: 2, result: null });
 
     // Only a draft can be published.
     await expect(teacher.teacher.homework.publish({ id: first, dueDate: today(3) })).rejects.toMatchObject({
