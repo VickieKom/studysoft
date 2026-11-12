@@ -492,7 +492,7 @@ sequenceDiagram
     V->>St: 9. Looks at the result
 ```
 
-Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
+Step 2 comes before step 4: a scenario written before the implementation checks the task, not whatever code came out. The scenario pull request is reviewed but never merged on its own, because every scenario in `e2e/acceptance/` runs in `make check` and one without its implementation would keep `main` red. Marking it as an expected failure instead would weaken a check. The implementation pull request carries the scenario commit unchanged and supersedes the scenario pull request; `acceptance-unchanged` finds the scenario pull request's branch by the issue number in the branch name and fails if any scenario file it changed — `playwright.config.ts` included, since it decides what runs — differs here from what was reviewed. Step 7: if the pull request touches the database schema, access, dependencies, check configuration, CI or deployment, the merge waits for the maintainer (section 8.4).
 
 ### 6.2 Behaviour on failure
 
@@ -660,7 +660,7 @@ The main rule: whatever must hold is checked by a machine. `AGENTS.md` tells an 
 | Check | Catches | State |
 |-------|---------|-------|
 | `forbidden-files` | Documents, audio, video, archives, dumps, env files, oversized files; raster images outside `app/public`; test data outside `deploy/seed` | Now |
-| `acceptance-unchanged` | A pull request edits or deletes an existing acceptance scenario together with code. Adding new ones is allowed | Now |
+| `acceptance-unchanged` | An implementation lands a scenario that differs from its reviewed scenario branch (`feature/<issue>-acceptance-*`), compared by content so rebases pass; scenario files (`e2e/acceptance/`, `playwright.config.ts`) changed outside that branch other than new scenarios; without a reviewed branch, an existing scenario file changed together with code. Adding new scenarios is allowed | Now |
 | `secrets` | Keys, passwords and tokens in changes | Now |
 | `lint-docs` | Broken Markdown | Now |
 | `typecheck` | Type errors in every package, including drift between the MCP server and the router | Now |
