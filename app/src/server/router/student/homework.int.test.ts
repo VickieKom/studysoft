@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import autoChecked from "../../../../../deploy/seed/homework/demo-auto-checked.json";
-import type { Answer } from "../../../domain/homework-format";
+import { type Answer, studentView, type Task } from "../../../domain/homework-format";
 import { LINK_SESSION_COOKIE } from "../../access/links";
 import { closeDb, db } from "../../db/client";
 import { homeworkAnswer, homeworkSubmission } from "../../db/schema";
+import { shuffleSeed } from "../../homework/homework";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleRouterRequest } from "../index";
@@ -190,5 +191,41 @@ describe("student.homework", () => {
     await expect(stranger.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("shuffles with a seed the student cannot compute from what they see", async () => {
+    const { id: studentId } = await teacher.teacher.students.create({
+      firstName: "Перемешивание",
+      lastName: "",
+      level: "A2",
+      timeZone: "Europe/Moscow",
+    });
+    const token = (await teacher.teacher.links.student({ studentId })).url.split("#")[1]!;
+    const response = await routerRequest("links.exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: json({ token }),
+    });
+    const cookie = response.headers.getSetCookie().find((c) => c.startsWith(`${LINK_SESSION_COOKIE}=`))!.split(";")[0]!;
+    // Long enough that two different shuffles cannot agree by chance.
+    const order: Task = { type: "order", prompt: "Order.", words: "a b c d e f g h i j k l".split(" ") };
+    const match: Task = {
+      type: "match",
+      prompt: "Match.",
+      pairs: "a b c d e f g h".split(" ").map((x) => ({ left: x, right: x.toUpperCase() })),
+    };
+    const { id } = await teacher.teacher.homework.import({
+      studentId,
+      json: json({ version: 1, title: "Shuffle", tasks: [order, match] }),
+    });
+    await teacher.teacher.homework.publish({ id, dueDate: inDays(2) });
+
+    const { tasks } = await createServerCaller(new Headers({ cookie })).student.homework.open({ id });
+    // Not the order a seed made of the homework id and the task number gives...
+    expect(tasks[0]).not.toEqual(studentView(order, `${id}:0`));
+    expect(tasks[1]).not.toEqual(studentView(match, `${id}:1`));
+    // ...but the one the server's secret gives, the same on every visit.
+    expect(tasks[0]).toEqual(studentView(order, shuffleSeed(id, 0)));
+    expect(tasks[1]).toEqual(studentView(match, shuffleSeed(id, 1)));
   });
 });

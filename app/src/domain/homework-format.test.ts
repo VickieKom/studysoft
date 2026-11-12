@@ -77,6 +77,24 @@ describe("studentView", () => {
   });
 });
 
+describe("studentView with alternatives", () => {
+  it("never shows any of the correct orders of an order task", () => {
+    const words = ["a", "b"];
+    for (let i = 0; i < 30; i++) {
+      // Both orders of two words are correct: nothing else exists, so it stays as it is.
+      const both = studentView({ type: "order", prompt: "p", words, alternatives: [["b", "a"]] }, `seed:${i}`);
+      expect(both.type === "order" && both.words.length).toBe(2);
+      const three = studentView(
+        { type: "order", prompt: "p", words: ["x", "y", "z"], alternatives: [["y", "z", "x"], ["z", "x", "y"]] },
+        `seed:${i}`,
+      );
+      expect(three.type === "order" && [["x", "y", "z"], ["y", "z", "x"], ["z", "x", "y"]]).not.toContainEqual(
+        three.type === "order" && three.words,
+      );
+    }
+  });
+});
+
 describe("isAnswered", () => {
   it("wants a full answer", () => {
     const gap: StudentTask = { type: "gap", prompt: "p", text: "___ and ___" };
