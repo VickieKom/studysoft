@@ -7,7 +7,8 @@
 // synthetic (deploy/seed/homework/demo-review.json). Scenarios run one at a
 // time (workers: 1), so the menu counter is compared before and after.
 // A submission leaves the counter once the teacher has opened it and marked
-// every open task (product owner, 2026-11-12).
+// every open task, and a reopened homework starts blank for the student
+// (product owner, 2026-11-12).
 import { randomUUID } from "node:crypto";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import homework from "../../deploy/seed/homework/demo-review.json" with { type: "json" };
@@ -68,10 +69,14 @@ async function submitAsStudent(page: Page, answers: Answers): Promise<void> {
   await page.getByRole("button", { name: "Дальше", exact: true }).click();
   await expect(page.getByText(day.prompt)).toBeVisible();
   await page.getByRole("button", { name: "Сдать", exact: true }).click();
-  // The written task is left for the lesson; submitting anyway is allowed (#34).
+  // The written task is left blank; submitting anyway is allowed (#34). The
+  // warning, if the page shows one, comes after the answers are saved, so
+  // wait for either it or the result before deciding.
+  const result = page.getByText(/\d+\s+верно/);
   const confirm = page.getByRole("button", { name: "Всё равно сдать", exact: true });
-  if (await confirm.isVisible().catch(() => false)) await confirm.click();
-  await expect(page.getByText(/\d+\s+верно/)).toBeVisible();
+  await expect(result.or(confirm)).toBeVisible();
+  if (await confirm.isVisible()) await confirm.click();
+  await expect(result).toBeVisible();
 }
 
 async function openAsStudent(browser: Browser, link: string): Promise<Page> {
@@ -183,6 +188,8 @@ test("«Открыть заново для ученика»: the student does it
   await page.getByRole("button", { name: "Открыть заново для ученика", exact: true }).click();
   await expect(page.getByText("Открыта заново")).toBeVisible();
 
+  // The second attempt starts blank: «cat» is not chosen yet, so clicking both
+  // animals chooses both.
   const again = await (await browser.newContext({ storageState: studentState })).newPage();
   await again.goto(new URL(link).pathname);
   await submitAsStudent(again, { gap: "is", animals: ["cat", "dog"] });
