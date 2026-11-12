@@ -369,7 +369,7 @@ erDiagram
 Rules for every table:
 
 - Every table except shared reference data has `teacher_id`, and every query filters by it.
-- Identifiers are UUIDs. Student page addresses carry no identifiers, only a token.
+- Identifiers are UUIDs: `gen_random_uuid()` by default, the built-in `uuidv7()` where rows are ordered by their identifier. Student page addresses carry no identifiers, only a token.
 - Physical deletion is forbidden where history refers to the record.
 - Entities of stages 2 and 3 (vocabulary, assessments, reports, surveys, characters) are added by the migrations of their own slices. Only groups and `teacher_id` are created up front: they are the only things expensive to add later.
 
