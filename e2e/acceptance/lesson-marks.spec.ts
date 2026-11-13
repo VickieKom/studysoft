@@ -155,27 +155,29 @@ test("a past lesson marked «Проведён» with a unit and a note appears i
   await expect(row).toContainText("Синтетическая заметка об уроке");
 });
 
-test("«Пропущен» is charged by default and the teacher can untick it", async ({ page }) => {
+test("«Пропущен» is not charged by default, and the teacher can tick «Списать»", async ({ page }) => {
+  // The product owner does not charge for a missed lesson for now; she can
+  // still charge one by ticking «Списать» (2026-11-13).
   const card = await createStudent(page, "Пропустивший");
   const date = await addPastLesson(page, "Пропустивший");
 
   const { dialog } = await openLesson(page, date, "Пропустивший");
   await dialog.getByLabel("Пропущен", { exact: true }).check();
-  await expect(dialog.getByLabel("Списать")).toBeChecked();
+  await expect(dialog.getByLabel("Списать")).not.toBeChecked();
   await page.keyboard.press("Escape");
 
   await mark(page, date, "Пропустивший", "Пропущен");
   await page.goto(card);
   let row = history(page).getByRole("listitem").first();
   await expect(row).toContainText("пропущен");
-  await expect(row).toContainText("списан");
-  await expect(row).not.toContainText("не списан");
+  await expect(row).toContainText("не списан");
 
-  await mark(page, date, "Пропустивший", "Пропущен", { charge: false });
+  await mark(page, date, "Пропустивший", "Пропущен", { charge: true });
   await page.goto(card);
   row = history(page).getByRole("listitem").first();
   await expect(row).toContainText("пропущен");
-  await expect(row).toContainText("не списан");
+  await expect(row).toContainText("списан");
+  await expect(row).not.toContainText("не списан");
 });
 
 test("a past lesson not yet marked asks for it on the week and on the card", async ({ page }) => {
