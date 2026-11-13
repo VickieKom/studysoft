@@ -155,7 +155,8 @@ test("with one prepaid lesson left the card warns", async ({ page }) => {
 
 test("a new price applies from its date; earlier lessons keep their price", async ({ page }) => {
   const card = await createStudent(page, "Новая цена");
-  await setTerms(page, "Предоплата", "1500", "₽");
+  // The old price has been in force for a week; the new one starts today.
+  await setTerms(page, "Предоплата", "1500", "₽", moscowDate(-7));
   await addPayment(page, "6000");
   const yesterday = await addPastLesson(page, "Новая цена", -1);
   await markHeld(page, yesterday, "Новая цена");
