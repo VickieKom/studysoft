@@ -350,7 +350,7 @@ erDiagram
 |--------|---------------|-----------|-------|
 | `teacher` | `access` | Permanent | Account and settings: time zone, cancellation rule |
 | `student` | `crm` | Permanent, soft delete | Profile fields as in [the product requirements](product/modules.md): first and last name, status, age, school year, time zone, level, interests, gaps, textbook and current unit |
-| `contact` | `crm` | Until consent is withdrawn | The parent's and the student's contacts, as in the product requirements |
+| `contact` | `crm` | Until consent is withdrawn | The parent's and the student's contacts, as in the product requirements: one row per student, all fields optional; read by teacher procedures only, never by student, parent or agent ones (#84) |
 | `access_link` | `access` | Until revoked | Who, role (student or parent), generation, token hash, revocation date; one per student and role. `link_session`: cookie hash, generation, sliding expiry |
 | `schedule_slot` | `schedule` | Permanent | Weekday, time, time zone, validity dates |
 | `lesson` | `schedule` | Permanent | Type, paid or free, time in UTC, status, unit, meeting link, plan by stages |

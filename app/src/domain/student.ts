@@ -75,6 +75,19 @@ export const PROFILE_FIELDS = [
   { key: "currentUnit", label: "Текущий юнит", multiline: false },
 ] as const;
 
+// Contacts (#84): all optional, the teacher's only.
+export const CONTACT_FIELDS = [
+  { key: "parentName", label: "ФИО родителя" },
+  { key: "parentEmail", label: "Почта родителя" },
+  { key: "parentMessenger", label: "Мессенджер родителя" },
+  { key: "studentEmail", label: "Почта ученика" },
+  { key: "studentMessenger", label: "Мессенджер ученика" },
+] as const;
+
+export type ContactKey = (typeof CONTACT_FIELDS)[number]["key"];
+export const CONTACT_KEYS = CONTACT_FIELDS.map((field) => field.key) as ContactKey[];
+export type Contacts = Record<ContactKey, string | null>;
+
 export type ProfileKey = (typeof PROFILE_FIELDS)[number]["key"];
 export type Profile = Record<ProfileKey, string | null>;
 export const PROFILE_KEYS = PROFILE_FIELDS.map((field) => field.key) as ProfileKey[];

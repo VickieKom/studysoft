@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import type { Level, Profile, Status, TimeZoneId } from "../../domain/student";
+import { CONTACT_KEYS, type Contacts, type Level, type Profile, type Status, type TimeZoneId } from "../../domain/student";
 import type { Database } from "../db/client";
-import { student } from "../db/schema";
+import { contact, student } from "../db/schema";
 
 export type StudentFields = {
   firstName: string;
@@ -90,4 +90,44 @@ export async function updateStudent(
     .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt)))
     .returning({ id: student.id });
   return rows.length > 0;
+}
+
+const noContacts = (): Contacts => Object.fromEntries(CONTACT_KEYS.map((key) => [key, null])) as Contacts;
+
+/** A student's contacts (#84), all null when none were given. Teacher procedures only. */
+export async function findContacts(db: Database, teacherId: string, studentId: string): Promise<Contacts> {
+  const [row] = await db
+    .select({
+      parentName: contact.parentName,
+      parentEmail: contact.parentEmail,
+      parentMessenger: contact.parentMessenger,
+      studentEmail: contact.studentEmail,
+      studentMessenger: contact.studentMessenger,
+    })
+    .from(contact)
+    .where(and(eq(contact.studentId, studentId), eq(contact.teacherId, teacherId)));
+  return row ?? noContacts();
+}
+
+/**
+ * Saves the given contacts of a student of this teacher; the ones left out
+ * stay. A new row cannot name another teacher's student: the composite key to
+ * the student refuses it. An existing row keeps its owner on update, so the
+ * key does not help there; the update itself is limited to this teacher's row.
+ */
+export async function saveContacts(
+  db: Pick<Database, "insert">,
+  teacherId: string,
+  studentId: string,
+  contacts: Partial<Contacts>,
+): Promise<void> {
+  if (Object.keys(contacts).length === 0) return;
+  await db
+    .insert(contact)
+    .values({ teacherId, studentId, ...contacts })
+    .onConflictDoUpdate({
+      target: contact.studentId,
+      set: { ...contacts, updatedAt: new Date() },
+      setWhere: eq(contact.teacherId, teacherId),
+    });
 }
