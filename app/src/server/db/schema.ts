@@ -421,7 +421,15 @@ export const lesson = pgTable(
     durationMinutes: bigint("duration_minutes", { mode: "number" }).notNull(),
     // "regular" or "intro" (вводный, free).
     kind: text("kind").notNull().default("regular"),
+    // "scheduled" until marked; "held" or "missed" (#82), more with #81.
     status: text("status").notNull().default("scheduled"),
+    // Charged to the balance (#83): set when the lesson is marked.
+    charged: boolean("charged"),
+    // What the teacher wrote when marking it: the unit covered and a note.
+    // Teacher only; kept on the lesson so it never joins the notes the
+    // assistant reads.
+    unit: text("unit"),
+    note: text("note"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

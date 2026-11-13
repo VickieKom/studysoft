@@ -109,3 +109,14 @@ export function dayLabel(date: string): string {
     timeZone: "UTC",
   });
 }
+
+/** How a lesson's mark reads on the week and in the history (#82). */
+export const LESSON_STATUS_LABELS: Record<string, string> = {
+  held: "проведён",
+  missed: "пропущен",
+};
+
+/** «17 ноября»: the date of a lesson in the history, in a time zone. */
+export function dayMonthIn(moment: Date, timeZone: string): string {
+  return moment.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone });
+}

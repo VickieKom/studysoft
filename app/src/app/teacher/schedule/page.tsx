@@ -1,7 +1,8 @@
+import { LessonCard } from "@/components/lesson-card";
 import { AddLessonForm } from "@/components/schedule-controls";
 import { WeekNav } from "@/components/week-nav";
-import { addDays, dateIn, dayLabel, mondayOf, timeIn } from "@/domain/schedule";
-import { timeZoneLabel } from "@/domain/student";
+import { addDays, dateIn, dayLabel, mondayOf } from "@/domain/schedule";
+import { TIME_ZONES, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../caller";
 
 export const metadata = { title: "Расписание — StudySoft" };
@@ -22,6 +23,8 @@ export default async function SchedulePage({ searchParams }: Props) {
   const week = await caller.teacher.schedule.week({ monday });
   const students = await caller.teacher.students.list();
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const now = new Date();
+  const zoneLabels = Object.fromEntries(TIME_ZONES.map((z) => [z.id, z.label]));
 
   return (
     <main className="flex flex-col gap-6">
@@ -39,31 +42,9 @@ export default async function SchedulePage({ searchParams }: Props) {
           return (
             <section key={date} aria-label={dayLabel(date)} className="flex flex-col gap-2 rounded-card border border-border p-2">
               <h2 className="text-small font-semibold">{dayLabel(date)}</h2>
-              {lessons.map((l) => {
-                const moment = new Date(l.startsAt);
-                const sameZone = l.studentTimeZone === week.timeZone;
-                return (
-                  <button
-                    key={l.id}
-                    type="button"
-                    className={`flex flex-col items-start rounded-control px-2 py-1 text-left text-small ${
-                      l.kind === "intro" ? "border border-dashed border-green-600 bg-green-50" : "bg-accent-50"
-                    }`}
-                  >
-                    <span className="font-semibold">
-                      {timeIn(moment, week.timeZone)} {l.studentName}
-                    </span>
-                    {!sameZone && (
-                      <span className="text-text-secondary">
-                        у ученика {timeIn(moment, l.studentTimeZone)} ({timeZoneLabel(l.studentTimeZone)})
-                      </span>
-                    )}
-                    <span className="text-text-muted">
-                      {l.durationMinutes} мин{l.kind === "intro" && " · вводный"}
-                    </span>
-                  </button>
-                );
-              })}
+              {lessons.map((l) => (
+                <LessonCard key={l.id} lesson={l} started={new Date(l.startsAt) <= now} timeZone={week.timeZone} zoneLabels={zoneLabels} />
+              ))}
             </section>
           );
         })}
