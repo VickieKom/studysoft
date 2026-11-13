@@ -192,37 +192,35 @@ test("a slot changed from a date moves the lessons after it; earlier ones and on
   }
 });
 
-test("cancelling offers «Списать» ticked less than 24 hours ahead and unticked further, and keeps the teacher's choice", async ({
-  page,
-}) => {
-  // Less than 24 hours ahead: ticked; the teacher unticks it.
+test("cancelling offers «Списать» unticked, late or not, and keeps the teacher's choice", async ({ page }) => {
+  // For now a cancellation is not charged by default, even less than 24 hours
+  // ahead; the teacher can still charge one (product owner, 2026-11-13).
   await createStudent(page, "Поздняя отмена");
   const soon = moscowSoon(3);
   await addLesson(page, "Поздняя отмена", soon.date, soon.time);
   let { day, dialog } = await openLesson(page, soon.date, "Поздняя отмена");
   await dialog.getByRole("button", { name: "Отменить", exact: true }).click();
-  await expect(dialog.getByLabel("Списать")).toBeChecked();
-  await dialog.getByLabel("Списать").uncheck();
+  await expect(dialog.getByLabel("Списать")).not.toBeChecked();
+  await dialog.getByLabel("Списать").check();
   await dialog.getByRole("button", { name: "Отменить урок", exact: true }).click();
   // Saved before the page is left: the week marks the lesson cancelled.
   await expect(lessonOf(day, "Поздняя отмена")).toContainText("отменён");
 
   ({ dialog } = await openLesson(page, soon.date, "Поздняя отмена"));
-  await expect(dialog.getByLabel("Списать")).not.toBeChecked();
+  await expect(dialog.getByLabel("Списать")).toBeChecked();
 
-  // Three days ahead: unticked; the teacher ticks it.
+  // Three days ahead: unticked too, and left so.
   await createStudent(page, "Ранняя отмена");
   const later = moscowDate(3);
   await addLesson(page, "Ранняя отмена", later, "10:00");
   ({ day, dialog } = await openLesson(page, later, "Ранняя отмена"));
   await dialog.getByRole("button", { name: "Отменить", exact: true }).click();
   await expect(dialog.getByLabel("Списать")).not.toBeChecked();
-  await dialog.getByLabel("Списать").check();
   await dialog.getByRole("button", { name: "Отменить урок", exact: true }).click();
   await expect(lessonOf(day, "Ранняя отмена")).toContainText("отменён");
 
   ({ dialog } = await openLesson(page, later, "Ранняя отмена"));
-  await expect(dialog.getByLabel("Списать")).toBeChecked();
+  await expect(dialog.getByLabel("Списать")).not.toBeChecked();
 });
 
 test("moving a lesson onto another lesson's time warns «в это время уже урок с …» and still saves", async ({ page }) => {
