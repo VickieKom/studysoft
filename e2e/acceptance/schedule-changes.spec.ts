@@ -78,6 +78,8 @@ async function addLesson(page: Page, firstName: string, date: Date, time: string
   await page.getByLabel("Дата").fill(isoDate(date));
   await page.getByLabel("Время").fill(time);
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
+  // Saved before the scenario moves on: the form has closed and «+ Урок» is back.
+  await expect(control(page, "+ Урок")).toBeVisible();
   await expect(lessonOf(await openWeekWith(page, date), firstName)).toHaveCount(1);
 }
 
