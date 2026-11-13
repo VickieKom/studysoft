@@ -120,7 +120,8 @@ function webm(bytes: Uint8Array): Recording {
   const seconds = (): number | null => {
     if (latest < 0 && declared <= 0) return null;
     // The declared duration and the blocks are both in TimecodeScale units; the longer one counts.
-    return (Math.max(latest, declared) * scale) / 1e9;
+    const length = (Math.max(latest, declared) * scale) / 1e9;
+    return Number.isFinite(length) ? length : null;
   };
   const audioOnly = () => tracks.length > 0 && tracks.every((type) => type === WEBM_AUDIO);
   const unreadable = () => ({ seconds: null, audioOnly: audioOnly() });
@@ -142,7 +143,9 @@ function webm(bytes: Uint8Array): Recording {
     else if (id.value === EBML.timecode) cluster = uint(bytes, body, size.value);
     else if (id.value === EBML.duration) {
       const view = new DataView(bytes.buffer, bytes.byteOffset + body, size.value);
-      declared = size.value === 4 ? view.getFloat32(0) : size.value === 8 ? view.getFloat64(0) : 0;
+      const value = size.value === 4 ? view.getFloat32(0) : size.value === 8 ? view.getFloat64(0) : 0;
+      // NaN or infinity says nothing about the length: the blocks decide.
+      declared = Number.isFinite(value) ? value : 0;
     } else if (id.value === EBML.simpleBlock || id.value === EBML.block) {
       const track = vint(bytes, body, false);
       if (!track || size.value < track.length + 2) return unreadable();

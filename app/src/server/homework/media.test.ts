@@ -59,6 +59,12 @@ describe("voiceDuration", () => {
     expect(voiceDuration(nestedMp4(100_000), "audio/mp4")).toBeNull();
   });
 
+  it("takes the longer of a WebM's declared duration and its blocks, ignoring one that is not a number", () => {
+    expect(voiceDuration(webmRecording(2, ["audio"], 400_000), "audio/webm")).toBeCloseTo(400);
+    expect(voiceDuration(webmRecording(2, ["audio"], Number.NaN), "audio/webm")).toBeCloseTo(2);
+    expect(voiceDuration(webmRecording(2, ["audio"], Number.POSITIVE_INFINITY), "audio/webm")).toBeCloseTo(2);
+  });
+
   it("counts what is there in a recording cut off at the end", () => {
     const whole = webmRecording(20);
     expect(voiceDuration(whole.subarray(0, whole.length - 10), "audio/webm")).toBeCloseTo(19);

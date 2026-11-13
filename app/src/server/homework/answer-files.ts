@@ -67,8 +67,9 @@ export async function handleAnswerFileUpload(request: Request, homeworkId: strin
   const index = Number(taskIndex);
   const id = homeworkId.toLowerCase();
 
-  const task = await publishedTask(database, teacherId, studentId, id, index);
-  if (!task || (task.type !== "voice" && task.type !== "file")) return notFound();
+  const published = await publishedTask(database, teacherId, studentId, id, index);
+  const task = published?.task;
+  if (!published || !task || (task.type !== "voice" && task.type !== "file")) return notFound();
 
   const bytes = await readLimited(request, MAX_ANSWER_FILE_BYTES);
   if (!bytes) return refused(413, "Файл больше 10 МБ. Выберите файл поменьше");
@@ -99,12 +100,12 @@ export async function handleAnswerFileUpload(request: Request, homeworkId: strin
   }
 
   const file = await saveBlob(database, teacherId, bytes, media.contentType);
-  const saved = await saveFileAnswer(database, teacherId, studentId, id, index, {
+  const saved = await saveFileAnswer(database, teacherId, studentId, id, index, published.attempt, {
     type: task.type,
     file,
     contentType: media.contentType,
   });
-  // Submitted or taken back while the file was on its way.
+  // Submitted, reopened or taken back while the file was on its way.
   if (saved !== "saved") return notFound();
   return Response.json(
     { url: answerFileUrl(id, index), contentType: media.contentType },

@@ -329,12 +329,14 @@ export function saveAnswer(
   taskIndex: number,
   answer: Answer | null,
 ): Promise<"saved" | "not_found" | "invalid"> {
-  return storeAnswer(db, teacherId, studentId, id, taskIndex, answer, (task) => !answer || fitsTask(task, answer));
+  return storeAnswer(db, teacherId, studentId, id, taskIndex, answer, null, (task) => !answer || fitsTask(task, answer));
 }
 
 /**
  * Saves a recording or a file the server has just kept in the blob store
  * (#35). Only the upload calls this: the page can never name a stored file.
+ * It goes to the attempt the upload started in: if the homework was
+ * submitted and reopened meanwhile, the new attempt stays blank.
  */
 export function saveFileAnswer(
   db: Database,
@@ -342,21 +344,26 @@ export function saveFileAnswer(
   studentId: string,
   id: string,
   taskIndex: number,
+  attempt: number,
   answer: StoredAnswer & { type: "voice" | "file" },
 ): Promise<"saved" | "not_found" | "invalid"> {
-  return storeAnswer(db, teacherId, studentId, id, taskIndex, answer, (task) => task.type === answer.type);
+  return storeAnswer(db, teacherId, studentId, id, taskIndex, answer, attempt, (task) => task.type === answer.type);
 }
 
-/** The task of this student's published homework that a file may answer, or null. */
+/** The task of this student's published homework that a file may answer, with the attempt in progress, or null. */
 export async function publishedTask(
   db: Database,
   teacherId: string,
   studentId: string,
   id: string,
   taskIndex: number,
-): Promise<Task | null> {
-  const [row] = await db.select({ document: homework.document }).from(homework).where(ownPublished(teacherId, studentId, id));
-  return (row?.document as HomeworkDocument | undefined)?.tasks[taskIndex] ?? null;
+): Promise<{ task: Task; attempt: number } | null> {
+  const [row] = await db
+    .select({ document: homework.document, attempt: homework.attempt })
+    .from(homework)
+    .where(ownPublished(teacherId, studentId, id));
+  const task = (row?.document as HomeworkDocument | undefined)?.tasks[taskIndex];
+  return row && task ? { task, attempt: row.attempt } : null;
 }
 
 async function storeAnswer(
@@ -366,6 +373,7 @@ async function storeAnswer(
   id: string,
   taskIndex: number,
   answer: StoredAnswer | null,
+  attempt: number | null,
   fits: (task: Task) => boolean,
 ): Promise<"saved" | "not_found" | "invalid"> {
   return db.transaction(async (tx) => {
@@ -376,7 +384,7 @@ async function storeAnswer(
       .from(homework)
       .where(ownPublished(teacherId, studentId, id))
       .for("share");
-    if (!row) return "not_found";
+    if (!row || (attempt !== null && row.attempt !== attempt)) return "not_found";
     const task = (row.document as HomeworkDocument).tasks[taskIndex];
     if (!task || !fits(task)) return "invalid";
     await tx

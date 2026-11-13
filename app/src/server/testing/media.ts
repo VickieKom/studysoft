@@ -33,12 +33,23 @@ const WEBM_TRACK = { audio: 2, video: 1 } as const;
  * one if asked), the segment and clusters of unknown size, no duration in
  * the header, a block every second, the last one at `seconds`.
  */
-export function webmRecording(seconds: number, tracks: (keyof typeof WEBM_TRACK)[] = ["audio"]): Buffer {
+export function webmRecording(
+  seconds: number,
+  tracks: (keyof typeof WEBM_TRACK)[] = ["audio"],
+  /** A Duration in the header, in milliseconds, which a browser does not write while recording. */
+  declaredMs?: number,
+): Buffer {
+  const declared = Buffer.alloc(8);
+  declared.writeDoubleBE(declaredMs ?? 0);
   const parts: Buffer[] = [
     element([0x1a, 0x45, 0xdf, 0xa3], element([0x42, 0x82], Buffer.from("webm"))),
     Buffer.from([0x18, 0x53, 0x80, 0x67]),
     UNKNOWN_SIZE,
-    element([0x15, 0x49, 0xa9, 0x66], element([0x2a, 0xd7, 0xb1], Buffer.from([0x0f, 0x42, 0x40]))),
+    element(
+      [0x15, 0x49, 0xa9, 0x66],
+      element([0x2a, 0xd7, 0xb1], Buffer.from([0x0f, 0x42, 0x40])),
+      ...(declaredMs === undefined ? [] : [element([0x44, 0x89], declared)]),
+    ),
     element(
       [0x16, 0x54, 0xae, 0x6b],
       ...tracks.map((kind, i) => element([0xae], element([0xd7], Buffer.from([i + 1])), element([0x83], Buffer.from([WEBM_TRACK[kind]])))),

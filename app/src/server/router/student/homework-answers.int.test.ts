@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import openAnswers from "../../../../../deploy/seed/homework/demo-open-answers.json";
 import { LINK_SESSION_COOKIES } from "../../access/links";
-import { closeDb } from "../../db/client";
+import { closeDb, db } from "../../db/client";
 import { env } from "../../env";
 import { fragmentedMp4Recording, mp4Recording, webmRecording } from "../../testing/media";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
+import { publishedTask, saveFileAnswer } from "../../homework/homework";
 import { createServerCaller, handleAnswerFileRequest, handleAnswerFileUpload, handleRouterRequest } from "../index";
 
 // Written, voice and file answers (#35). The homework is the synthetic
@@ -46,7 +47,7 @@ async function studentWithHomework(firstName: string) {
   const cookie = response.headers.getSetCookie().find((c) => c.startsWith(`${LINK_SESSION_COOKIES.student}=`))!.split(";")[0]!;
   const { id } = await teacher.teacher.homework.import({ studentId, json: json(openAnswers) });
   await teacher.teacher.homework.publish({ id, dueDate: inDays(3) });
-  return { id, headers: new Headers({ cookie }), student: createServerCaller(new Headers({ cookie })) };
+  return { id, studentId, headers: new Headers({ cookie }), student: createServerCaller(new Headers({ cookie })) };
 }
 
 async function put(headers: Headers, id: string, task: string, body: Buffer, extra: Record<string, string> = {}) {
@@ -235,5 +236,27 @@ describe("open answers", () => {
     // After submission the student still opens their own file, and the teacher too.
     expect((await get(headers, id, "3")).status).toBe(200);
     expect((await get(teacherHeaders, id, "2")).type).toBe("audio/webm");
+  });
+
+  it("keeps an upload that started before a submission and a reopening out of the new attempt", async () => {
+    const { id, studentId, headers, student } = await studentWithHomework("Новая попытка");
+    const { teacherId } = (await db().query.homework.findFirst({ where: (h, { eq }) => eq(h.id, id) }))!;
+    // The upload is authorised for attempt 1 ...
+    const started = (await publishedTask(db(), teacherId, studentId, id, 3))!;
+    expect(started.attempt).toBe(1);
+    // ... then the student submits from another device and the teacher reopens the homework.
+    await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() });
+    const [submission] = await teacher.teacher.review.list({ studentId });
+    await teacher.teacher.review.reopen({ id: submission!.submissionId! });
+
+    const saved = await saveFileAnswer(db(), teacherId, studentId, id, 3, started.attempt, {
+      type: "file",
+      file: crypto.randomUUID(),
+      contentType: "image/png",
+    });
+    expect(saved).toBe("not_found");
+    expect((await student.student.homework.open({ id })).answers[3]).toBeNull();
+    // A new upload goes to the new attempt.
+    expect((await put(headers, id, "3", PNG)).status).toBe(200);
   });
 });
