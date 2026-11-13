@@ -92,6 +92,8 @@ async function addPastLesson(page: Page, firstName: string): Promise<Date> {
   await page.getByLabel("Дата").fill(isoDate(date));
   await page.getByLabel("Время").fill("10:00");
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
+  // Saved before the scenario moves on: the form has closed and «+ Урок» is back.
+  await expect(control(page, "+ Урок")).toBeVisible();
   await expect(lessonOf(await openWeekWith(page, date), firstName)).toHaveCount(1);
   return date;
 }
