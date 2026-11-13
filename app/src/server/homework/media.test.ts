@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fragmentedMp4Recording, mp4Recording, mp4WithTrun, nestedMp4, webmRecording } from "../testing/media";
-import { sniffMedia, voiceDuration } from "./media";
+import { isAudioOnly, sniffMedia, voiceDuration } from "./media";
 
 // The recordings are synthetic containers built in src/server/testing/media.ts.
 
@@ -68,5 +68,26 @@ describe("voiceDuration", () => {
     expect(voiceDuration(PNG, "audio/webm")).toBeNull();
     expect(voiceDuration(PNG, "audio/mp4")).toBeNull();
     expect(voiceDuration(webmRecording(1), "audio/ogg")).toBeNull();
+  });
+});
+
+describe("isAudioOnly", () => {
+  it("takes a WebM or MP4 whose every track is audio", () => {
+    expect(isAudioOnly(webmRecording(2), "audio/webm")).toBe(true);
+    expect(isAudioOnly(mp4Recording(2), "audio/mp4")).toBe(true);
+    expect(isAudioOnly(fragmentedMp4Recording(2), "audio/mp4")).toBe(true);
+  });
+
+  it("refuses a video, with sound or without, and a container without tracks", () => {
+    expect(isAudioOnly(webmRecording(2, ["audio", "video"]), "audio/webm")).toBe(false);
+    expect(isAudioOnly(webmRecording(2, ["video"]), "audio/webm")).toBe(false);
+    expect(isAudioOnly(webmRecording(2, []), "audio/webm")).toBe(false);
+    expect(isAudioOnly(mp4Recording(2, true), "audio/mp4")).toBe(false);
+    expect(isAudioOnly(nestedMp4(3), "audio/mp4")).toBe(false);
+  });
+
+  it("takes the other audio types as they are", () => {
+    expect(isAudioOnly(Buffer.from("ID3\x04\0\0", "latin1"), "audio/mpeg")).toBe(true);
+    expect(isAudioOnly(PNG, "image/png")).toBe(false);
   });
 });

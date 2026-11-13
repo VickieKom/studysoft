@@ -31,11 +31,28 @@ export function sniffMedia(bytes: Uint8Array): { contentType: string; kind: Medi
 /** The containers a browser records voice in: WebM (Chrome, Firefox) and MP4 (Safari). */
 export const VOICE_TYPES = ["audio/webm", "audio/mp4"] as const;
 
+/** What a recording's container says: its length in seconds (null when unreadable) and whether every track is audio. */
+type Recording = { seconds: number | null; audioOnly: boolean };
+
+function readRecording(bytes: Uint8Array, contentType: string): Recording | null {
+  if (contentType === "audio/webm") return webm(bytes);
+  if (contentType === "audio/mp4") return mp4(bytes);
+  return null;
+}
+
 /** A recording's length in seconds, read from its container; null when it cannot be read. */
 export function voiceDuration(bytes: Uint8Array, contentType: string): number | null {
-  if (contentType === "audio/webm") return webmDuration(bytes);
-  if (contentType === "audio/mp4") return mp4Duration(bytes);
-  return null;
+  return readRecording(bytes, contentType)?.seconds ?? null;
+}
+
+/**
+ * Whether a file is sound only. WebM and MP4 hold video as well, which is not
+ * an answer here (#35: video is out of scope): they must have tracks and
+ * every one of them audio. The other accepted audio types hold nothing else.
+ */
+export function isAudioOnly(bytes: Uint8Array, contentType: string): boolean {
+  if (contentType !== "audio/webm" && contentType !== "audio/mp4") return contentType.startsWith("audio/");
+  return readRecording(bytes, contentType)?.audioOnly ?? false;
 }
 
 // --- WebM (Matroska) ----------------------------------------------------------
@@ -43,8 +60,8 @@ export function voiceDuration(bytes: Uint8Array, contentType: string): number | 
 // A browser writes WebM while it records, so the segment and its clusters have
 // "unknown" sizes and the header has no duration. The length is the latest
 // block's time: a cluster's timecode plus the block's own offset, scaled by
-// TimecodeScale. The elements that hold blocks are entered, every other one is
-// skipped by its size.
+// TimecodeScale. The elements that hold blocks or describe the tracks are
+// entered, every other one is skipped by its size.
 
 const EBML = {
   segment: 0x18538067,
@@ -56,8 +73,20 @@ const EBML = {
   simpleBlock: 0xa3,
   blockGroup: 0xa0,
   block: 0xa1,
+  tracks: 0x1654ae6b,
+  trackEntry: 0xae,
+  trackType: 0x83,
 } as const;
-const ENTERED: ReadonlySet<number> = new Set([EBML.segment, EBML.info, EBML.cluster, EBML.blockGroup]);
+const ENTERED: ReadonlySet<number> = new Set([
+  EBML.segment,
+  EBML.info,
+  EBML.cluster,
+  EBML.blockGroup,
+  EBML.tracks,
+  EBML.trackEntry,
+]);
+// TrackType 2 is audio; 1 is video.
+const WEBM_AUDIO = 2;
 
 /** A variable-length integer at `at`: its value (with or without the length marker) and its length. */
 function vint(bytes: Uint8Array, at: number, keepMarker: boolean): { value: number; length: number; unknown: boolean } | null {
@@ -80,16 +109,24 @@ function uint(bytes: Uint8Array, at: number, length: number): number {
   return value;
 }
 
-function webmDuration(bytes: Uint8Array): number | null {
+function webm(bytes: Uint8Array): Recording {
+  const tracks: number[] = [];
   let scale = 1_000_000;
   let declared = 0;
   let cluster = 0;
   let latest = -1;
   let at = 0;
   // The EBML header comes first; it is skipped like any element.
+  const seconds = (): number | null => {
+    if (latest < 0 && declared <= 0) return null;
+    // The declared duration and the blocks are both in TimecodeScale units; the longer one counts.
+    return (Math.max(latest, declared) * scale) / 1e9;
+  };
+  const audioOnly = () => tracks.length > 0 && tracks.every((type) => type === WEBM_AUDIO);
+  const unreadable = () => ({ seconds: null, audioOnly: audioOnly() });
   while (at < bytes.length) {
     const id = vint(bytes, at, true);
-    if (!id) return null;
+    if (!id) return unreadable();
     const size = vint(bytes, at + id.length, false);
     if (!size) break;
     const body = at + id.length + size.length;
@@ -97,25 +134,24 @@ function webmDuration(bytes: Uint8Array): number | null {
       at = body;
       continue;
     }
-    if (size.unknown) return null;
+    if (size.unknown) return unreadable();
     // A recording cut off mid-element ends here: what came before still counts.
     if (body + size.value > bytes.length) break;
     if (id.value === EBML.timecodeScale) scale = uint(bytes, body, size.value);
+    else if (id.value === EBML.trackType) tracks.push(uint(bytes, body, size.value));
     else if (id.value === EBML.timecode) cluster = uint(bytes, body, size.value);
     else if (id.value === EBML.duration) {
       const view = new DataView(bytes.buffer, bytes.byteOffset + body, size.value);
       declared = size.value === 4 ? view.getFloat32(0) : size.value === 8 ? view.getFloat64(0) : 0;
     } else if (id.value === EBML.simpleBlock || id.value === EBML.block) {
       const track = vint(bytes, body, false);
-      if (!track || size.value < track.length + 2) return null;
+      if (!track || size.value < track.length + 2) return unreadable();
       const offset = new DataView(bytes.buffer, bytes.byteOffset + body + track.length, 2).getInt16(0);
       latest = Math.max(latest, cluster + offset);
     }
     at = body + size.value;
   }
-  if (latest < 0 && declared <= 0) return null;
-  // The declared duration and the blocks are both in TimecodeScale units; the longer one counts.
-  return (Math.max(latest, declared) * scale) / 1e9;
+  return { seconds: seconds(), audioOnly: audioOnly() };
 }
 
 // --- MP4 (ISO base media) -----------------------------------------------------
@@ -123,17 +159,19 @@ function webmDuration(bytes: Uint8Array): number | null {
 // A whole file states its length in the movie header (mvhd). A recording
 // written in fragments may state 0 there; then the length is the end of the
 // latest fragment: its decode time (tfdt) plus its samples' durations (trun,
-// or the defaults in tfhd and trex), in the track's timescale (mdhd).
+// or the defaults in tfhd and trex), in the track's timescale (mdhd). Each
+// track's handler (hdlr) says what it holds: "soun" is audio.
 
 const CONTAINERS: ReadonlySet<string> = new Set(["moov", "trak", "mdia", "mvex", "moof", "traf"]);
 // Real files nest moov/trak/mdia or moof/traf; a limit keeps a crafted file from overflowing the stack.
 const MAX_DEPTH = 8;
 
-function mp4Duration(bytes: Uint8Array): number | null {
+function mp4(bytes: Uint8Array): Recording {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const u32 = (at: number) => view.getUint32(at);
   const u64 = (at: number) => view.getUint32(at) * 2 ** 32 + view.getUint32(at + 4);
 
+  const handlers: string[] = [];
   let movie = 0;
   let trackScale = 0;
   let trexDuration = 0;
@@ -173,6 +211,8 @@ function mp4Duration(bytes: Uint8Array): number | null {
         if (scale > 0 && duration !== 0xffffffff && duration < 2 ** 53 - 1) movie = Math.max(movie, duration / scale);
       } else if (type === "mdhd" && has(bytes[body] === 1 ? 32 : 20)) {
         trackScale ||= u32(body + (bytes[body] === 1 ? 20 : 12));
+      } else if (type === "hdlr" && has(12)) {
+        handlers.push(String.fromCharCode(...bytes.slice(body + 8, body + 12)));
       } else if (type === "trex" && has(24)) {
         trexDuration = u32(body + 12);
       } else if (type === "tfhd" && has(8)) {
@@ -205,8 +245,10 @@ function mp4Duration(bytes: Uint8Array): number | null {
     return true;
   };
 
-  if (!walk(0, bytes.length, 0)) return null;
+  const read = walk(0, bytes.length, 0);
+  const audioOnly = handlers.length > 0 && handlers.every((handler) => handler === "soun");
+  if (!read) return { seconds: null, audioOnly };
   const fragments = trackScale > 0 ? fragmentEnd / trackScale : 0;
   const longest = Math.max(movie, fragments);
-  return longest > 0 ? longest : null;
+  return { seconds: longest > 0 ? longest : null, audioOnly };
 }

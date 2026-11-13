@@ -181,8 +181,10 @@ describe("open answers", () => {
       expect(refused.status).toBe(413);
       expect(refused.body?.error).toContain("5 минут");
     }
-    // A photo is not a recording.
+    // A photo is not a recording, and neither is a video with sound.
     expect((await put(headers, id, "2", PNG)).status).toBe(415);
+    expect((await put(headers, id, "2", webmRecording(3, ["audio", "video"]))).status).toBe(415);
+    expect((await put(headers, id, "2", mp4Recording(3, true))).status).toBe(415);
     // The last recording that was taken stays.
     expect((await get(headers, id, "2")).type).toBe("audio/mp4");
   });

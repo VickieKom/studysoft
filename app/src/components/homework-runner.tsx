@@ -47,6 +47,9 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
   const [result, setResult] = useState<{ correct: number; wrong: number; pending: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // While a recording runs, its upload does not exist yet: nothing moves on or submits until it stops.
+  const [recording, setRecording] = useState(false);
+  const locked = busy || recording;
 
   const latest = useRef(saved);
   const dirty = useRef(new Set<number>());
@@ -226,6 +229,7 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
         answer={answers[index] ?? null}
         onChange={(answer, typing) => update(index, answer, typing)}
         upload={(body) => upload(index, body)}
+        onRecording={setRecording}
       />
       <p className="text-small text-text-secondary">Ответы проверим вместе на уроке</p>
 
@@ -240,10 +244,10 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
             {unanswered.length === 1 ? "Без ответа задание" : "Без ответа задания"} {unanswered.join(", ")}
           </p>
           <div className="flex flex-wrap gap-2">
-            <NavButton onClick={() => go(unanswered[0]! - 1)} disabled={busy} secondary>
+            <NavButton onClick={() => go(unanswered[0]! - 1)} disabled={locked} secondary>
               Вернуться к заданию
             </NavButton>
-            <NavButton onClick={() => submit(true)} disabled={busy}>
+            <NavButton onClick={() => submit(true)} disabled={locked}>
               Всё равно сдать
             </NavButton>
           </div>
@@ -252,16 +256,16 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
 
       <nav className="flex gap-3">
         {index > 0 && (
-          <NavButton onClick={() => go(index - 1)} disabled={busy} secondary>
+          <NavButton onClick={() => go(index - 1)} disabled={locked} secondary>
             Назад
           </NavButton>
         )}
         {last ? (
-          <NavButton onClick={() => submit(false)} disabled={busy}>
+          <NavButton onClick={() => submit(false)} disabled={locked}>
             Сдать
           </NavButton>
         ) : (
-          <NavButton onClick={() => go(index + 1)} disabled={busy}>
+          <NavButton onClick={() => go(index + 1)} disabled={locked}>
             Дальше
           </NavButton>
         )}
@@ -301,7 +305,13 @@ type BodyProps = {
   onChange: (answer: Answer | null, typing?: boolean) => void;
 };
 
-function TaskBody({ task, answer, onChange, upload }: BodyProps & { upload: (body: Blob) => Promise<string | null> }) {
+function TaskBody({
+  task,
+  answer,
+  onChange,
+  upload,
+  onRecording,
+}: BodyProps & { upload: (body: Blob) => Promise<string | null>; onRecording: (active: boolean) => void }) {
   switch (task.type) {
     case "single_choice":
     case "multiple_choice":
@@ -315,7 +325,7 @@ function TaskBody({ task, answer, onChange, upload }: BodyProps & { upload: (bod
     case "written":
       return <Written task={task} answer={answer} onChange={onChange} />;
     case "voice":
-      return <Voice hint={task.hint} answer={answer} upload={upload} />;
+      return <Voice hint={task.hint} answer={answer} upload={upload} onRecording={onRecording} />;
     case "file":
       return <Attachment task={task} answer={answer} upload={upload} />;
   }
@@ -537,10 +547,12 @@ function Voice({
   hint,
   answer,
   upload,
+  onRecording,
 }: {
   hint?: string;
   answer: StudentAnswer | null;
   upload: (body: Blob) => Promise<string | null>;
+  onRecording: (active: boolean) => void;
 }) {
   const [state, setState] = useState<"idle" | "recording" | "saving">("idle");
   const [seconds, setSeconds] = useState(0);
@@ -579,6 +591,8 @@ function Voice({
     media.onstop = async () => {
       clearInterval(timer.current);
       for (const track of stream.getTracks()) track.stop();
+      // The upload is in the runner's saves from here on, which «Сдать» waits for.
+      onRecording(false);
       setState("saving");
       const error = await upload(new Blob(chunks, { type: media.mimeType || mimeType || "audio/webm" }));
       setMessage(error);
@@ -595,6 +609,7 @@ function Voice({
     }, 250);
     media.start();
     setState("recording");
+    onRecording(true);
   }
 
   return (

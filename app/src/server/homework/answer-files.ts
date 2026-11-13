@@ -17,7 +17,7 @@ import { readBlob, saveBlob } from "../blob/store";
 import { type Database, db } from "../db/client";
 import { homework, homeworkAnswer } from "../db/schema";
 import { publishedTask, saveFileAnswer } from "./homework";
-import { sniffMedia, VOICE_TYPES, voiceDuration } from "./media";
+import { isAudioOnly, sniffMedia, VOICE_TYPES, voiceDuration } from "./media";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TASK_INDEX = /^(0|[1-9]\d{0,2})$/;
@@ -75,7 +75,8 @@ export async function handleAnswerFileUpload(request: Request, homeworkId: strin
   const media = sniffMedia(bytes);
 
   if (task.type === "voice") {
-    if (!media || !(VOICE_TYPES as readonly string[]).includes(media.contentType)) {
+    // A video, even one with sound, is not a voice answer (#35: video is out of scope).
+    if (!media || !(VOICE_TYPES as readonly string[]).includes(media.contentType) || !isAudioOnly(bytes, media.contentType)) {
       return refused(415, "Не получилось сохранить запись. Попробуйте записать ещё раз");
     }
     const seconds = voiceDuration(bytes, media.contentType);
@@ -85,14 +86,14 @@ export async function handleAnswerFileUpload(request: Request, homeworkId: strin
     }
   } else {
     const accept = task.accept ?? ["image", "audio"];
-    if (!media || !accept.includes(media.kind)) {
+    if (!media || !accept.includes(media.kind) || (media.kind === "audio" && !isAudioOnly(bytes, media.contentType))) {
       return refused(
         415,
         accept.includes("audio") && accept.includes("image")
-          ? "Можно прикрепить фото (JPEG, PNG, WebP) или аудио (MP3, M4A, WAV, OGG)"
+          ? "Можно прикрепить фото (JPEG, PNG, WebP) или аудио (MP3, M4A, WAV, OGG, WebM)"
           : accept.includes("image")
             ? "Можно прикрепить фото: JPEG, PNG или WebP"
-            : "Можно прикрепить аудио: MP3, M4A, WAV или OGG",
+            : "Можно прикрепить аудио: MP3, M4A, WAV, OGG или WebM",
       );
     }
   }

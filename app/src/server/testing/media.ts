@@ -25,17 +25,24 @@ function element(id: number[], ...content: Buffer[]): Buffer {
   return Buffer.concat([Buffer.from(id), size(body.length), body]);
 }
 
+/** Track types of a WebM: 2 is audio, 1 is video. */
+const WEBM_TRACK = { audio: 2, video: 1 } as const;
+
 /**
- * A WebM as a browser writes it while recording: the segment and clusters of
- * unknown size, no duration in the header, a block every second, the last
- * one at `seconds`.
+ * A WebM as a browser writes it while recording: an audio track (and a video
+ * one if asked), the segment and clusters of unknown size, no duration in
+ * the header, a block every second, the last one at `seconds`.
  */
-export function webmRecording(seconds: number): Buffer {
+export function webmRecording(seconds: number, tracks: (keyof typeof WEBM_TRACK)[] = ["audio"]): Buffer {
   const parts: Buffer[] = [
     element([0x1a, 0x45, 0xdf, 0xa3], element([0x42, 0x82], Buffer.from("webm"))),
     Buffer.from([0x18, 0x53, 0x80, 0x67]),
     UNKNOWN_SIZE,
     element([0x15, 0x49, 0xa9, 0x66], element([0x2a, 0xd7, 0xb1], Buffer.from([0x0f, 0x42, 0x40]))),
+    element(
+      [0x16, 0x54, 0xae, 0x6b],
+      ...tracks.map((kind, i) => element([0xae], element([0xd7], Buffer.from([i + 1])), element([0x83], Buffer.from([WEBM_TRACK[kind]])))),
+    ),
   ];
   const lastMs = Math.round(seconds * 1000);
   const times = [...Array.from({ length: Math.ceil(lastMs / 1000) }, (_, i) => i * 1000), lastMs];
@@ -63,14 +70,21 @@ function box(type: string, ...content: Buffer[]): Buffer {
 }
 
 const FTYP = box("ftyp", Buffer.from("M4A ", "latin1"), u32(0), Buffer.from("isomM4A ", "latin1"));
+/** A track's media box: its timescale and what it holds ("soun" audio, "vide" video). */
+const media = (timescale: number, handler = "soun") =>
+  box(
+    "mdia",
+    box("mdhd", header(timescale, 0, 24)),
+    box("hdlr", u32(0), u32(0), Buffer.from(handler, "latin1"), Buffer.alloc(12)),
+  );
 const header = (timescale: number, duration: number, length: number) =>
   Buffer.concat([u32(0), u32(0), u32(0), u32(timescale), u32(duration), Buffer.alloc(length - 20)]);
 
-/** A whole MP4 whose movie header states its length. */
-export function mp4Recording(seconds: number): Buffer {
+/** A whole MP4 whose movie header states its length; one audio track, and a video one if asked. */
+export function mp4Recording(seconds: number, withVideo = false): Buffer {
   return Buffer.concat([
     FTYP,
-    box("moov", box("mvhd", header(1000, Math.round(seconds * 1000), 100)), box("trak", box("mdia", box("mdhd", header(48_000, 0, 24))))),
+    box("moov", box("mvhd", header(1000, Math.round(seconds * 1000), 100)), box("trak", media(48_000)), ...(withVideo ? [box("trak", media(90_000, "vide"))] : [])),
     box("mdat", Buffer.alloc(32)),
   ]);
 }
@@ -87,7 +101,7 @@ export function fragmentedMp4Recording(seconds: number): Buffer {
     box(
       "moov",
       box("mvhd", header(1000, 0, 100)),
-      box("trak", box("mdia", box("mdhd", header(scale, 0, 24)))),
+      box("trak", media(scale)),
       box("mvex", box("trex", u32(0), u32(1), u32(1), u32(frame), u32(0), u32(0))),
     ),
   ];
