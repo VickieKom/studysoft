@@ -112,3 +112,22 @@ export function fragmentedMp4Recording(seconds: number): Buffer {
   }
   return Buffer.concat(parts);
 }
+
+/**
+ * A fragmented MP4 with one fragment whose `trun` declares `count` samples and
+ * carries `samples` as their durations (flag 0x100) when given. A crafted
+ * file: the count need not match what the box holds.
+ */
+export function mp4WithTrun(count: number, samples?: Buffer[], defaultDuration?: number): Buffer {
+  const tfhd = defaultDuration === undefined ? box("tfhd", u32(0), u32(1)) : box("tfhd", u32(0x08), u32(1), u32(defaultDuration));
+  return Buffer.concat([
+    FTYP,
+    box("moov", box("trak", box("mdia", box("mdhd", header(1000, 0, 24))))),
+    box("moof", box("traf", tfhd, box("trun", u32(samples ? 0x100 : 0), u32(count), ...(samples ?? [])))),
+  ]);
+}
+
+/** An MP4 of `depth` container boxes nested in each other, each running to the end of the file. */
+export function nestedMp4(depth: number): Buffer {
+  return Buffer.concat([FTYP, ...Array.from({ length: depth }, () => Buffer.concat([u32(0), Buffer.from("moov", "latin1")]))]);
+}

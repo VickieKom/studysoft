@@ -126,6 +126,8 @@ function webmDuration(bytes: Uint8Array): number | null {
 // or the defaults in tfhd and trex), in the track's timescale (mdhd).
 
 const CONTAINERS: ReadonlySet<string> = new Set(["moov", "trak", "mdia", "mvex", "moof", "traf"]);
+// Real files nest moov/trak/mdia or moof/traf; a limit keeps a crafted file from overflowing the stack.
+const MAX_DEPTH = 8;
 
 function mp4Duration(bytes: Uint8Array): number | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -140,7 +142,8 @@ function mp4Duration(bytes: Uint8Array): number | null {
   let decodeTime = 0;
   let defaultDuration = 0;
 
-  const walk = (start: number, end: number): boolean => {
+  const walk = (start: number, end: number, depth: number): boolean => {
+    if (depth > MAX_DEPTH) return false;
     let at = start;
     while (at + 8 <= end) {
       let size = u32(at);
@@ -162,7 +165,7 @@ function mp4Duration(bytes: Uint8Array): number | null {
         defaultDuration = trexDuration;
       }
       if (CONTAINERS.has(type)) {
-        if (!walk(body, boxEnd)) return false;
+        if (!walk(body, boxEnd, depth + 1)) return false;
       } else if (type === "mvhd" && has(32)) {
         const v1 = bytes[body] === 1;
         const scale = u32(body + (v1 ? 20 : 12));
@@ -187,13 +190,12 @@ function mp4Duration(bytes: Uint8Array): number | null {
         if (flags & 0x01) at2 += 4;
         if (flags & 0x04) at2 += 4;
         const perSample = [0x100, 0x200, 0x400, 0x800].filter((f) => flags & f).length * 4;
-        let total = 0;
-        for (let i = 0; i < count; i++) {
-          if (flags & 0x100) {
-            if (at2 + 4 > boxEnd) return false;
-            total += u32(at2);
-          } else total += defaultDuration;
-          at2 += perSample;
+        let total = count * defaultDuration;
+        if (flags & 0x100) {
+          // The count comes from the file: refuse one the box cannot hold, so the loop is bounded by real bytes.
+          if (at2 + count * perSample > boxEnd) return false;
+          total = 0;
+          for (let i = 0; i < count; i++, at2 += perSample) total += u32(at2);
         }
         decodeTime += total;
         fragmentEnd = Math.max(fragmentEnd, decodeTime);
@@ -203,7 +205,7 @@ function mp4Duration(bytes: Uint8Array): number | null {
     return true;
   };
 
-  if (!walk(0, bytes.length)) return null;
+  if (!walk(0, bytes.length, 0)) return null;
   const fragments = trackScale > 0 ? fragmentEnd / trackScale : 0;
   const longest = Math.max(movie, fragments);
   return longest > 0 ? longest : null;

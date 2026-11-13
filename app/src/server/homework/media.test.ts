@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fragmentedMp4Recording, mp4Recording, webmRecording } from "../testing/media";
+import { fragmentedMp4Recording, mp4Recording, mp4WithTrun, nestedMp4, webmRecording } from "../testing/media";
 import { sniffMedia, voiceDuration } from "./media";
 
 // The recordings are synthetic containers built in src/server/testing/media.ts.
@@ -41,6 +41,22 @@ describe("voiceDuration", () => {
     expect(voiceDuration(mp4Recording(42), "audio/mp4")).toBeCloseTo(42);
     expect(voiceDuration(fragmentedMp4Recording(30), "audio/mp4")).toBeCloseTo(30, 1);
     expect(voiceDuration(fragmentedMp4Recording(6 * 60), "audio/mp4")).toBeCloseTo(360, 1);
+  });
+
+  it("does not loop over a sample count the file only claims", () => {
+    const started = performance.now();
+    // Without per-sample durations the count is only multiplied: nothing to iterate.
+    expect(voiceDuration(mp4WithTrun(0xffffffff), "audio/mp4")).toBeNull();
+    // With a default duration the length comes out far over the limit, which the upload refuses.
+    expect(voiceDuration(mp4WithTrun(0xffffffff, undefined, 1024), "audio/mp4")).toBeGreaterThan(6 * 60);
+    // With per-sample durations the count must fit in the box.
+    expect(voiceDuration(mp4WithTrun(0xffffffff, [Buffer.alloc(4)]), "audio/mp4")).toBeNull();
+    expect(voiceDuration(mp4WithTrun(2, [Buffer.alloc(4)]), "audio/mp4")).toBeNull();
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("gives null, not an error, for boxes nested without end", () => {
+    expect(voiceDuration(nestedMp4(100_000), "audio/mp4")).toBeNull();
   });
 
   it("counts what is there in a recording cut off at the end", () => {
