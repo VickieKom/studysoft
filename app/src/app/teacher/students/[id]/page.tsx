@@ -6,6 +6,7 @@ import { StudentHomework } from "@/components/student-homework";
 import { StudentSlots } from "@/components/schedule-controls";
 import { dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
 import { StudentNotes } from "@/components/student-notes";
+import { StudentPayments } from "@/components/student-payments";
 import { CONTACT_FIELDS, PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../../caller";
 import { studentOrNotFound } from "../student";
@@ -21,6 +22,7 @@ export default async function StudentCardPage({ params }: Props) {
   const slots = await caller.teacher.schedule.slots({ studentId: student.id });
   const history = await caller.teacher.schedule.history({ studentId: student.id });
   const { timeZone } = await caller.teacher.settings.get();
+  const money = await caller.teacher.payments.get({ studentId: student.id });
   const homework = await caller.teacher.homework.list({ studentId: student.id });
 
   return (
@@ -92,6 +94,7 @@ export default async function StudentCardPage({ params }: Props) {
             </ul>
           )}
         </section>
+        <StudentPayments studentId={student.id} {...money} />
         <section aria-label="Ссылки" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
           {student.status === "finished" ? (
             // "Завершили" closes both links (#21); coming back gives new ones.

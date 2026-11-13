@@ -262,3 +262,17 @@ export async function weekLessons(db: Database, teacherId: string, monday: strin
     .orderBy(asc(lesson.startsAt));
   return { timeZone: zone, lessons };
 }
+
+/**
+ * The student's dates (in the student's time zone) of every charged lesson:
+ * held, missed or cancelled with «Списать» (#82, #83). The balance charges
+ * each at the price of its date.
+ */
+export async function chargedLessonDates(db: Database, teacherId: string, studentId: string): Promise<string[]> {
+  const rows = await db
+    .select({ startsAt: lesson.startsAt, timeZone: student.timeZone })
+    .from(lesson)
+    .innerJoin(student, eq(student.id, lesson.studentId))
+    .where(and(eq(lesson.teacherId, teacherId), eq(lesson.studentId, studentId), eq(lesson.charged, true)));
+  return rows.map((r) => dateIn(r.startsAt, r.timeZone));
+}
