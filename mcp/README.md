@@ -1,6 +1,6 @@
 # StudySoft MCP server
 
-Connects the teacher's AI assistant to the platform (#3). The assistant runs in the teacher's own session on her computer; this small program runs next to it over stdio and calls the platform over HTTPS with a personal token. It only reads and, later, saves drafts: publishing stays with the teacher (architecture 8.8).
+Connects the teacher's AI assistant to the platform (#3). The assistant runs in the teacher's own session on her computer; this small program runs next to it over stdio and calls the platform over HTTPS with a personal token. It reads, and saves homework drafts (#43): publishing stays with the teacher (architecture 8.8).
 
 ## Tools
 
@@ -8,6 +8,9 @@ Connects the teacher's AI assistant to the platform (#3). The assistant runs in 
 |------|-----------------|
 | `list_students` | The teacher's students: id, first name, status |
 | `get_student_context` | For one student: first name, age, school year, CEFR level, textbook and current unit, interests, what works, gaps, and the latest 5 notes |
+| `get_homework_format` | The homework format the platform accepts, with its version (the text of `docs/homework-format.md`) |
+| `save_homework_draft` | Saves a homework for a student as a draft marked «от ассистента»; replaces the assistant's draft until the teacher edits it, then makes a new one. Never publishes (#43) |
+| `read_homework_draft` | The assistant's latest draft for a student, as the teacher may have changed it |
 
 Never returned: last names, contacts, payments, links.
 

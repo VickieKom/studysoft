@@ -368,3 +368,19 @@ export const blob = pgTable(
   },
   (t) => [index("blob_teacher_id_idx").on(t.teacherId)],
 );
+
+// Where a draft came from (#43; architecture 5.4): drafts the assistant saved
+// carry a snapshot of the student context they were built on. While the
+// teacher has not edited such a draft by hand, the assistant's next save
+// replaces it; after her edit, the next save makes a new draft.
+export const draftOrigin = pgTable("draft_origin", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  homeworkId: uuid("homework_id")
+    .notNull()
+    .unique()
+    .references(() => homework.id),
+  createdBy: text("created_by").notNull(),
+  context: jsonb("context").notNull(),
+  teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
