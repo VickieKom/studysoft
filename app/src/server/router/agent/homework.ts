@@ -36,7 +36,8 @@ export const agentHomeworkRouter = router({
       const replaced = await replaceableDraft(ctx.db, ctx.teacherId, input.studentId);
       const stored = await storeImages(ctx.db, ctx.teacherId, checked.homework, replaced ? imageRefs(replaced.document) : new Set());
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
-      return { id: await saveAssistantDraft(ctx.db, ctx.teacherId, input.studentId, stored.homework, context) };
+      // The draft found above is checked again under a lock before it is replaced.
+      return { id: await saveAssistantDraft(ctx.db, ctx.teacherId, input.studentId, replaced, stored.homework, context) };
     }),
 
   /** The assistant's latest draft for a student, to revise it; null when there is none. */

@@ -35,31 +35,42 @@ export async function replaceableDraft(
 
 /**
  * Saves a validated homework as the assistant's draft for a student of this
- * teacher: replaces its untouched draft, or creates a new one. Returns the
- * draft's id.
+ * teacher: replaces `candidate`, the draft `replaceableDraft` found, or
+ * creates a new one. Returns the draft's id.
+ *
+ * The candidate was read without a lock, so it is checked again under one,
+ * in the order the teacher's edit takes them (homework, then draft_origin):
+ * the homework row is locked while it is still a draft, then draft_origin is
+ * read in a new statement, which sees an edit the teacher committed
+ * meanwhile. It is replaced only if both still hold; otherwise a new draft is
+ * made and the old rows stay as they are.
  */
 export async function saveAssistantDraft(
   db: Database,
   teacherId: string,
   studentId: string,
+  candidate: { id: string } | null,
   document: HomeworkDocument,
   context: StudentContext,
 ): Promise<string> {
   return db.transaction(async (tx) => {
-    const existing = await replaceableDraft(tx, teacherId, studentId);
-    if (existing) {
-      // Conditional on still being an untouched draft: a publish or an edit meanwhile wins.
-      const [replaced] = await tx
-        .update(homework)
-        .set({ document, title: document.title })
-        .where(and(eq(homework.id, existing.id), eq(homework.status, "draft")))
-        .returning({ id: homework.id });
-      const [origin] = await tx
-        .update(draftOrigin)
-        .set({ context })
-        .where(and(eq(draftOrigin.homeworkId, existing.id), isNull(draftOrigin.teacherEditedAt)))
-        .returning({ id: draftOrigin.id });
-      if (replaced && origin) return existing.id;
+    if (candidate) {
+      const [draft] = await tx
+        .select({ id: homework.id })
+        .from(homework)
+        .where(and(eq(homework.id, candidate.id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
+        .for("update");
+      const [origin] = draft
+        ? await tx
+            .select({ teacherEditedAt: draftOrigin.teacherEditedAt })
+            .from(draftOrigin)
+            .where(eq(draftOrigin.homeworkId, candidate.id))
+        : [];
+      if (origin && origin.teacherEditedAt === null) {
+        await tx.update(homework).set({ document, title: document.title }).where(eq(homework.id, candidate.id));
+        await tx.update(draftOrigin).set({ context }).where(eq(draftOrigin.homeworkId, candidate.id));
+        return candidate.id;
+      }
     }
     const [created] = await tx
       .insert(homework)
