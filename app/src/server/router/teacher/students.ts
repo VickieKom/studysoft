@@ -123,10 +123,12 @@ export const studentsRouter = router({
       // links on the first copy.
       const saved = await withStudentLocked(ctx.db, ctx.teacherId, id, async (tx) => {
         if (changes.status === "finished") await revokeLinks(tx, ctx.teacherId, id);
-        return updateStudent(tx, ctx.teacherId, id, changes);
+        const updated = await updateStudent(tx, ctx.teacherId, id, changes);
+        // The profile and the contacts are saved together or not at all.
+        if (updated) await saveContacts(tx, ctx.teacherId, id, contacts);
+        return updated;
       });
       if (!saved) throw notFound();
-      await saveContacts(ctx.db, ctx.teacherId, id, contacts);
       return { id };
     }),
 });

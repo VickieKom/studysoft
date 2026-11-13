@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES, type LinkRole } from "../../access/links";
-import { closeDb } from "../../db/client";
+import { saveContacts } from "../../crm/students";
+import { closeDb, db } from "../../db/client";
+import { contact, teacher as teacherTable } from "../../db/schema";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleRouterRequest } from "../index";
@@ -92,5 +95,14 @@ describe("contacts", () => {
       expect(body).toContain('"result"');
       for (const value of Object.values(CONTACTS)) expect(body).not.toContain(value);
     }
+  });
+
+  it("are not overwritten by saveContacts called with another teacher's id", async () => {
+    // The procedure refuses earlier; this checks the function on its own.
+    const [rowB] = await db().select({ id: teacherTable.id }).from(teacherTable).where(eq(teacherTable.email, teacherB.email));
+    // The composite key refuses a row for B; an update of A's row must be refused too, quietly or not.
+    await saveContacts(db(), rowB!.id, studentId, { parentName: "Чужое имя" }).catch(() => undefined);
+    expect((await teacher.teacher.students.get({ id: studentId })).contacts).toEqual(CONTACTS);
+    expect(await db().select().from(contact).where(eq(contact.teacherId, rowB!.id))).toEqual([]);
   });
 });

@@ -111,10 +111,12 @@ export async function findContacts(db: Database, teacherId: string, studentId: s
 
 /**
  * Saves the given contacts of a student of this teacher; the ones left out
- * stay. The composite key to the student keeps it inside one teacher.
+ * stay. A new row cannot name another teacher's student: the composite key to
+ * the student refuses it. An existing row keeps its owner on update, so the
+ * key does not help there; the update itself is limited to this teacher's row.
  */
 export async function saveContacts(
-  db: Database,
+  db: Pick<Database, "insert">,
   teacherId: string,
   studentId: string,
   contacts: Partial<Contacts>,
@@ -123,5 +125,9 @@ export async function saveContacts(
   await db
     .insert(contact)
     .values({ teacherId, studentId, ...contacts })
-    .onConflictDoUpdate({ target: contact.studentId, set: { ...contacts, updatedAt: new Date() } });
+    .onConflictDoUpdate({
+      target: contact.studentId,
+      set: { ...contacts, updatedAt: new Date() },
+      setWhere: eq(contact.teacherId, teacherId),
+    });
 }
