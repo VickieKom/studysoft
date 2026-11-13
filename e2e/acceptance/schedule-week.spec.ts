@@ -118,6 +118,8 @@ test("«+ Урок» adds a one-off lesson, which can be an introductory one", a
   await page.getByLabel("Длительность").selectOption({ label: "45 мин" });
   await page.getByLabel("Вводный урок").check();
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
+  // Saved before the scenario moves on: the form has closed and «+ Урок» is back.
+  await expect(control(page, "+ Урок")).toBeVisible();
 
   const lesson = lessonOf(await openWeekWith(page, date), "Разовый");
   await expect(lesson).toHaveCount(1);
