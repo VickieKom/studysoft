@@ -3,7 +3,7 @@
 // whole, keys included; a student only ever gets studentView() — without the
 // keys (AGENTS.md, rule 4).
 import { createHmac } from "node:crypto";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   type Answer,
   type HomeworkDocument,
@@ -16,7 +16,7 @@ import {
   type Task,
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
-import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
+import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
 import { answerFileUrl, homeworkImageUrl, todayIn } from "../../domain/homework";
 import { checkAnswer, fitsTask } from "./check";
@@ -30,6 +30,8 @@ export type HomeworkSummary = {
   status: HomeworkStatus;
   dueDate: string | null;
   taskCount: number;
+  /** Saved by the assistant (#43), whether or not the teacher edited it since. */
+  fromAssistant: boolean;
   createdAt: Date;
 };
 
@@ -40,9 +42,18 @@ const summaryColumns = {
   dueDate: homework.dueDate,
   document: homework.document,
   createdAt: homework.createdAt,
+  originId: draftOrigin.id,
 };
 
-type Row = { id: string; title: string; status: string; dueDate: string | null; document: unknown; createdAt: Date };
+type Row = {
+  id: string;
+  title: string;
+  status: string;
+  dueDate: string | null;
+  document: unknown;
+  createdAt: Date;
+  originId: string | null;
+};
 
 function taskCount(document: unknown): number {
   return (document as HomeworkDocument).tasks.length;
@@ -55,6 +66,7 @@ function toSummary(row: Row): HomeworkSummary {
     status: row.status as HomeworkStatus,
     dueDate: row.dueDate,
     taskCount: taskCount(row.document),
+    fromAssistant: row.originId !== null,
     createdAt: row.createdAt,
   };
 }
@@ -79,6 +91,7 @@ export async function listHomework(db: Database, teacherId: string, studentId: s
   const rows = await db
     .select(summaryColumns)
     .from(homework)
+    .leftJoin(draftOrigin, eq(draftOrigin.homeworkId, homework.id))
     .where(and(eq(homework.teacherId, teacherId), eq(homework.studentId, studentId)))
     .orderBy(desc(homework.createdAt));
   return rows.map(toSummary);
@@ -93,6 +106,7 @@ export async function findHomework(
   const [row] = await db
     .select({ ...summaryColumns, studentId: homework.studentId })
     .from(homework)
+    .leftJoin(draftOrigin, eq(draftOrigin.homeworkId, homework.id))
     .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId)));
   if (!row) return null;
   return {
@@ -108,12 +122,20 @@ export async function findHomework(
  * homework never changes.
  */
 export async function updateDraftTasks(db: Database, teacherId: string, id: string, document: HomeworkDocument): Promise<boolean> {
-  const rows = await db
-    .update(homework)
-    .set({ document: homeworkSchema.parse(document), title: document.title })
-    .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
-    .returning({ id: homework.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(homework)
+      .set({ document: homeworkSchema.parse(document), title: document.title })
+      .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
+      .returning({ id: homework.id });
+    if (rows.length === 0) return false;
+    // An assistant's draft the teacher edited is hers now: the assistant's next save makes a new one (#43).
+    await tx
+      .update(draftOrigin)
+      .set({ teacherEditedAt: sql`now()` })
+      .where(and(eq(draftOrigin.homeworkId, id), isNull(draftOrigin.teacherEditedAt)));
+    return true;
+  });
 }
 
 /**
