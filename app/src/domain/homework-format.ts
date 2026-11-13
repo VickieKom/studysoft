@@ -285,11 +285,14 @@ export const AUTO_CHECKED_TYPES = ["single_choice", "multiple_choice", "gap", "m
 
 const answerText = z.string().max(500);
 
-/**
- * A student's answer to an auto-checked task, as the page sends it. Choices
- * are indexes into the options; gaps, pairs and words are the values shown.
- */
-export const answerSchema = z.discriminatedUnion("type", [
+/** The longest written answer: a few paragraphs (#35). */
+export const MAX_WRITTEN_CHARS = 5000;
+/** The largest file a student attaches or records (#35, product owner 2026-11-12). */
+export const MAX_ANSWER_FILE_BYTES = 10 * 1024 * 1024;
+/** The longest voice recording, in seconds (#35, product owner 2026-11-12). */
+export const MAX_VOICE_SECONDS = 5 * 60;
+
+const pageAnswers = [
   z.object({ type: z.literal("single_choice"), choice: z.number().int().min(0) }).strict(),
   z.object({ type: z.literal("multiple_choice"), choices: z.array(z.number().int().min(0)).max(8) }).strict(),
   z.object({ type: z.literal("gap"), gaps: z.array(answerText).max(50) }).strict(),
@@ -297,8 +300,35 @@ export const answerSchema = z.discriminatedUnion("type", [
     .object({ type: z.literal("match"), pairs: z.array(z.object({ left: answerText, right: answerText }).strict()).max(10) })
     .strict(),
   z.object({ type: z.literal("order"), words: z.array(answerText).max(20) }).strict(),
-]);
+  z.object({ type: z.literal("written"), text: z.string().max(MAX_WRITTEN_CHARS) }).strict(),
+] as const;
+
+/**
+ * A student's answer as the page sends it. Choices are indexes into the
+ * options; gaps, pairs and words are the values shown; a written answer is
+ * its text. A recording or a file is never sent this way: it is uploaded to
+ * its own address and the server stores the reference (#35).
+ */
+export const answerSchema = z.discriminatedUnion("type", [...pageAnswers]);
 export type Answer = z.infer<typeof answerSchema>;
+
+/** An answer as stored: what the page sends, or a recording or a file the server kept in the blob store. */
+export const storedAnswerSchema = z.discriminatedUnion("type", [
+  ...pageAnswers,
+  z.object({ type: z.literal("voice"), file: z.uuid(), contentType: z.string() }).strict(),
+  z.object({ type: z.literal("file"), file: z.uuid(), contentType: z.string() }).strict(),
+]);
+export type StoredAnswer = z.infer<typeof storedAnswerSchema>;
+
+const answerFileUrl = z.string().startsWith("/api/files/answers/");
+
+/** An answer as the student's page gets it back: a recording or a file by its address, never by the stored reference. */
+export const studentAnswerSchema = z.discriminatedUnion("type", [
+  ...pageAnswers,
+  z.object({ type: z.literal("voice"), url: answerFileUrl, contentType: z.string() }).strict(),
+  z.object({ type: z.literal("file"), url: answerFileUrl, contentType: z.string() }).strict(),
+]);
+export type StudentAnswer = z.infer<typeof studentAnswerSchema>;
 
 /** The number of gaps (___) in a gap task's text. */
 export function gapCount(text: string): number {
@@ -306,7 +336,7 @@ export function gapCount(text: string): number {
 }
 
 /** Whether the student has given a full answer: the page warns about the others before «Сдать». */
-export function isAnswered(task: StudentTask, answer: Answer | null | undefined): boolean {
+export function isAnswered(task: StudentTask, answer: StudentAnswer | null | undefined): boolean {
   if (!answer || answer.type !== task.type) return false;
   switch (answer.type) {
     case "single_choice":
@@ -319,5 +349,10 @@ export function isAnswered(task: StudentTask, answer: Answer | null | undefined)
       return task.type === "match" && answer.pairs.length === task.left.length;
     case "order":
       return task.type === "order" && answer.words.length === task.words.length;
+    case "written":
+      return answer.text.trim() !== "";
+    case "voice":
+    case "file":
+      return true;
   }
 }

@@ -117,7 +117,7 @@ describe("teacher.review", () => {
     const current = await student.student.homework.current();
     expect(current).toMatchObject({ id: homeworkId, result: null });
     expect((await student.student.homework.open({ id: homeworkId })).answers).toEqual([null, null, null, null]);
-    expect(await answerAndSubmit(student, homeworkId, "is", [0, 2])).toEqual({ correct: 3, wrong: 0 });
+    expect(await answerAndSubmit(student, homeworkId, "is", [0, 2])).toEqual({ correct: 3, wrong: 0, pending: 1 });
 
     const submissions = await db().select().from(homeworkSubmission).where(eq(homeworkSubmission.homeworkId, homeworkId));
     expect(submissions.map((s) => [s.attempt, s.isCurrent]).sort()).toEqual([

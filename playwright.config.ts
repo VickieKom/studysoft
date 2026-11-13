@@ -28,7 +28,11 @@ export default defineConfig({
       name: "chromium",
       testIgnore: ["teacher-sign-in.spec.ts", /\.setup\.ts$/],
       dependencies: ["sessions"],
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Voice answers (#35): a fake microphone that plays a tone, granted without a prompt.
+        launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
+      },
     },
   ],
   webServer: {

@@ -171,6 +171,7 @@ describe("teacher.homework.updateTasks", () => {
     expect(await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() })).toEqual({
       correct: 1,
       wrong: 1,
+      pending: 1,
     });
   });
 

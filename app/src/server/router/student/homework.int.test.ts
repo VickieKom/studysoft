@@ -122,9 +122,9 @@ describe("student.homework", () => {
     await student.student.homework.saveAnswer({ id, taskIndex: 3, answer: right[3]! });
 
     const key = crypto.randomUUID();
-    expect(await student.student.homework.submit({ id, idempotencyKey: key })).toEqual({ correct: 3, wrong: 2 });
+    expect(await student.student.homework.submit({ id, idempotencyKey: key })).toEqual({ correct: 3, wrong: 2, pending: 0 });
     // The same request again (a double tap, a retry) gets the same result.
-    expect(await student.student.homework.submit({ id, idempotencyKey: key })).toEqual({ correct: 3, wrong: 2 });
+    expect(await student.student.homework.submit({ id, idempotencyKey: key })).toEqual({ correct: 3, wrong: 2, pending: 0 });
     await expect(student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() })).rejects.toMatchObject({
       code: "CONFLICT",
     });

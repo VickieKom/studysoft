@@ -1,14 +1,17 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { answerSchema } from "../../../domain/homework-format";
+import { answerSchema, studentAnswerSchema } from "../../../domain/homework-format";
 import { currentHomeworkForStudent, openHomework, saveAnswer, submitHomework } from "../../homework/homework";
 import { router, studentProcedure } from "../core/trpc";
 
 // The student's side of a homework (#34). Every output is strict and has no
 // key: the tasks go out as studentView(), checking happens on the server, and
 // the score after submission says how many, never which (AGENTS.md, rule 4).
+// A recording or a file is uploaded to its own address, not through here (#35).
 
-const result = z.object({ correct: z.number().int(), wrong: z.number().int() }).strict();
+const result = z
+  .object({ correct: z.number().int(), wrong: z.number().int(), pending: z.number().int() })
+  .strict();
 
 const current = z
   .object({ id: z.uuid(), dueDate: z.iso.date(), taskCount: z.number().int(), result: result.nullable() })
@@ -46,14 +49,14 @@ export const studentHomeworkRouter = router({
   /** The tasks to do and the answers saved so far. Only while the homework is published. */
   open: studentProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(z.object({ tasks: z.array(studentTask), answers: z.array(answerSchema.nullable()) }).strict())
+    .output(z.object({ tasks: z.array(studentTask), answers: z.array(studentAnswerSchema.nullable()) }).strict())
     .query(async ({ ctx, input }) => {
       const opened = await openHomework(ctx.db, ctx.teacherId, ctx.studentId, input.id);
       if (!opened) throw notFound();
       return opened;
     }),
 
-  /** Saves the answer to one task; null clears it. */
+  /** Saves the answer to one task; null clears it, a recording or a file included. */
   saveAnswer: studentProcedure
     .input(z.object({ id: z.uuid(), taskIndex: z.number().int().min(0).max(49), answer: answerSchema.nullable() }))
     .output(z.object({ ok: z.literal(true) }))
