@@ -5,7 +5,9 @@
 // The teacher starts signed in (sessions.setup.ts). Her time zone and every
 // student's are Moscow here. Past lessons are added with «+ Урок» and marked
 // as in lesson-marks.spec.ts (#82); the helpers needed here are copied. Money
-// is shown the Russian way, «6 000 ₽», with a non-breaking space.
+// is shown the Russian way, «6 000 ₽», with a non-breaking space. A balance
+// is shown for prepaid students; a postpaid one shows only a debt; a free one
+// shows neither (product owner, 2026-11-13).
 import { type APIRequestContext, type Browser, expect, type Locator, type Page, test } from "@playwright/test";
 import { TEACHER_SESSION } from "./sessions";
 
@@ -175,6 +177,12 @@ test("postpaid: held lessons without a payment are a debt, in dollars here", asy
   for (const days of [-2, -1]) await markHeld(page, await addPastLesson(page, "Постоплата", days), "Постоплата");
   await page.goto(card);
   await expect(payments(page)).toContainText("Долг 2 урока · 60 $");
+
+  // Paid in full: no debt, and no balance either — a balance is for prepaid
+  // students only (product owner, 2026-11-13).
+  await addPayment(page, "60");
+  await expect(payments(page)).not.toContainText("Долг");
+  await expect(payments(page)).not.toContainText("Осталось");
 });
 
 test("a free student has no balance or payments, and a held lesson charges nothing", async ({ page }) => {
