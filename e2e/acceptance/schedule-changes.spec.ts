@@ -174,9 +174,11 @@ test("a slot changed from a date moves the lessons after it; earlier ones and on
   await move(page, second, "Новое время", plusDays(second, 2), "12:00");
 
   await page.goto(card);
+  // The card has other date fields (the price's «С даты»): the slot's are in its own section.
+  const slots = page.getByRole("region", { name: "Регулярные уроки" });
   await control(page, "Изменить слот").click();
-  await page.getByLabel("Время").fill("19:00");
-  await page.getByLabel("С даты").fill(isoDate(second));
+  await slots.getByLabel("Время").fill("19:00");
+  await slots.getByLabel("С даты").fill(isoDate(second));
   await page.getByRole("button", { name: "Сохранить слот", exact: true }).click();
   await expect(page.getByText(new RegExp(`${day}, 19:00`))).toBeVisible();
 
