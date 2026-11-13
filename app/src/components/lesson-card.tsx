@@ -43,7 +43,10 @@ export function LessonCard({
   const dialog = useRef<HTMLDialogElement>(null);
   const moment = new Date(lesson.startsAt);
   const [status, setStatus] = useState<"held" | "missed" | null>(lesson.status === "scheduled" ? null : lesson.status);
-  const [charged, setCharged] = useState(lesson.charged ?? true);
+  // A held lesson is charged by default; a missed one is not, for now
+  // (product owner, 2026-11-13). The teacher can change it on every lesson.
+  const [charged, setCharged] = useState(lesson.charged ?? lesson.status === "held");
+  const [chargeTouched, setChargeTouched] = useState(false);
   const [unit, setUnit] = useState(lesson.unit ?? "");
   const [note, setNote] = useState(lesson.note ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +106,10 @@ export function LessonCard({
                     type="radio"
                     name={`mark-${lesson.id}`}
                     checked={status === value}
-                    onChange={() => setStatus(value)}
+                    onChange={() => {
+                      setStatus(value);
+                      if (!chargeTouched) setCharged(value === "held");
+                    }}
                   />
                   <label htmlFor={`mark-${lesson.id}-${value}`}>{value === "held" ? "Проведён" : "Пропущен"}</label>
                 </div>
@@ -115,7 +121,10 @@ export function LessonCard({
                   id={`charge-${lesson.id}`}
                   type="checkbox"
                   checked={charged}
-                  onChange={(e) => setCharged(e.target.checked)}
+                  onChange={(e) => {
+                    setCharged(e.target.checked);
+                    setChargeTouched(true);
+                  }}
                 />
                 <label htmlFor={`charge-${lesson.id}`}>Списать</label>
               </div>
