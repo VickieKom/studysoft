@@ -121,7 +121,9 @@ async function mark(
   if (fields.note !== undefined) await dialog.getByLabel("Заметка").fill(fields.note);
   if (fields.charge !== undefined) await dialog.getByLabel("Списать").setChecked(fields.charge);
   await dialog.getByRole("button", { name: "Сохранить отметку", exact: true }).click();
-  // Saved before the scenario moves on: the lesson on the week carries its new status.
+  // Saved before the scenario moves on: the dialog has closed (a lesson marked
+  // again may carry the same status already), and the week carries the new one.
+  await expect(dialog).toBeHidden();
   await expect(lessonOf(day, firstName)).toContainText(status.toLowerCase());
   await expect(lessonOf(day, firstName)).not.toContainText("отметьте урок");
 }
