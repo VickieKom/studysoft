@@ -117,8 +117,11 @@ async function addPayment(page: Page, amount: string, comment = "") {
   await expect(control(page, "Добавить оплату")).toBeVisible();
 }
 
-/** «Осталось 4 урока · 6 000 ₽» with the non-breaking spaces of Russian numbers. */
-const balance = (text: string) => new RegExp(text.replace(/ (?=\d{3}\b)/g, "\\s"));
+/**
+ * «Осталось 4 урока · 6 000 ₽», whatever the kind of space: Russian numbers
+ * and the currency sign take non-breaking ones.
+ */
+const balance = (text: string) => new RegExp(text.replace(/[.$]/g, "\\$&").replace(/ /g, "\\s"));
 
 test.beforeEach(async ({ page }) => {
   await setTeacherTimeZone(page, "Москва");
@@ -177,7 +180,7 @@ test("postpaid: held lessons without a payment are a debt, in dollars here", asy
   await setTerms(page, "Постоплата", "30", "$");
   for (const days of [-2, -1]) await markHeld(page, await addPastLesson(page, "Постоплата", days), "Постоплата");
   await page.goto(card);
-  await expect(payments(page)).toContainText("Долг 2 урока · 60 $");
+  await expect(payments(page)).toContainText(balance("Долг 2 урока · 60 $"));
 
   // Paid in full: no debt, and no balance either — a balance is for prepaid
   // students only (product owner, 2026-11-13).
