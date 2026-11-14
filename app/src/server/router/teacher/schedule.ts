@@ -208,6 +208,7 @@ export const scheduleRouter = router({
             startsAt: z.iso.datetime(),
             durationMinutes: z.number().int(),
             kind: z.enum(["regular", "intro"]),
+            movedFrom: z.iso.datetime().nullable(),
             ...markOutput,
           })
           .strict(),
@@ -218,6 +219,7 @@ export const scheduleRouter = router({
       return (await lessonHistory(ctx.db, ctx.teacherId, input.studentId)).map((l) => ({
         ...l,
         startsAt: l.startsAt.toISOString(),
+        movedFrom: l.movedFrom?.toISOString() ?? null,
         kind: l.kind === "intro" ? ("intro" as const) : ("regular" as const),
         status: status(l.status),
         needsMark: needsMark(l),

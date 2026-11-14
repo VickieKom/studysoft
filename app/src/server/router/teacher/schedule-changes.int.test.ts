@@ -90,6 +90,34 @@ describe("moving a lesson", () => {
   });
 });
 
+describe("a lesson moved ahead and the history", () => {
+  it("cannot be marked while it is in the future", async () => {
+    const studentId = await student("Перенос вперёд");
+    const lessonId = await lessonOn(studentId, moscow(-1));
+    await teacher.teacher.schedule.move({ lessonId, date: moscow(2), time: "10:00" });
+    await expect(
+      teacher.teacher.schedule.mark({ lessonId, status: "held", charged: true, unit: "", note: "" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await teacher.teacher.schedule.history({ studentId })).toEqual([]);
+  });
+
+  it("tells in the history where a moved lesson came from, and that a cancelled one is cancelled", async () => {
+    const studentId = await student("История переноса");
+    const lessonId = await lessonOn(studentId, moscow(-3));
+    const before = (await lessonsInWeekOf(moscow(-3), studentId))[0]!.startsAt;
+    await teacher.teacher.schedule.move({ lessonId, date: moscow(-1), time: "12:00" });
+    expect(await teacher.teacher.schedule.history({ studentId })).toEqual([
+      expect.objectContaining({ id: lessonId, movedFrom: before, status: "scheduled" }),
+    ]);
+    await teacher.teacher.schedule.cancel({ lessonId, charged: true });
+    expect((await teacher.teacher.schedule.history({ studentId }))[0]).toMatchObject({
+      movedFrom: before,
+      status: "cancelled",
+      charged: true,
+    });
+  });
+});
+
 describe("cancelling a lesson", () => {
   it("keeps it on the week as cancelled, charged as chosen, and can put it back", async () => {
     const studentId = await student("Отмена");

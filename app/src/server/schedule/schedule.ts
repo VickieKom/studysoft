@@ -228,11 +228,13 @@ export async function markLesson(
     .from(lesson)
     .where(and(eq(lesson.id, lessonId), eq(lesson.teacherId, teacherId), lte(lesson.startsAt, now)));
   if (!row) return false;
-  await db
+  // The write repeats the conditions: a lesson moved ahead since the read stays unmarked.
+  const rows = await db
     .update(lesson)
     .set({ ...mark, charged: row.kind === "intro" ? false : mark.charged, updatedAt: now })
-    .where(eq(lesson.id, lessonId));
-  return true;
+    .where(and(eq(lesson.id, lessonId), eq(lesson.teacherId, teacherId), lte(lesson.startsAt, now)))
+    .returning({ id: lesson.id });
+  return rows.length > 0;
 }
 
 export type HistoryLesson = {
@@ -244,6 +246,7 @@ export type HistoryLesson = {
   charged: boolean | null;
   unit: string | null;
   note: string | null;
+  movedFrom: Date | null;
 };
 
 /** The student's lessons that have started, newest first: the history on the card (#82). */
@@ -260,6 +263,7 @@ export async function lessonHistory(
       durationMinutes: lesson.durationMinutes,
       kind: lesson.kind,
       ...markColumns,
+      movedFrom: lesson.movedFrom,
     })
     .from(lesson)
     .where(and(eq(lesson.teacherId, teacherId), eq(lesson.studentId, studentId), lte(lesson.startsAt, now)))
@@ -339,11 +343,20 @@ export async function moveLesson(
   if (!row) return false;
   const startsAt = zonedMoment(to.date, to.time, row.timeZone);
   const first = row.movedFrom ?? row.startsAt;
-  await db
+  // The write repeats the conditions, so a lesson marked or moved since the read is left alone.
+  const rows = await db
     .update(lesson)
     .set({ startsAt, movedFrom: first.getTime() === startsAt.getTime() ? null : first, updatedAt: now })
-    .where(eq(lesson.id, lessonId));
-  return true;
+    .where(
+      and(
+        eq(lesson.id, lessonId),
+        eq(lesson.teacherId, teacherId),
+        eq(lesson.status, "scheduled"),
+        eq(lesson.startsAt, row.startsAt),
+      ),
+    )
+    .returning({ id: lesson.id });
+  return rows.length > 0;
 }
 
 /**
@@ -361,11 +374,13 @@ export async function cancelLesson(
 ): Promise<boolean> {
   const row = await lessonOf(db, teacherId, lessonId, ["scheduled", "cancelled"]);
   if (!row) return false;
-  await db
+  // The write repeats the conditions, so a lesson marked since the read is left alone.
+  const rows = await db
     .update(lesson)
     .set({ status: "cancelled", charged: row.kind === "intro" ? false : charged, updatedAt: now })
-    .where(eq(lesson.id, lessonId));
-  return true;
+    .where(and(eq(lesson.id, lessonId), eq(lesson.teacherId, teacherId), inArray(lesson.status, ["scheduled", "cancelled"])))
+    .returning({ id: lesson.id });
+  return rows.length > 0;
 }
 
 /** «Вернуть в расписание»: a cancelled lesson is scheduled again and not charged. */

@@ -231,7 +231,14 @@ export function LessonCard({
               <Button variant="secondary" onClick={() => setMode("move")}>
                 Перенести
               </Button>
-              <Button variant="secondary" onClick={() => setMode("cancel")}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  // Unticked on every entry: a charged cancellation that was restored must not leave it ticked.
+                  setCancelCharged(false);
+                  setMode("cancel");
+                }}
+              >
                 Отменить
               </Button>
             </div>
@@ -348,7 +355,7 @@ export function LessonCard({
             ) : (
               <p className="text-small text-text-secondary">Отметить урок можно после его начала.</p>
             ))}
-          {mode === "none" && !cancelled && (
+          {mode === "none" && (
             <div className="flex flex-col gap-2 border-t border-border pt-3">
               <label htmlFor={`link-${lesson.id}`} className="text-small text-text-secondary">
                 Ссылка на встречу

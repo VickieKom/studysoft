@@ -83,6 +83,9 @@ export default async function StudentCardPage({ params }: Props) {
                   ) : (
                     lesson.status !== "scheduled" && <span>{LESSON_STATUS_LABELS[lesson.status]}</span>
                   )}
+                  {lesson.movedFrom && (
+                    <span className="text-text-secondary">перенесён с {dayMonthIn(new Date(lesson.movedFrom), timeZone)}</span>
+                  )}
                   {lesson.kind === "intro" && <span>вводный</span>}
                   {lesson.status !== "scheduled" && lesson.kind !== "intro" && (
                     <span className="text-text-secondary">{lesson.charged ? "списан" : "не списан"}</span>
