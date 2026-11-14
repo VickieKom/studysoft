@@ -7,7 +7,7 @@ import type { Database } from "../db/client";
 import { payment, priceTerms } from "../db/schema";
 
 /** The student's terms over time, oldest first. */
-export async function listTerms(db: Database, teacherId: string, studentId: string): Promise<Terms[]> {
+export async function listTerms(db: Pick<Database, "select">, teacherId: string, studentId: string): Promise<Terms[]> {
   const rows = await db
     .select({
       format: priceTerms.format,
@@ -26,7 +26,7 @@ export async function listTerms(db: Database, teacherId: string, studentId: stri
  * The composite key refuses a new row for another teacher's student, but not
  * an update of an existing one, so the update is limited to this teacher's.
  */
-export async function saveTerms(db: Database, teacherId: string, studentId: string, terms: Terms): Promise<void> {
+export async function saveTerms(db: Pick<Database, "insert">, teacherId: string, studentId: string, terms: Terms): Promise<void> {
   await db
     .insert(priceTerms)
     .values({ teacherId, studentId, ...terms })
@@ -40,7 +40,7 @@ export async function saveTerms(db: Database, teacherId: string, studentId: stri
 export type Payment = { id: string; paidOn: string; amountMinor: number; comment: string | null };
 
 /** The student's payments, newest first. */
-export async function listPayments(db: Database, teacherId: string, studentId: string): Promise<Payment[]> {
+export async function listPayments(db: Pick<Database, "select">, teacherId: string, studentId: string): Promise<Payment[]> {
   return db
     .select({ id: payment.id, paidOn: payment.paidOn, amountMinor: payment.amountMinor, comment: payment.comment })
     .from(payment)
@@ -50,7 +50,7 @@ export async function listPayments(db: Database, teacherId: string, studentId: s
 
 /** Records a payment received from a student of this teacher. */
 export async function addPayment(
-  db: Database,
+  db: Pick<Database, "insert">,
   teacherId: string,
   studentId: string,
   input: { paidOn: string; amountMinor: number; comment: string | null },

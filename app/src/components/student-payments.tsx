@@ -90,7 +90,6 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
   }
 
   const free = terms?.format === "free";
-  const symbol = (id: Currency) => CURRENCIES.find((c) => c.id === id)?.symbol ?? id;
 
   return (
     <section aria-label="Оплаты" className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
@@ -203,7 +202,7 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
       )}
       {terms && !free && (
         <p className="text-small text-text-muted">
-          Сейчас: {PAYMENT_FORMATS.find((f) => f.id === terms.format)?.label}, {major(terms.priceMinor)} {symbol(terms.currency)}{" "}
+          Сейчас: {PAYMENT_FORMATS.find((f) => f.id === terms.format)?.label}, {formatMoney(terms.priceMinor, terms.currency)}{" "}
           за урок с {dayMonth(terms.validFrom)}
         </p>
       )}

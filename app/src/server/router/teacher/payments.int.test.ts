@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addDays, dateIn } from "../../../domain/schedule";
-import { LINK_SESSION_COOKIES, type LinkRole } from "../../access/links";
-import { closeDb } from "../../db/client";
+import { LINK_SESSION_COOKIES, type LinkRole, withStudentLocked } from "../../access/links";
+import { addPayment } from "../../crm/payments";
+import { closeDb, db } from "../../db/client";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleRouterRequest } from "../index";
@@ -107,6 +108,35 @@ describe("teacher.payments", () => {
     await expect(
       teacher.teacher.payments.saveTerms({ studentId: other, format: "postpaid", price: "15", currency: "EUR", validFrom: moscow(0) }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("checks the currency after a payment being saved at the same moment", async () => {
+    const studentId = await newStudent("Валюта в гонке");
+    const teacherId = (await teacher.teacher.session.me()).id;
+    await teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "1500", currency: "RUB", validFrom: moscow(0) });
+
+    // A payment holds the student's lock and has not committed yet...
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let held!: () => void;
+    const holding = new Promise<void>((resolve) => (held = resolve));
+    const paying = withStudentLocked(db(), teacherId, studentId, async (tx) => {
+      await addPayment(tx, teacherId, studentId, { paidOn: moscow(0), amountMinor: 600_000, comment: null });
+      held();
+      await gate;
+    });
+    await holding;
+
+    // ...so a switch to dollars waits for it, then sees the payment and is refused.
+    let settled = false;
+    const switching = teacher.teacher.payments
+      .saveTerms({ studentId, format: "prepaid", price: "20", currency: "USD", validFrom: moscow(0) })
+      .finally(() => (settled = true));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(settled).toBe(false);
+    release();
+    await paying;
+    await expect(switching).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("takes amounts with a comma or a point and refuses others", async () => {

@@ -9,6 +9,7 @@ import {
   termsOn,
 } from "../../../domain/payments";
 import { dateIn } from "../../../domain/schedule";
+import { withStudentLocked } from "../../access/links";
 import { addPayment, listPayments, listTerms, saveTerms } from "../../crm/payments";
 import { findStudent } from "../../crm/students";
 import type { Database } from "../../db/client";
@@ -93,22 +94,25 @@ export const paymentsRouter = router({
       // One currency per student (#83): payments carry no currency of their
       // own, so changing it would recount every past payment in the new one.
       // It is fixed by terms on another date, or by the replaced terms once a
-      // payment exists.
-      const history = await listTerms(ctx.db, ctx.teacherId, input.studentId);
-      const fixed =
-        history.find((t) => t.validFrom !== input.validFrom)?.currency ??
-        ((await listPayments(ctx.db, ctx.teacherId, input.studentId)).length > 0 ? history[0]?.currency : undefined);
-      if (fixed && fixed !== input.currency) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Цены и оплаты ученика ведутся в одной валюте: ${CURRENCIES.find((c) => c.id === fixed)?.symbol ?? fixed}`,
+      // payment exists. Checked and written under the student's lock, which
+      // addPayment takes too, so two saves cannot both find it unset.
+      await withStudentLocked(ctx.db, ctx.teacherId, input.studentId, async (tx) => {
+        const history = await listTerms(tx, ctx.teacherId, input.studentId);
+        const fixed =
+          history.find((t) => t.validFrom !== input.validFrom)?.currency ??
+          ((await listPayments(tx, ctx.teacherId, input.studentId)).length > 0 ? history[0]?.currency : undefined);
+        if (fixed && fixed !== input.currency) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Цены и оплаты ученика ведутся в одной валюте: ${CURRENCIES.find((c) => c.id === fixed)?.symbol ?? fixed}`,
+          });
+        }
+        await saveTerms(tx, ctx.teacherId, input.studentId, {
+          format: input.format,
+          priceMinor: input.format === "free" ? 0 : (input.price ?? 0),
+          currency: input.currency,
+          validFrom: input.validFrom,
         });
-      }
-      await saveTerms(ctx.db, ctx.teacherId, input.studentId, {
-        format: input.format,
-        priceMinor: input.format === "free" ? 0 : (input.price ?? 0),
-        currency: input.currency,
-        validFrom: input.validFrom,
       });
       return { ok: true as const };
     }),
@@ -130,12 +134,14 @@ export const paymentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await studentToday(ctx.db, ctx.teacherId, input.studentId);
       if (input.amount <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Сумма должна быть больше нуля" });
-      return {
-        id: await addPayment(ctx.db, ctx.teacherId, input.studentId, {
+      // Under the student's lock, so a terms save checking for payments waits for it.
+      const id = await withStudentLocked(ctx.db, ctx.teacherId, input.studentId, (tx) =>
+        addPayment(tx, ctx.teacherId, input.studentId, {
           paidOn: input.paidOn,
           amountMinor: input.amount,
           comment: input.comment,
         }),
-      };
+      );
+      return { id };
     }),
 });
