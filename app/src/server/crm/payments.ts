@@ -21,7 +21,11 @@ export async function listTerms(db: Database, teacherId: string, studentId: stri
   return rows.map((r) => ({ ...r, format: r.format as PaymentFormat, currency: r.currency as Currency }));
 }
 
-/** Sets the terms from a date; terms already starting that day are replaced. */
+/**
+ * Sets the terms from a date; terms already starting that day are replaced.
+ * The composite key refuses a new row for another teacher's student, but not
+ * an update of an existing one, so the update is limited to this teacher's.
+ */
 export async function saveTerms(db: Database, teacherId: string, studentId: string, terms: Terms): Promise<void> {
   await db
     .insert(priceTerms)
@@ -29,6 +33,7 @@ export async function saveTerms(db: Database, teacherId: string, studentId: stri
     .onConflictDoUpdate({
       target: [priceTerms.studentId, priceTerms.validFrom],
       set: { format: terms.format, priceMinor: terms.priceMinor, currency: terms.currency },
+      setWhere: eq(priceTerms.teacherId, teacherId),
     });
 }
 

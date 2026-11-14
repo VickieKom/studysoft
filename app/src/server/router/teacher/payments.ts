@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   balanceShown,
+  CURRENCIES,
   CURRENCY_IDS,
   computeBalance,
   PAYMENT_FORMAT_IDS,
@@ -89,6 +90,20 @@ export const paymentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await studentToday(ctx.db, ctx.teacherId, input.studentId);
       if (input.format !== "free" && !input.price) throw new TRPCError({ code: "BAD_REQUEST", message: "Укажите цену урока" });
+      // One currency per student (#83): payments carry no currency of their
+      // own, so changing it would recount every past payment in the new one.
+      // It is fixed by terms on another date, or by the replaced terms once a
+      // payment exists.
+      const history = await listTerms(ctx.db, ctx.teacherId, input.studentId);
+      const fixed =
+        history.find((t) => t.validFrom !== input.validFrom)?.currency ??
+        ((await listPayments(ctx.db, ctx.teacherId, input.studentId)).length > 0 ? history[0]?.currency : undefined);
+      if (fixed && fixed !== input.currency) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Цены и оплаты ученика ведутся в одной валюте: ${CURRENCIES.find((c) => c.id === fixed)?.symbol ?? fixed}`,
+        });
+      }
       await saveTerms(ctx.db, ctx.teacherId, input.studentId, {
         format: input.format,
         priceMinor: input.format === "free" ? 0 : (input.price ?? 0),

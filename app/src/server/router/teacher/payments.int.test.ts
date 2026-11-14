@@ -84,6 +84,31 @@ describe("teacher.payments", () => {
     });
   });
 
+  it("keeps one currency per student once it counts", async () => {
+    // Set by mistake and replaced the same day before any payment: allowed.
+    const studentId = await newStudent("Валюта");
+    await teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "20", currency: "USD", validFrom: moscow(0) });
+    await teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "1500", currency: "RUB", validFrom: moscow(0) });
+    await teacher.teacher.payments.addPayment({ studentId, amount: "6000", paidOn: moscow(0), comment: "" });
+    const before = await teacher.teacher.payments.get({ studentId });
+
+    // After a payment, neither the same day's terms nor new ones may switch it.
+    for (const validFrom of [moscow(0), moscow(7)]) {
+      await expect(
+        teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "20", currency: "USD", validFrom }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    // A new price in the same currency is fine.
+    await teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "2000", currency: "RUB", validFrom: moscow(7) });
+    expect((await teacher.teacher.payments.get({ studentId })).balance).toBe(before.balance);
+    // Terms on another date fix it even without payments.
+    const other = await newStudent("Валюта без оплат");
+    await teacher.teacher.payments.saveTerms({ studentId: other, format: "postpaid", price: "500", currency: "THB", validFrom: moscow(-7) });
+    await expect(
+      teacher.teacher.payments.saveTerms({ studentId: other, format: "postpaid", price: "15", currency: "EUR", validFrom: moscow(0) }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("takes amounts with a comma or a point and refuses others", async () => {
     const studentId = await newStudent("Суммы");
     await teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "30,5", currency: "EUR", validFrom: moscow(0) });
