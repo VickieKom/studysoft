@@ -92,6 +92,13 @@
       "when": 1794580157660,
       "tag": "0012_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794586309859,
+      "tag": "0013_schedule",
+      "breakpoints": true
     }
   ]
 }

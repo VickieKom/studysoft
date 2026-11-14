@@ -13,6 +13,7 @@ import {
 } from "../../../domain/student";
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
+import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
 
 // No format checks on names (#18): whatever the teacher types is stored as
@@ -125,8 +126,14 @@ export const studentsRouter = router({
         if (changes.status === "finished") await revokeLinks(tx, ctx.teacherId, id);
         const updated = await updateStudent(tx, ctx.teacherId, id, changes);
         // The profile and the contacts are saved together or not at all.
-        if (updated) await saveContacts(tx, ctx.teacherId, id, contacts);
-        return updated;
+        if (!updated) return false;
+        await saveContacts(tx, ctx.teacherId, id, contacts);
+        // «На паузе» and «Завершили» take the future lessons off the schedule;
+        // back in «Занимается» they come again from the slots (#80). Inside the
+        // lock, so a week read cannot add lessons after the pause (it waits).
+        if (changes.status === "paused" || changes.status === "finished") await removeFutureLessons(tx, ctx.teacherId, id);
+        else await topUpLessons(tx, ctx.teacherId, new Date(), id);
+        return true;
       });
       if (!saved) throw notFound();
       return { id };

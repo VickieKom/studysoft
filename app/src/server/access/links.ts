@@ -49,8 +49,8 @@ export function linkUrl(token: string, role: LinkRole): string {
   return new URL(`${LINK_PATHS[role]}#${token}`, env().APP_URL).toString();
 }
 
-/** What these functions need of the database: the pool or a transaction. */
-type Queries = Pick<Database, "select" | "insert" | "update">;
+/** What these functions need of the database: the pool or a transaction (a nested one is a savepoint). */
+export type Queries = Pick<Database, "select" | "insert" | "update" | "delete" | "transaction">;
 
 type LinkRow = { id: string; generation: number; tokenHash: string; revokedAt: Date | null };
 

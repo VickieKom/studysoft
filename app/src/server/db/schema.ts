@@ -19,6 +19,10 @@ export const teacher = pgTable("teacher", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // The teacher's own time zone for the schedule (#80): her time of every
+  // lesson is shown in it. Changed in «Настройки»; the product owner works
+  // from Bangkok.
+  timeZone: text("time_zone").notNull().default("Asia/Bangkok"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -367,6 +371,70 @@ export const blob = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("blob_teacher_id_idx").on(t.teacherId)],
+);
+
+// A student's weekly slot (#80; architecture 8.6): a weekday and a local time
+// in the student's time zone, so a lesson stays "Tuesday at 17:00" for the
+// student when clocks change. Lessons are created from it ahead of time.
+export const scheduleSlot = pgTable(
+  "schedule_slot",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    // 0 Sunday … 6 Saturday, as JavaScript's getUTCDay().
+    weekday: bigint("weekday", { mode: "number" }).notNull(),
+    startTime: text("start_time").notNull(),
+    timeZone: text("time_zone").notNull(),
+    durationMinutes: bigint("duration_minutes", { mode: "number" }).notNull(),
+    validFrom: date("valid_from").notNull(),
+    validUntil: date("valid_until"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "schedule_slot_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("schedule_slot_teacher_id_idx").on(t.teacherId),
+    index("schedule_slot_student_id_idx").on(t.studentId),
+  ],
+);
+
+// A lesson (#80): a moment in UTC and a duration. One from a slot carries the
+// slot and the student's date it was made for, so topping up never makes it
+// twice and a lesson moved by hand keeps its place in the series.
+export const lesson = pgTable(
+  "lesson",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    slotId: uuid("slot_id").references(() => scheduleSlot.id),
+    slotDate: date("slot_date"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    durationMinutes: bigint("duration_minutes", { mode: "number" }).notNull(),
+    // "regular" or "intro" (вводный, free).
+    kind: text("kind").notNull().default("regular"),
+    status: text("status").notNull().default("scheduled"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "lesson_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("lesson_slot_date_key").on(t.slotId, t.slotDate),
+    index("lesson_teacher_id_starts_at_idx").on(t.teacherId, t.startsAt),
+    index("lesson_student_id_idx").on(t.studentId),
+  ],
 );
 
 // Where a draft came from (#43; architecture 5.4): drafts the assistant saved
