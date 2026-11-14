@@ -62,9 +62,14 @@ export function zonedMoment(date: string, time: string, timeZone: string): Date 
     const p = partsIn(new Date(moment), timeZone);
     return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - moment;
   };
-  let moment = wanted - offsetAt(wanted);
-  moment = wanted - offsetAt(moment);
-  return new Date(moment);
+  // The offsets a day before and after cover any clock change that night.
+  const DAY = 86_400_000;
+  const before = wanted - offsetAt(wanted - DAY);
+  const after = wanted - offsetAt(wanted + DAY);
+  const shows = (moment: number) => moment + offsetAt(moment) === wanted;
+  const valid = [before, after].filter(shows);
+  // Repeated: the earlier one. Missing: the old offset, which lands past the gap.
+  return new Date(valid.length > 0 ? Math.min(...valid) : before);
 }
 
 /** A date plus some days, as YYYY-MM-DD. */

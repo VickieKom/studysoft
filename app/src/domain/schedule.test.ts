@@ -15,6 +15,8 @@ describe("schedule time", () => {
     expect(zonedMoment("2026-10-27", "17:00", "Europe/Berlin").toISOString()).toBe("2026-10-27T16:00:00.000Z");
     // A time that does not exist on the spring-forward night moves on by the gap.
     expect(timeIn(zonedMoment("2027-03-28", "02:30", "Europe/Berlin"), "Europe/Berlin")).toBe("03:30");
+    // A time that happens twice on the fall-back night takes the first, still summer time.
+    expect(zonedMoment("2026-10-25", "02:30", "Europe/Berlin").toISOString()).toBe("2026-10-25T00:30:00.000Z");
   });
 
   it("finds a weekly slot's dates in a window, and the week's Monday", () => {
