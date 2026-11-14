@@ -1,0 +1,21 @@
+# The image is built from the lockfile and the sources of app/ only.
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+# A local env file must never end up in a published image.
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.github
+data
+docs
+e2e
+mcp/src
+scripts
+test-results
+playwright-report
+# Only the seed data: the type check of the build reads it through the tests.
+# It stays in the build stage and never reaches the final image.
+deploy/*
+!deploy/seed

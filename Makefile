@@ -19,6 +19,8 @@ DB_ROOT := postgres://studysoft:studysoft@127.0.0.1:$(DB_PORT)
 LOCAL_AUTH_SECRET := local-stand-only-auth-secret-never-used-elsewhere
 LOCAL_LINK_KEY := local-stand-only-link-key-never-used-anywhere-else
 BUILD_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+# The image CI publishes; locally the same build under a local name.
+IMAGE ?= studysoft-app:local
 
 # Files of the local stand live in the ignored data/ folder, one per database.
 DEV_ENV := DATABASE_URL=$(DB_ROOT)/studysoft AUTH_SECRET=$(LOCAL_AUTH_SECRET) LINK_KEY=$(LOCAL_LINK_KEY) APP_URL=http://localhost:3000 FILES_DIR=$(CURDIR)/data/files BUILD_SHA=$(BUILD_SHA)
@@ -31,12 +33,12 @@ E2E_ENV := DATABASE_URL=$(DB_ROOT)/studysoft_e2e AUTH_SECRET=$(LOCAL_AUTH_SECRET
 # fonts and fails the job whenever the Ubuntu mirrors are unreachable.
 PLAYWRIGHT_INSTALL_FLAGS ?=
 
-.PHONY: help check check-repo lint-docs install dev db-up db-down typecheck lint migrations test-unit test-integration e2e browsers
+.PHONY: help check check-repo lint-docs install dev db-up db-down typecheck lint migrations test-unit test-integration e2e browsers image
 
 help: ## List available commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-17s %s\n", $$1, $$2}'
 
-check: check-repo lint-docs typecheck lint migrations test-unit test-integration e2e ## Run every check that CI runs
+check: check-repo lint-docs typecheck lint migrations test-unit test-integration e2e image ## Run every check that CI runs
 
 check-repo: ## Guard scripts: self-test, tracked files, acceptance scenarios
 	bash scripts/ci/test.sh
@@ -90,3 +92,6 @@ e2e: install browsers db-up ## Acceptance scenarios against a production build
 	$(E2E_ENV) npm run db:seed -w app
 	$(E2E_ENV) npm run build -w app
 	$(E2E_ENV) npx playwright test
+
+image: ## Build the application image
+	docker build -f deploy/Dockerfile --build-arg BUILD_SHA=$(BUILD_SHA) -t $(IMAGE) .

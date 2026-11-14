@@ -559,7 +559,7 @@ The link between the hosts is plain HTTPS; tunnels on that route are unreliable.
 
 The proxy caches only static assets with a hash in the name: scripts, styles, fonts. Router responses and student files are not cached and are served with `Cache-Control: private`.
 
-**Delivery.** CI builds the `app` image and pushes it to the registry. Staging polls the registry and updates itself to the image of `main`. Production is pinned to a tag in a separate, private infrastructure repository and is rolled out from there. This repository holds no server secrets.
+**Delivery.** CI builds the `app` image and pushes it to the registry: as `main` on every merge, and under its version for every `v*` tag (`v1.2.3` publishes `1.2.3`). The image holds the production build, the migrations and the script that creates a teacher account; it holds no seed data. A stack applies migrations from the same image (`npm run db:migrate`) before it starts the new version. Until #4 is finished the image is not the standalone build and keeps development dependencies. Staging polls the registry and updates itself to the image of `main`. Production is pinned to a tag in a separate, private infrastructure repository and is rolled out from there. This repository holds no server secrets.
 
 **Rollback.** Return to the previous image tag. Migrations go forward only and in two steps: first add the new shape, remove the old one in the next release. The previous version of the code therefore works with the next version of the schema.
 
