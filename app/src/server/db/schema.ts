@@ -489,3 +489,59 @@ export const contact = pgTable(
     index("contact_teacher_id_idx").on(t.teacherId),
   ],
 );
+
+// The terms a student is taught on (#83): the payment format, the price of a
+// lesson and its currency, in force from a date (the student's). A new row
+// starts new terms; earlier lessons keep the price of their date.
+export const priceTerms = pgTable(
+  "price_terms",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    // "prepaid", "postpaid" or "free".
+    format: text("format").notNull(),
+    // In minor units (kopecks, cents, satang); 0 when free.
+    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    currency: text("currency").notNull(),
+    validFrom: date("valid_from").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "price_terms_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    unique("price_terms_student_id_valid_from_key").on(t.studentId, t.validFrom),
+    index("price_terms_teacher_id_idx").on(t.teacherId),
+  ],
+);
+
+// A payment the teacher received from a student (#83). The balance is
+// computed from payments and charged lessons, never stored.
+export const payment = pgTable(
+  "payment",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    paidOn: date("paid_on").notNull(),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    comment: text("comment"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "payment_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("payment_student_id_idx").on(t.studentId),
+    index("payment_teacher_id_idx").on(t.teacherId),
+  ],
+);
