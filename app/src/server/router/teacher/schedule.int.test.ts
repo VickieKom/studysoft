@@ -2,8 +2,9 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addDays, dateIn, mondayOf, timeIn, weekdayOf } from "../../../domain/schedule";
 import { closeDb, db } from "../../db/client";
-import { lesson } from "../../db/schema";
-import { topUpLessons } from "../../schedule/schedule";
+import { withStudentLocked } from "../../access/links";
+import { lesson, student } from "../../db/schema";
+import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller } from "../index";
 
@@ -98,6 +99,35 @@ describe("teacher.schedule", () => {
     await update("active");
     expect(await lessonsOf(studentId)).toHaveLength(4);
     await update("finished");
+    expect(await lessonsOf(studentId)).toHaveLength(0);
+  });
+
+  it("does not top up a student whose pause is being saved", async () => {
+    const studentId = await newStudent("Гонка");
+    await teacher.teacher.schedule.addSlot({ studentId, weekday: weekdayOf(ahead(2)), startTime: "12:00", durationMinutes: 60 });
+    await db().delete(lesson).where(eq(lesson.studentId, studentId));
+
+    // The pause holds the student row, as the status change does...
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let held!: () => void;
+    const holding = new Promise<void>((resolve) => (held = resolve));
+    const pausing = withStudentLocked(db(), teacherId, studentId, async (tx) => {
+      await tx.update(student).set({ status: "paused" }).where(eq(student.id, studentId));
+      await removeFutureLessons(tx, teacherId, studentId);
+      held();
+      await gate;
+    });
+    await holding;
+
+    // ...so a week read that started meanwhile waits for it and sees the pause.
+    let toppedUp = false;
+    const topping = topUpLessons(db(), teacherId, new Date(), studentId).then(() => (toppedUp = true));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(toppedUp).toBe(false);
+
+    release();
+    await Promise.all([pausing, topping]);
     expect(await lessonsOf(studentId)).toHaveLength(0);
   });
 

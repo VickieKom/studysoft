@@ -4,6 +4,7 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt } from "drizzle-orm";
 import { addDays, dateIn, LESSONS_AHEAD_DAYS, slotDates, zonedMoment } from "../../domain/schedule";
 import type { Database } from "../db/client";
+import type { Queries } from "../access/links";
 import { teacherTimeZone } from "../access/settings";
 import { lesson, scheduleSlot, student } from "../db/schema";
 
@@ -61,40 +62,64 @@ export async function addSlot(
  * not exist yet. Idempotent: a slot makes one lesson per date, whatever
  * happened to it since. Students on pause or finished get none.
  */
-export async function topUpLessons(db: Database, teacherId: string, now: Date = new Date(), studentId?: string) {
-  const slots = await db
-    .select({
-      id: scheduleSlot.id,
-      studentId: scheduleSlot.studentId,
-      weekday: scheduleSlot.weekday,
-      startTime: scheduleSlot.startTime,
-      timeZone: scheduleSlot.timeZone,
-      durationMinutes: scheduleSlot.durationMinutes,
-      validFrom: scheduleSlot.validFrom,
-      validUntil: scheduleSlot.validUntil,
-    })
-    .from(scheduleSlot)
-    .innerJoin(
-      student,
-      and(eq(student.id, scheduleSlot.studentId), isNull(student.deletedAt), inArray(student.status, SCHEDULED_STATUSES)),
-    )
-    .where(and(eq(scheduleSlot.teacherId, teacherId), studentId ? eq(scheduleSlot.studentId, studentId) : undefined));
+export async function topUpLessons(db: Queries, teacherId: string, now: Date = new Date(), studentId?: string) {
+  await db.transaction(async (tx) => {
+    // Share-lock the students first, so a status change in flight either
+    // finishes before the slots are read, and this sees the pause, or waits
+    // for the lessons to land and then removes them. Ordered by id so two
+    // week reads never lock in opposite orders.
+    const students = await tx
+      .select({ id: student.id })
+      .from(student)
+      .where(
+        and(
+          eq(student.teacherId, teacherId),
+          isNull(student.deletedAt),
+          inArray(student.status, SCHEDULED_STATUSES),
+          studentId ? eq(student.id, studentId) : undefined,
+        ),
+      )
+      .orderBy(asc(student.id))
+      .for("share");
+    if (students.length === 0) return;
+    const slots = await tx
+      .select({
+        id: scheduleSlot.id,
+        studentId: scheduleSlot.studentId,
+        weekday: scheduleSlot.weekday,
+        startTime: scheduleSlot.startTime,
+        timeZone: scheduleSlot.timeZone,
+        durationMinutes: scheduleSlot.durationMinutes,
+        validFrom: scheduleSlot.validFrom,
+        validUntil: scheduleSlot.validUntil,
+      })
+      .from(scheduleSlot)
+      .where(
+        and(
+          eq(scheduleSlot.teacherId, teacherId),
+          inArray(
+            scheduleSlot.studentId,
+            students.map((row) => row.id),
+          ),
+        ),
+      );
 
-  const rows = slots.flatMap((slot) => {
-    const today = dateIn(now, slot.timeZone);
-    return slotDates(slot.weekday, today, LESSONS_AHEAD_DAYS)
-      .filter((date) => date >= slot.validFrom && (!slot.validUntil || date <= slot.validUntil))
-      .map((date) => ({
-        teacherId,
-        studentId: slot.studentId,
-        slotId: slot.id,
-        slotDate: date,
-        startsAt: zonedMoment(date, slot.startTime, slot.timeZone),
-        durationMinutes: slot.durationMinutes,
-      }))
-      .filter((row) => row.startsAt > now);
+    const rows = slots.flatMap((slot) => {
+      const today = dateIn(now, slot.timeZone);
+      return slotDates(slot.weekday, today, LESSONS_AHEAD_DAYS)
+        .filter((date) => date >= slot.validFrom && (!slot.validUntil || date <= slot.validUntil))
+        .map((date) => ({
+          teacherId,
+          studentId: slot.studentId,
+          slotId: slot.id,
+          slotDate: date,
+          startsAt: zonedMoment(date, slot.startTime, slot.timeZone),
+          durationMinutes: slot.durationMinutes,
+        }))
+        .filter((row) => row.startsAt > now);
+    });
+    if (rows.length > 0) await tx.insert(lesson).values(rows).onConflictDoNothing();
   });
-  if (rows.length > 0) await db.insert(lesson).values(rows).onConflictDoNothing();
 }
 
 /** A one-off lesson at the student's local date and time. Null for no such student. */
@@ -121,7 +146,7 @@ export async function addLesson(
 }
 
 /** «На паузе» and «Завершили» take the student's future lessons off the schedule. */
-export async function removeFutureLessons(db: Database, teacherId: string, studentId: string, now: Date = new Date()) {
+export async function removeFutureLessons(db: Queries, teacherId: string, studentId: string, now: Date = new Date()) {
   await db
     .delete(lesson)
     .where(
