@@ -88,7 +88,7 @@ Client components call the router through `app/src/components/router-client.ts`;
 - Pure logic (answer checking, balance, time zones) gets unit tests.
 - Anything that touches the database, permissions or the shape of a response gets an integration test against real PostgreSQL.
 - New branching, parsing, money or security logic leaves at least one test behind.
-- A check followed by a write in another statement (status, ownership, "not edited yet", "none published") runs in one transaction that locks the row the check depends on. Take row locks in the order homework, then student, then links, so two procedures never deadlock. Its integration test forces the interleaving, as `app/src/server/access/links.int.test.ts` does; a `Promise.all` race can pass without the lock.
+- A check followed by a write in another statement (status, ownership, "not edited yet", "none published") either runs in one transaction that locks the row the check depends on, or makes the write conditional on what the check read. Take row locks in the order homework, then student, then links, so two procedures never deadlock. Its integration test forces the interleaving step by step: the read, then the competing write, then the write, as `app/src/server/access/links.int.test.ts` does for a conditional write; for a lock, the competing transaction stays open while the test asserts the other one waits. A `Promise.all` race can pass without either guard.
 - Acceptance scenarios cover behaviour as a user sees it. They are owned by the product owner.
 
 ## Shortcuts and debt
