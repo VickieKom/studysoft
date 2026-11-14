@@ -51,7 +51,7 @@ make dev     # local stand: PostgreSQL in Docker, migrations, seed data, app on 
 make check   # everything CI runs; run it before every push (needs Docker running)
 ```
 
-Teacher accounts for the local stand are in `deploy/seed/teachers.json`.
+Teacher accounts for the local stand are in `deploy/seed/teachers.json`. An environment with real data gets its teacher from `npm run db:create-teacher -w app`, which reads `TEACHER_NAME`, `TEACHER_EMAIL` and `TEACHER_PASSWORD` from the environment.
 
 `make check` is the single source of truth for what CI runs. When a slice adds a check, it adds it to `make check`.
 

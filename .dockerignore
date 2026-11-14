@@ -1,0 +1,17 @@
+# The image is built from the lockfile and the sources of app/ only.
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+.git
+.github
+data
+docs
+e2e
+mcp/src
+scripts
+test-results
+playwright-report
+# Only the seed data: the type check of the build reads it through the tests.
+# It stays in the build stage and never reaches the final image.
+deploy/*
+!deploy/seed

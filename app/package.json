@@ -15,7 +15,8 @@
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx src/server/db/cli/migrate.ts",
     "db:reset": "tsx src/server/db/cli/reset.ts",
-    "db:seed": "tsx src/server/db/cli/seed.ts"
+    "db:seed": "tsx src/server/db/cli/seed.ts",
+    "db:create-teacher": "tsx src/server/db/cli/create-teacher.ts"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

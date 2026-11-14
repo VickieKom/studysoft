@@ -1,0 +1,42 @@
+name: Image
+
+# Publishes the application image: `main` for staging, and the version of a
+# `v*` tag for production, which the private infrastructure repository pins.
+# Pull requests build the same image inside `make check`, without publishing.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.ref }}
+
+jobs:
+  publish:
+    name: Publish image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          # Registry names are lower-case; a tag v1.2.3 publishes 1.2.3.
+          image="ghcr.io/$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          if [ "$REF_TYPE" = "tag" ]; then version="${REF_NAME#v}"; else version="main"; fi
+          make image IMAGE="$image:$version" BUILD_SHA="$BUILD_SHA"
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+          docker push "$image:$version"
