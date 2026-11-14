@@ -421,15 +421,21 @@ export const lesson = pgTable(
     durationMinutes: bigint("duration_minutes", { mode: "number" }).notNull(),
     // "regular" or "intro" (вводный, free).
     kind: text("kind").notNull().default("regular"),
-    // "scheduled" until marked; "held" or "missed" (#82), more with #81.
+    // "scheduled" until marked; "held" or "missed" (#82); "cancelled" (#81).
     status: text("status").notNull().default("scheduled"),
-    // Charged to the balance (#83): set when the lesson is marked.
+    // Charged to the balance (#83): set when the lesson is marked or cancelled (#81).
     charged: boolean("charged"),
     // What the teacher wrote when marking it: the unit covered and a note.
     // Teacher only; kept on the lesson so it never joins the notes the
     // assistant reads.
     unit: text("unit"),
     note: text("note"),
+    // When the lesson was first planned, if it has been moved since (#81):
+    // the week says «перенесён с …», and a slot change leaves it alone.
+    movedFrom: timestamp("moved_from", { withTimezone: true }),
+    // The video call of this lesson (#81): the service gives no permanent
+    // rooms, so every lesson has its own, pasted by the teacher.
+    meetingLink: text("meeting_link"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

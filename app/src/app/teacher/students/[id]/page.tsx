@@ -4,7 +4,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentSlots } from "@/components/schedule-controls";
-import { dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
+import { dateIn, dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
 import { StudentNotes } from "@/components/student-notes";
 import { StudentPayments } from "@/components/student-payments";
 import { CONTACT_FIELDS, PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
@@ -68,7 +68,7 @@ export default async function StudentCardPage({ params }: Props) {
             </Fragment>
           ))}
         </dl>
-        <StudentSlots studentId={student.id} slots={slots} />
+        <StudentSlots studentId={student.id} slots={slots} today={dateIn(new Date(), student.timeZone)} />
         <section aria-label="История уроков" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
           <h2 className="text-small font-semibold text-text-secondary">История уроков</h2>
           {history.length === 0 ? (
@@ -82,6 +82,9 @@ export default async function StudentCardPage({ params }: Props) {
                     <span className="text-danger">отметьте урок</span>
                   ) : (
                     lesson.status !== "scheduled" && <span>{LESSON_STATUS_LABELS[lesson.status]}</span>
+                  )}
+                  {lesson.movedFrom && (
+                    <span className="text-text-secondary">перенесён с {dayMonthIn(new Date(lesson.movedFrom), timeZone)}</span>
                   )}
                   {lesson.kind === "intro" && <span>вводный</span>}
                   {lesson.status !== "scheduled" && lesson.kind !== "intro" && (

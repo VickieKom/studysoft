@@ -110,13 +110,17 @@ export function dayLabel(date: string): string {
   });
 }
 
-/** How a lesson's mark reads on the week and in the history (#82). */
+/** How a lesson's mark reads on the week and in the history (#82); a cancelled lesson too (#81). */
 export const LESSON_STATUS_LABELS: Record<string, string> = {
   held: "проведён",
   missed: "пропущен",
+  cancelled: "отменён",
 };
 
 /** «17 ноября»: the date of a lesson in the history, in a time zone. */
 export function dayMonthIn(moment: Date, timeZone: string): string {
   return moment.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone });
 }
+
+/** The overlap warning (#81): «в это время уже урок с Аней, Борей» reads with the first names as typed. */
+export const overlapWarning = (names: string[]) => `в это время уже урок с ${names.join(", ")}`;

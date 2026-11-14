@@ -31,7 +31,7 @@ Each section of the platform, with its priority. P1 is stage 1, P2 stage 2, P3 s
 - a lesson price per student; prepaid or postpaid;
 - payments: date, amount, comment;
 - the balance — lessons paid, held, remaining or owed — is computed, never stored;
-- a held lesson is charged automatically; a late cancellation follows a configurable rule (for now: cancelled less than 24 hours ahead is charged).
+- a held lesson is charged automatically; a cancellation is not charged by default, late or not, and the teacher can charge one with «Списать» (product owner, 2026-11-13; a rule for late cancellations may come later).
 
 **Lesson history — P1:** a feed of date, unit, status (held, missed, moved, cancelled), note, topics to work on, and the homework status for that lesson. A board snapshot is P2.
 
