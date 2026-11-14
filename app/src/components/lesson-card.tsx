@@ -91,8 +91,12 @@ export function LessonCard({
         </span>
         {lesson.needsMark && <span className="text-danger">отметьте урок</span>}
       </button>
-      <dialog ref={dialog} className="m-auto w-full max-w-md rounded-card border border-border p-6 backdrop:bg-black/30">
-        <h2 className="mb-4 text-h3 font-semibold">
+      <dialog
+        ref={dialog}
+        aria-labelledby={`lesson-${lesson.id}-heading`}
+        className="m-auto w-full max-w-md rounded-card border border-border p-6 backdrop:bg-black/30"
+      >
+        <h2 id={`lesson-${lesson.id}-heading`} className="mb-4 text-h3 font-semibold">
           {lesson.studentName}, {timeIn(moment, timeZone)}
         </h2>
         {started ? (

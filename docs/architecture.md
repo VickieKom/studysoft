@@ -357,7 +357,7 @@ erDiagram
 | `lesson_state` | `lesson` | Until the lesson is finished, then a snapshot | Stage state document with a version number |
 | `payment` | `crm` | Permanent | The balance is computed, not stored |
 | `price_history`, `level_history` | `crm` | Permanent | History of the lesson price and the level: past charges are never recomputed |
-| `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42) or to a lesson (with the schedule). A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
+| `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42); a lesson's note is kept on the `lesson` row instead (#82), so it never joins the notes the assistant reads. A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
 | `textbook`, `textbook_file` | `library` | Permanent | Files are visible to the teacher only |
 | `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed" |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
