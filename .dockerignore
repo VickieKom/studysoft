@@ -2,6 +2,10 @@
 **/node_modules
 **/.next
 **/*.tsbuildinfo
+# A local env file must never end up in a published image.
+**/.env
+**/.env.*
+!**/.env.example
 .git
 .github
 data
