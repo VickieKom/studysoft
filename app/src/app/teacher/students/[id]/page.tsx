@@ -4,6 +4,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentSlots } from "@/components/schedule-controls";
+import { dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
 import { StudentNotes } from "@/components/student-notes";
 import { CONTACT_FIELDS, PROFILE_FIELDS, STATUS_LABELS, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../../caller";
@@ -18,6 +19,8 @@ export default async function StudentCardPage({ params }: Props) {
   const { caller } = await teacherCaller();
   const notes = await caller.teacher.notes.list({ studentId: student.id });
   const slots = await caller.teacher.schedule.slots({ studentId: student.id });
+  const history = await caller.teacher.schedule.history({ studentId: student.id });
+  const { timeZone } = await caller.teacher.settings.get();
   const homework = await caller.teacher.homework.list({ studentId: student.id });
 
   return (
@@ -64,6 +67,31 @@ export default async function StudentCardPage({ params }: Props) {
           ))}
         </dl>
         <StudentSlots studentId={student.id} slots={slots} />
+        <section aria-label="История уроков" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
+          <h2 className="text-small font-semibold text-text-secondary">История уроков</h2>
+          {history.length === 0 ? (
+            <p className="text-small text-text-secondary">Прошедших уроков пока нет</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {history.map((lesson) => (
+                <li key={lesson.id} className="flex flex-wrap gap-x-3 text-small">
+                  <span className="font-semibold">{dayMonthIn(new Date(lesson.startsAt), timeZone)}</span>
+                  {lesson.needsMark ? (
+                    <span className="text-danger">отметьте урок</span>
+                  ) : (
+                    lesson.status !== "scheduled" && <span>{LESSON_STATUS_LABELS[lesson.status]}</span>
+                  )}
+                  {lesson.kind === "intro" && <span>вводный</span>}
+                  {lesson.status !== "scheduled" && lesson.kind !== "intro" && (
+                    <span className="text-text-secondary">{lesson.charged ? "списан" : "не списан"}</span>
+                  )}
+                  {lesson.unit && <span>{lesson.unit}</span>}
+                  {lesson.note && <span className="w-full whitespace-pre-line text-text-secondary">{lesson.note}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
         <section aria-label="Ссылки" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
           {student.status === "finished" ? (
             // "Завершили" closes both links (#21); coming back gives new ones.

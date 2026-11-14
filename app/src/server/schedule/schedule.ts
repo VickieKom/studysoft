@@ -1,7 +1,7 @@
 // The schedule (#80): weekly slots, lessons created from them ahead of time,
 // one-off lessons, and the teacher's week. Time rules are in
 // domain/schedule.ts (architecture 8.6).
-import { and, asc, eq, gt, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte } from "drizzle-orm";
 import { addDays, dateIn, LESSONS_AHEAD_DAYS, slotDates, zonedMoment } from "../../domain/schedule";
 import type { Database } from "../db/client";
 import type { Queries } from "../access/links";
@@ -166,7 +166,76 @@ export type WeekLesson = {
   startsAt: Date;
   durationMinutes: number;
   kind: string;
+  status: string;
+  charged: boolean | null;
+  unit: string | null;
+  note: string | null;
 };
+
+const markColumns = { status: lesson.status, charged: lesson.charged, unit: lesson.unit, note: lesson.note };
+
+/** A lesson that has ended and is not marked yet asks to be marked (#82). */
+export function needsMark(l: { status: string; startsAt: Date; durationMinutes: number }, now: Date = new Date()): boolean {
+  return l.status === "scheduled" && l.startsAt.getTime() + l.durationMinutes * 60_000 <= now.getTime();
+}
+
+export type LessonMark = { status: "held" | "missed"; charged: boolean; unit: string | null; note: string | null };
+
+/**
+ * Marks a lesson of this teacher that has started: held or missed, charged
+ * or not, the unit covered and a note. It can be marked again at any time.
+ * An introductory lesson is free and never charged. False when there is no
+ * such lesson yet.
+ */
+export async function markLesson(
+  db: Database,
+  teacherId: string,
+  lessonId: string,
+  mark: LessonMark,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const [row] = await db
+    .select({ kind: lesson.kind })
+    .from(lesson)
+    .where(and(eq(lesson.id, lessonId), eq(lesson.teacherId, teacherId), lte(lesson.startsAt, now)));
+  if (!row) return false;
+  await db
+    .update(lesson)
+    .set({ ...mark, charged: row.kind === "intro" ? false : mark.charged, updatedAt: now })
+    .where(eq(lesson.id, lessonId));
+  return true;
+}
+
+export type HistoryLesson = {
+  id: string;
+  startsAt: Date;
+  durationMinutes: number;
+  kind: string;
+  status: string;
+  charged: boolean | null;
+  unit: string | null;
+  note: string | null;
+};
+
+/** The student's lessons that have started, newest first: the history on the card (#82). */
+export async function lessonHistory(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  now: Date = new Date(),
+): Promise<HistoryLesson[]> {
+  return db
+    .select({
+      id: lesson.id,
+      startsAt: lesson.startsAt,
+      durationMinutes: lesson.durationMinutes,
+      kind: lesson.kind,
+      ...markColumns,
+    })
+    .from(lesson)
+    .where(and(eq(lesson.teacherId, teacherId), eq(lesson.studentId, studentId), lte(lesson.startsAt, now)))
+    .orderBy(desc(lesson.startsAt));
+}
 
 /**
  * The lessons of the week that starts on `monday` in the teacher's time zone,
@@ -185,6 +254,7 @@ export async function weekLessons(db: Database, teacherId: string, monday: strin
       startsAt: lesson.startsAt,
       durationMinutes: lesson.durationMinutes,
       kind: lesson.kind,
+      ...markColumns,
     })
     .from(lesson)
     .innerJoin(student, and(eq(student.id, lesson.studentId), isNull(student.deletedAt)))

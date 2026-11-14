@@ -353,11 +353,11 @@ erDiagram
 | `contact` | `crm` | Until consent is withdrawn | The parent's and the student's contacts, as in the product requirements: one row per student, all fields optional; read by teacher procedures only, never by student, parent or agent ones (#84) |
 | `access_link` | `access` | Until revoked | Who, role (student or parent), generation, token hash, revocation date; one per student and role. `link_session`: cookie hash, generation, sliding expiry |
 | `schedule_slot` | `schedule` | Permanent | Weekday, local time and the student's time zone, duration, validity dates (#80) |
-| `lesson` | `schedule` | Permanent | Type (regular or introductory), time in UTC, duration, status, the slot and the student's date it came from; later paid or free, unit, meeting link, plan by stages. Lessons are created from slots 4 weeks ahead whenever the week is read or a slot or status changes; one per slot and date (#80) |
+| `lesson` | `schedule` | Permanent | Type (regular or introductory), time in UTC, duration, status, the slot and the student's date it came from; the mark (#82): held or missed, whether it is charged, the unit covered and a note, kept on the lesson so the note never joins the notes the assistant reads; later the meeting link and the plan by stages. Lessons are created from slots 4 weeks ahead whenever the week is read or a slot or status changes; one per slot and date (#80) |
 | `lesson_state` | `lesson` | Until the lesson is finished, then a snapshot | Stage state document with a version number |
 | `payment` | `crm` | Permanent | The balance is computed, not stored |
 | `price_history`, `level_history` | `crm` | Permanent | History of the lesson price and the level: past charges are never recomputed |
-| `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42) or to a lesson (with the schedule). A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
+| `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42); a lesson's note is kept on the `lesson` row instead (#82), so it never joins the notes the assistant reads. A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
 | `textbook`, `textbook_file` | `library` | Permanent | Files are visible to the teacher only |
 | `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed" |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
