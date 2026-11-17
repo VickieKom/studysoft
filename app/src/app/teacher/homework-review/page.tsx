@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReviewStudentFilter } from "@/components/review-student-filter";
-import { formatReviewDate } from "@/domain/homework";
+import { formatPastDate, formatReviewDate } from "@/domain/homework";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../caller";
 
@@ -11,15 +11,21 @@ type Props = { searchParams: Promise<{ student?: string }> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** «Проверка домашек» (#36): current submissions and missed homework, newest first. */
+/**
+ * «Проверка домашек» (#36): current submissions and missed homework, newest
+ * first, and below them the history imported from the old tool (#38), which
+ * never waits for review.
+ */
 export default async function ReviewListPage({ searchParams }: Props) {
   const requested = (await searchParams).student;
   const studentId = requested && UUID.test(requested) ? requested : null;
   const { caller } = await teacherCaller();
   const students = await caller.teacher.students.list();
   let rows;
+  let past;
   try {
     rows = await caller.teacher.review.list({ studentId });
+    past = await caller.teacher.history.list({ studentId });
   } catch (error) {
     if (isNotFound(error)) notFound();
     throw error;
@@ -34,7 +40,7 @@ export default async function ReviewListPage({ searchParams }: Props) {
           selected={studentId}
         />
       </header>
-      {rows.length === 0 ? (
+      {rows.length === 0 && past.length === 0 ? (
         <p className="text-text-secondary">Сданных домашек пока нет</p>
       ) : (
         <ul className="divide-y divide-border rounded-card border border-border">
@@ -60,6 +66,18 @@ export default async function ReviewListPage({ searchParams }: Props) {
               {row.waiting && (
                 <span className="rounded-full bg-accent-100 px-2 py-0.5 text-caption text-accent-900">ждёт проверки</span>
               )}
+            </li>
+          ))}
+          {past.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center gap-4 px-4 py-3">
+              <Link href={`/teacher/homework-review/imported/${row.id}`} className="flex-1 font-semibold hover:underline">
+                {row.studentName} · {row.title}
+              </Link>
+              <span className="text-small text-text-secondary">{formatPastDate(row.submittedOn)}</span>
+              <span className="text-small">
+                {row.correct} верно, {row.wrong} неверно
+              </span>
+              <span className="rounded-full bg-surface px-2 py-0.5 text-caption text-text-secondary">импорт</span>
             </li>
           ))}
         </ul>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HistoryUpload } from "@/components/history-upload";
 import { STATUS_LABELS, STATUSES, type Status, timeZoneLabel } from "@/domain/student";
 import { teacherCaller } from "../caller";
 
@@ -85,6 +86,7 @@ export default async function StudentsPage({ searchParams }: Props) {
           ))}
         </ul>
       )}
+      <HistoryUpload />
     </main>
   );
 }

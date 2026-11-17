@@ -23,6 +23,11 @@ export const TASK_TYPE_LABELS = {
 // The weekday as it reads after «к»: "к четвергу", "к среде". Index = getUTCDay().
 const WEEKDAY_AFTER_K = ["воскресенью", "понедельнику", "вторнику", "среде", "четвергу", "пятнице", "субботе"];
 
+/** The date of an imported submission (#38): «3 ноября», as the date was written. */
+export function formatPastDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
 /**
  * A deadline is a calendar date with no time, the same in every time zone.
  * Written to follow «к»: "четвергу, 14 ноября" for "Домашка к четвергу, 14 ноября".
