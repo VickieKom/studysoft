@@ -2,7 +2,7 @@
 // one-off lessons, and the teacher's week. Time rules are in
 // domain/schedule.ts (architecture 8.6).
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
-import { addDays, dateIn, LESSONS_AHEAD_DAYS, mondayOf, slotDates, zonedMoment } from "../../domain/schedule";
+import { addDays, dateIn, LESSONS_AHEAD_DAYS, mondayOf, slotDates, timeIn, weekdayOf, zonedMoment } from "../../domain/schedule";
 import type { Database } from "../db/client";
 import type { Queries } from "../access/links";
 import { teacherTimeZone } from "../access/settings";
@@ -16,8 +16,11 @@ type Db = Pick<Database, "select" | "insert" | "update" | "delete">;
 
 export type Slot = {
   id: string;
+  /** The weekday and time in the student's current zone, as a slot is entered and changed. */
   weekday: number;
   startTime: string;
+  /** The same moment for the teacher; null when her zone is the student's. */
+  teacher: { weekday: number; startTime: string } | null;
   durationMinutes: number;
   validFrom: string;
   validUntil: string | null;
@@ -27,15 +30,22 @@ export type Slot = {
  * The student's weekly slots that are in force today or will be: one that
  * was changed from a date shows until that date, next to the one after it
  * (#81). Today is the student's.
+ *
+ * A slot keeps the zone it was made in, so its lessons keep their moments
+ * when the student's zone changes (#100). It is shown at its next lesson's
+ * moment in the student's current zone and the teacher's, so the card never
+ * shows a time that is no longer the student's.
  */
 export async function listSlots(db: Database, teacherId: string, studentId: string, now: Date = new Date()): Promise<Slot[]> {
   const owner = await studentOf(db, teacherId, studentId);
   if (!owner) return [];
-  return db
+  const teacherZone = await teacherTimeZone(db, teacherId);
+  const rows = await db
     .select({
       id: scheduleSlot.id,
       weekday: scheduleSlot.weekday,
       startTime: scheduleSlot.startTime,
+      timeZone: scheduleSlot.timeZone,
       durationMinutes: scheduleSlot.durationMinutes,
       validFrom: scheduleSlot.validFrom,
       validUntil: scheduleSlot.validUntil,
@@ -51,6 +61,19 @@ export async function listSlots(db: Database, teacherId: string, studentId: stri
       ),
     )
     .orderBy(asc(scheduleSlot.weekday), asc(scheduleSlot.validFrom), asc(scheduleSlot.startTime));
+  return rows.map(({ timeZone, weekday, startTime, ...rest }) => {
+    const moment = nextMoment({ weekday, startTime, timeZone, validFrom: rest.validFrom }, now);
+    const at = (zone: string) => ({ weekday: weekdayOf(dateIn(moment, zone)), startTime: timeIn(moment, zone) });
+    return { ...rest, ...at(owner.timeZone), teacher: teacherZone === owner.timeZone ? null : at(teacherZone) };
+  });
+}
+
+/** The moment of a slot's next lesson from today (or from its first day), in the zone it was made in. */
+function nextMoment(slot: { weekday: number; startTime: string; timeZone: string; validFrom: string }, now: Date): Date {
+  const today = dateIn(now, slot.timeZone);
+  const from = slot.validFrom > today ? slot.validFrom : today;
+  const [date] = slotDates(slot.weekday, from, 7) as [string];
+  return zonedMoment(date, slot.startTime, slot.timeZone);
 }
 
 async function studentOf(db: Db, teacherId: string, studentId: string) {

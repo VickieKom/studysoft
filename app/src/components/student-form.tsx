@@ -32,7 +32,7 @@ type Values = StudentFormValues;
 
 type Props =
   | { mode: "create" }
-  | { mode: "edit"; studentId: string; initial: Values };
+  | { mode: "edit"; studentId: string; initial: Values; hasSlots: boolean };
 
 const fieldClass = "h-10 rounded-control border border-border bg-bg px-3 outline-none focus:border-green-500";
 const areaClass = "min-h-20 rounded-control border border-border bg-bg px-3 py-2 outline-none focus:border-green-500";
@@ -185,6 +185,13 @@ export function StudentForm(props: Props) {
             </option>
           ))}
         </select>
+        {props.mode === "edit" && props.hasSlots && values.timeZone !== props.initial.timeZone && (
+          // A slot keeps its moment when the zone changes (#100): the lesson does not move by itself.
+          <p role="status" className="text-small text-text-secondary">
+            Регулярные уроки останутся в то же время для вас, а у ученика время сдвинется вместе с поясом. Если урок
+            тоже переносится, после сохранения нажмите «Изменить слот» на карточке.
+          </p>
+        )}
       </div>
       {props.mode === "edit" && (
         <div className="flex flex-col gap-1">

@@ -50,6 +50,7 @@ const slotOutput = z
     id: z.uuid(),
     weekday: z.number().int(),
     startTime: z.string(),
+    teacher: z.object({ weekday: z.number().int(), startTime: z.string() }).strict().nullable(),
     durationMinutes: z.number().int(),
     validFrom: z.iso.date(),
     validUntil: z.iso.date().nullable(),
