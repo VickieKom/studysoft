@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
+import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentSlots } from "@/components/schedule-controls";
 import { dateIn, dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
@@ -24,6 +25,7 @@ export default async function StudentCardPage({ params }: Props) {
   const { timeZone } = await caller.teacher.settings.get();
   const money = await caller.teacher.payments.get({ studentId: student.id });
   const homework = await caller.teacher.homework.list({ studentId: student.id });
+  const past = await caller.teacher.history.list({ studentId: student.id });
 
   return (
     <main>
@@ -113,6 +115,7 @@ export default async function StudentCardPage({ params }: Props) {
         </section>
       </div>
       <StudentHomework studentId={student.id} homework={homework} />
+      <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />
     </main>
   );

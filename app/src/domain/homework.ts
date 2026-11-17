@@ -23,6 +23,11 @@ export const TASK_TYPE_LABELS = {
 // The weekday as it reads after «к»: "к четвергу", "к среде". Index = getUTCDay().
 const WEEKDAY_AFTER_K = ["воскресенью", "понедельнику", "вторнику", "среде", "четвергу", "пятнице", "субботе"];
 
+/** The date of an imported submission (#38): «3 ноября», as the date was written. */
+export function formatPastDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
 /**
  * A deadline is a calendar date with no time, the same in every time zone.
  * Written to follow «к»: "четвергу, 14 ноября" for "Домашка к четвергу, 14 ноября".
@@ -66,6 +71,11 @@ export function answerFileUrl(homeworkId: string, taskIndex: number): string {
   return `/api/files/answers/${homeworkId}/${taskIndex}`;
 }
 
+/** The address of a recording or file in one attempt, current or earlier: what «Проверка домашек» plays (#93). */
+export function attemptAnswerFileUrl(homeworkId: string, attempt: number, taskIndex: number): string {
+  return `/api/files/answers/${homeworkId}/attempts/${attempt}/${taskIndex}`;
+}
+
 /** Today's calendar date in a time zone, as YYYY-MM-DD: what "today" is for the student. */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -96,7 +106,7 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
       return answer.words.join(" ");
     case "written":
       return answer.text.trim() || null;
-    // shortcut: the review names a recording or a file but does not play or show it, until the review plays them (#93)
+    // The review plays a recording and shows a photo next to these words (#93).
     case "voice":
       return "Голосовая запись";
     case "file":

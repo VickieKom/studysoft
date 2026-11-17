@@ -334,6 +334,57 @@ export const homeworkSubmission = pgTable(
   ],
 );
 
+// Past submissions imported from the teacher's old tool (#38): history to
+// read, never reviewed, reopened or counted as waiting. One per student, date
+// and homework title, so importing the same file again adds nothing.
+export const importedSubmission = pgTable(
+  "imported_submission",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    title: text("title").notNull(),
+    submittedOn: date("submitted_on").notNull(),
+    correctCount: bigint("correct_count", { mode: "number" }).notNull(),
+    wrongCount: bigint("wrong_count", { mode: "number" }).notNull(),
+    // Answers without a result: not checked in the old tool.
+    uncheckedCount: bigint("unchecked_count", { mode: "number" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "imported_submission_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    unique("imported_submission_once").on(t.teacherId, t.studentId, t.submittedOn, t.title),
+    index("imported_submission_student_id_idx").on(t.studentId),
+  ],
+);
+
+// One answer of an imported submission, as the history file gave it (#38):
+// the task's text, type and topic, the answer, the key and right or wrong.
+export const importedAnswer = pgTable(
+  "imported_answer",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => importedSubmission.id),
+    taskNumber: bigint("task_number", { mode: "number" }).notNull(),
+    type: text("type").notNull(),
+    question: text("question").notNull(),
+    answer: text("answer"),
+    correctAnswer: text("correct_answer"),
+    // Null when the old tool did not check it.
+    correct: boolean("correct"),
+    topic: text("topic"),
+  },
+  (t) => [unique("imported_answer_task_key").on(t.submissionId, t.taskNumber)],
+);
+
 // The assistant's personal token (#3; architecture 8.1). One active token per
 // teacher; creating a new one revokes the old. Only the hash is stored; the
 // token is shown to the teacher once.

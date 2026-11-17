@@ -12,6 +12,7 @@ import { linksRouter } from "./public/links";
 import { studentHomeworkRouter } from "./student/homework";
 import { parentMeRouter } from "./parent/me";
 import { studentMeRouter } from "./student/me";
+import { historyRouter } from "./teacher/history";
 import { homeworkRouter } from "./teacher/homework";
 import { libraryRouter } from "./teacher/library";
 import { paymentsRouter } from "./teacher/payments";
@@ -38,6 +39,7 @@ export const appRouter = router({
     homework: homeworkRouter,
     review: reviewRouter,
     library: libraryRouter,
+    history: historyRouter,
     schedule: scheduleRouter,
     payments: paymentsRouter,
     settings: settingsRouter,

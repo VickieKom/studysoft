@@ -3,8 +3,8 @@
 // were. A submission waits for review until the teacher has opened it and
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { answerKey, answerText } from "../../domain/homework";
-import { type HomeworkDocument, storedAnswerSchema } from "../../domain/homework-format";
+import { answerKey, answerText, attemptAnswerFileUrl } from "../../domain/homework";
+import { type HomeworkDocument, storedAnswerSchema, type Task } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 
@@ -90,6 +90,8 @@ export type ReviewTask = {
   verdict: boolean | null;
   marked: boolean | null;
   key: string | null;
+  /** A recording or file to play or show, from this submission's own attempt (#93). */
+  file: { kind: "audio" | "image"; url: string } | null;
 };
 
 export type ReviewSubmission = {
@@ -111,6 +113,133 @@ export type ReviewSubmission = {
 };
 
 const NO_TOPIC = "Без темы";
+
+type StoredRow = { taskIndex: number; answer: unknown; correct: boolean | null; mark: boolean | null };
+
+/**
+ * The tasks of one submission with the student's answers and the verdicts; a
+ * recording or file points at that submission's own attempt (#93).
+ */
+function reviewTasks(
+  submission: { homeworkId: string; attempt: number },
+  tasks: Task[],
+  answers: StoredRow[],
+): ReviewTask[] {
+  const byIndex = new Map(answers.map((a) => [a.taskIndex, a]));
+  return tasks.map((task, index) => {
+    const stored = byIndex.get(index);
+    const parsed = storedAnswerSchema.safeParse(stored?.answer);
+    const autoChecked = task.type !== "written" && task.type !== "voice" && task.type !== "file";
+    return {
+      index,
+      type: task.type,
+      prompt: task.prompt,
+      topic: task.topic ?? null,
+      answer: parsed.success ? answerText(task, parsed.data) : null,
+      autoChecked,
+      verdict: stored?.mark ?? stored?.correct ?? null,
+      marked: stored?.mark ?? null,
+      key: answerKey(task),
+      file:
+        parsed.success && (parsed.data.type === "voice" || parsed.data.type === "file") && parsed.data.type === task.type
+          ? {
+              kind: parsed.data.contentType.startsWith("image/") ? "image" : "audio",
+              url: attemptAnswerFileUrl(submission.homeworkId, submission.attempt, index),
+            }
+          : null,
+    };
+  });
+}
+
+/** Wrong answers by topic, the most frequent first. */
+function mistakesByTopic(tasks: ReviewTask[]): { topic: string; count: number }[] {
+  const mistakes = new Map<string, number>();
+  for (const task of tasks) {
+    if (task.verdict === false) mistakes.set(task.topic ?? NO_TOPIC, (mistakes.get(task.topic ?? NO_TOPIC) ?? 0) + 1);
+  }
+  return [...mistakes].map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
+}
+
+/** How many of the latest submitted homework the student context carries (#44). */
+export const CONTEXT_HOMEWORK = 3;
+
+export type RecentHomework = {
+  title: string;
+  submittedAt: Date;
+  /** The teacher's comment, null when she has written none. */
+  comment: string | null;
+  tasks: {
+    prompt: string;
+    type: Task["type"];
+    topic: string | null;
+    source: NonNullable<Task["source"]> | null;
+    answer: string | null;
+    /** The teacher's mark if any, else the platform's result; null while it waits for her. */
+    correct: boolean | null;
+    markedByTeacher: boolean;
+  }[];
+};
+
+/**
+ * The student's latest submitted homework for the assistant (#44), newest
+ * first: each with its latest attempt, the answers as text and right or wrong,
+ * and the wrong answers by topic across them. No keys: the assistant gets what
+ * the student answered, not the expected answers. A homework published but
+ * not submitted is not here; a reopened one shows the attempt it was
+ * submitted with.
+ */
+export async function recentResults(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+): Promise<{ recentHomework: RecentHomework[]; mistakesByTopic: { topic: string; count: number }[] }> {
+  const latest = await db
+    .selectDistinctOn([homeworkSubmission.homeworkId], {
+      homeworkId: homework.id,
+      title: homework.title,
+      document: homework.document,
+      comment: homework.reviewComment,
+      attempt: homeworkSubmission.attempt,
+      submittedAt: homeworkSubmission.submittedAt,
+    })
+    .from(homeworkSubmission)
+    .innerJoin(homework, eq(homework.id, homeworkSubmission.homeworkId))
+    .where(and(eq(homework.teacherId, teacherId), eq(homework.studentId, studentId)))
+    .orderBy(homeworkSubmission.homeworkId, desc(homeworkSubmission.attempt));
+  const chosen = latest.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime()).slice(0, CONTEXT_HOMEWORK);
+
+  const all: ReviewTask[] = [];
+  const recentHomework: RecentHomework[] = [];
+  for (const row of chosen) {
+    const answers = await db
+      .select({
+        taskIndex: homeworkAnswer.taskIndex,
+        answer: homeworkAnswer.answer,
+        correct: homeworkAnswer.correct,
+        mark: homeworkAnswer.teacherMark,
+      })
+      .from(homeworkAnswer)
+      .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
+    const document = (row.document as HomeworkDocument).tasks;
+    const tasks = reviewTasks(row, document, answers);
+    all.push(...tasks);
+    recentHomework.push({
+      title: row.title,
+      submittedAt: row.submittedAt,
+      comment: row.comment?.trim() ? row.comment : null,
+      tasks: tasks.map((task, index) => ({
+        prompt: task.prompt,
+        type: document[index]!.type,
+        topic: task.topic,
+        source: document[index]!.source ?? null,
+        answer: task.answer,
+        correct: task.verdict,
+        markedByTeacher: task.marked !== null,
+      })),
+    });
+  }
+  return { recentHomework, mistakesByTopic: mistakesByTopic(all) };
+}
 
 /** One submission of this teacher with every answer, or null. */
 export async function findSubmission(db: Database, teacherId: string, id: string): Promise<ReviewSubmission | null> {
@@ -146,29 +275,7 @@ export async function findSubmission(db: Database, teacherId: string, id: string
     })
     .from(homeworkAnswer)
     .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
-  const byIndex = new Map(answers.map((a) => [a.taskIndex, a]));
-
-  const tasks: ReviewTask[] = (row.document as HomeworkDocument).tasks.map((task, index) => {
-    const stored = byIndex.get(index);
-    const parsed = storedAnswerSchema.safeParse(stored?.answer);
-    const autoChecked = task.type !== "written" && task.type !== "voice" && task.type !== "file";
-    return {
-      index,
-      type: task.type,
-      prompt: task.prompt,
-      topic: task.topic ?? null,
-      answer: parsed.success ? answerText(task, parsed.data) : null,
-      autoChecked,
-      verdict: stored?.mark ?? stored?.correct ?? null,
-      marked: stored?.mark ?? null,
-      key: answerKey(task),
-    };
-  });
-
-  const mistakes = new Map<string, number>();
-  for (const task of tasks) {
-    if (task.verdict === false) mistakes.set(task.topic ?? NO_TOPIC, (mistakes.get(task.topic ?? NO_TOPIC) ?? 0) + 1);
-  }
+  const tasks = reviewTasks(row, (row.document as HomeworkDocument).tasks, answers);
 
   const attempts = await db
     .select({
@@ -197,7 +304,7 @@ export async function findSubmission(db: Database, teacherId: string, id: string
     pending: row.pending,
     comment: row.comment ?? "",
     tasks,
-    mistakesByTopic: [...mistakes].map(([topic, count]) => ({ topic, count })),
+    mistakesByTopic: mistakesByTopic(tasks),
     attempts,
   };
 }

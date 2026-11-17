@@ -203,6 +203,19 @@ export type WeekLesson = {
 
 const markColumns = { status: lesson.status, charged: lesson.charged, unit: lesson.unit, note: lesson.note };
 
+const weekColumns = {
+  id: lesson.id,
+  studentId: lesson.studentId,
+  studentName: student.firstName,
+  studentTimeZone: student.timeZone,
+  startsAt: lesson.startsAt,
+  durationMinutes: lesson.durationMinutes,
+  kind: lesson.kind,
+  ...markColumns,
+  movedFrom: lesson.movedFrom,
+  meetingLink: lesson.meetingLink,
+};
+
 /** A lesson that has ended and is not marked yet asks to be marked (#82). */
 export function needsMark(l: { status: string; startsAt: Date; durationMinutes: number }, now: Date = new Date()): boolean {
   return l.status === "scheduled" && l.startsAt.getTime() + l.durationMinutes * 60_000 <= now.getTime();
@@ -280,21 +293,27 @@ export async function weekLessons(db: Database, teacherId: string, monday: strin
   const from = zonedMoment(monday, "00:00", zone);
   const to = zonedMoment(addDays(monday, 7), "00:00", zone);
   const lessons: WeekLesson[] = await db
-    .select({
-      id: lesson.id,
-      studentId: lesson.studentId,
-      studentName: student.firstName,
-      studentTimeZone: student.timeZone,
-      startsAt: lesson.startsAt,
-      durationMinutes: lesson.durationMinutes,
-      kind: lesson.kind,
-      ...markColumns,
-      movedFrom: lesson.movedFrom,
-      meetingLink: lesson.meetingLink,
-    })
+    .select(weekColumns)
     .from(lesson)
     .innerJoin(student, and(eq(student.id, lesson.studentId), isNull(student.deletedAt)))
     .where(and(eq(lesson.teacherId, teacherId), gte(lesson.startsAt, from), lt(lesson.startsAt, to)))
+    .orderBy(asc(lesson.startsAt));
+  return { timeZone: zone, lessons };
+}
+
+/**
+ * «Список» (#85): the lessons that have not started yet, in time order, after
+ * topping up the lessons ahead. A cancelled lesson is not coming, so it is
+ * not here; the week still shows it.
+ */
+export async function upcomingLessons(db: Database, teacherId: string, now: Date = new Date()) {
+  await topUpLessons(db, teacherId, now);
+  const zone = await teacherTimeZone(db, teacherId);
+  const lessons: WeekLesson[] = await db
+    .select(weekColumns)
+    .from(lesson)
+    .innerJoin(student, and(eq(student.id, lesson.studentId), isNull(student.deletedAt)))
+    .where(and(eq(lesson.teacherId, teacherId), gt(lesson.startsAt, now), ne(lesson.status, "cancelled")))
     .orderBy(asc(lesson.startsAt));
   return { timeZone: zone, lessons };
 }

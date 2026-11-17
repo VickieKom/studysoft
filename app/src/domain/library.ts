@@ -22,5 +22,5 @@ export const MAX_TOPIC_LENGTH = 100;
  * storage, no access to the page around it. Forms, dialogs and pointer lock
  * are what self-made games use.
  */
-// shortcut: games may load scripts from the network (AI-made games often use a CDN); whether to forbid it is decided with the maintainer (#115)
+// shortcut: games may load scripts from the network (AI-made games often use a CDN); whether to forbid it is decided with the maintainer (#125)
 export const GAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-pointer-lock";
