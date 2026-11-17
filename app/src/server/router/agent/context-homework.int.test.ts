@@ -43,7 +43,8 @@ async function newStudent(firstName: string) {
 
 async function published(studentId: string, title: string) {
   const { id } = await teacher.teacher.homework.import({ studentId, json: json({ ...review, title }) });
-  await teacher.teacher.homework.publish({ id, dueDate: inDays(3) });
+  const { revision } = await teacher.teacher.homework.get({ id });
+  await teacher.teacher.homework.publish({ id, revision, dueDate: inDays(3) });
   return id;
 }
 
