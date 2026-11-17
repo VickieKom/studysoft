@@ -50,7 +50,7 @@ test("the profile fields are saved and shown on the card", async ({ page }) => {
 
   await page.goto(card);
   for (const value of Object.values(profile)) {
-    await expect(page.getByText(value, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(value, { exact: true })).toBeVisible();
   }
 });
 
