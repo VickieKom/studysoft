@@ -63,7 +63,7 @@ async function createStudent(page: Page, firstName: string): Promise<string> {
 async function addSlot(page: Page, day: string, time: string) {
   await control(page, "Добавить слот").click();
   await page.getByLabel("День недели").selectOption({ label: day });
-  await page.getByLabel("Время").fill(time);
+  await page.getByLabel("Время", { exact: true }).fill(time);
   await page.getByRole("button", { name: "Сохранить слот", exact: true }).click();
   // Saved before the scenario moves on: the card lists the slot.
   await expect(page.getByText(new RegExp(`${day}, ${time}`))).toBeVisible();
@@ -76,7 +76,7 @@ async function addLesson(page: Page, firstName: string, date: Date, time: string
   await control(page, "+ Урок").click();
   await page.getByLabel("Ученик").selectOption({ label: firstName });
   await page.getByLabel("Дата").fill(isoDate(date));
-  await page.getByLabel("Время").fill(time);
+  await page.getByLabel("Время", { exact: true }).fill(time);
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
   // Saved before the scenario moves on: the form has closed and «+ Урок» is back.
   await expect(control(page, "+ Урок")).toBeVisible();

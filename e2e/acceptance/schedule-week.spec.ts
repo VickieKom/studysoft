@@ -55,7 +55,7 @@ async function createStudent(page: Page, firstName: string): Promise<string> {
 async function addSlot(page: Page, weekday: string, time: string, duration?: string) {
   await control(page, "Добавить слот").click();
   await page.getByLabel("День недели").selectOption({ label: weekday });
-  await page.getByLabel("Время").fill(time);
+  await page.getByLabel("Время", { exact: true }).fill(time);
   if (duration) await page.getByLabel("Длительность").selectOption({ label: duration });
   await page.getByRole("button", { name: "Сохранить слот", exact: true }).click();
   // Saved before the scenario moves on: the card lists the slot.
@@ -114,7 +114,7 @@ test("«+ Урок» adds a one-off lesson, which can be an introductory one", a
   await control(page, "+ Урок").click();
   await page.getByLabel("Ученик").selectOption({ label: "Разовый" });
   await page.getByLabel("Дата").fill(isoDate(date));
-  await page.getByLabel("Время").fill("10:00");
+  await page.getByLabel("Время", { exact: true }).fill("10:00");
   await page.getByLabel("Длительность").selectOption({ label: "45 мин" });
   await page.getByLabel("Вводный урок").check();
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
