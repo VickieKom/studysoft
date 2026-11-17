@@ -26,6 +26,8 @@ import {
   materialTopics,
   updateMaterial,
 } from "../../library/library";
+import { gameOpenedTo, openGameToStudent, studentsInLesson } from "../../library/student-games";
+import { teacherTimeZone } from "../../access/settings";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -151,6 +153,46 @@ export const libraryRouter = router({
       const created = await createVideoFile(ctx.db, ctx.teacherId, rest, file.toLowerCase());
       if (created === "no_file") throw new TRPCError({ code: "BAD_REQUEST", message: "Не нашли загруженное видео. Загрузите файл ещё раз" });
       return created;
+    }),
+
+  /** Students with a lesson going on now: the ones a game can be opened to (#118). */
+  studentsInLesson: teacherProcedure
+    .output(z.array(z.object({ studentId: z.uuid(), name: z.string() }).strict()))
+    .query(({ ctx }) => studentsInLesson(ctx.db, ctx.teacherId)),
+
+  /** Whom a game is open to now, until when, and the teacher's time zone to show it in (#118). */
+  openedTo: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(
+      z
+        .object({
+          timeZone: z.string(),
+          students: z.array(z.object({ name: z.string(), until: z.iso.datetime() }).strict()),
+        })
+        .strict(),
+    )
+    .query(async ({ ctx, input }) => {
+      if (!(await findMaterial(ctx.db, ctx.teacherId, input.id))) throw notFound();
+      return {
+        timeZone: await teacherTimeZone(ctx.db, ctx.teacherId),
+        students: (await gameOpenedTo(ctx.db, ctx.teacherId, input.id)).map((s) => ({ ...s, until: s.until.toISOString() })),
+      };
+    }),
+
+  /**
+   * «Открыть ученику» (#118): opens a game to a student while a lesson of
+   * theirs is going on, until an hour after it ends. A missing or another
+   * teacher's game is NOT_FOUND; a video, or a student without a lesson now
+   * (another teacher's included), is refused with a message.
+   */
+  openToStudent: teacherProcedure
+    .input(z.object({ id: z.uuid(), studentId: z.uuid() }))
+    .output(z.object({ until: z.iso.datetime() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await findMaterial(ctx.db, ctx.teacherId, input.id))) throw notFound();
+      const until = await openGameToStudent(ctx.db, ctx.teacherId, input.id, input.studentId.toLowerCase());
+      if (!until) throw new TRPCError({ code: "BAD_REQUEST", message: "Открыть игру можно, пока идёт урок с этим учеником" });
+      return { until: until.toISOString() };
     }),
 
   /** A warm-up: a picture (base64, PNG, JPEG or WebP, at most 2 MB) or a list of questions (#116). */
