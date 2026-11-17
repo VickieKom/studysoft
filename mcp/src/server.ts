@@ -34,7 +34,8 @@ server.registerTool(
     title: "Student context",
     description:
       "What the teacher knows about a student for preparing homework: first name, age, school year, CEFR level, " +
-      "textbook and current unit, interests, what works, gaps, and the latest notes.",
+      "textbook and current unit, interests, what works, gaps, the latest notes, and the latest submitted homework " +
+      "with the answers, right or wrong, and the mistakes by topic, to repeat what was hard.",
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),
