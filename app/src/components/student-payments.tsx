@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { CURRENCIES, type Currency, formatMoney, PAYMENT_FORMATS, type PaymentFormat } from "@/domain/payments";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
@@ -35,7 +35,8 @@ const dayMonth = (date: string) =>
 /**
  * «Оплаты» on the card (#83): the payment format, the price and its currency
  * from a date, payments, and the balance — for a prepaid student; a postpaid
- * one shows only a debt, a free one neither. Teacher only.
+ * one shows only a debt, a free one neither. Teacher only. A payment can be
+ * corrected or, after «Удалить оплату?», deleted (#101).
  */
 export function StudentPayments({ studentId, today, terms, payments, balance, runningOut }: Props) {
   const router = useRouter();
@@ -45,7 +46,11 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
   const [validFrom, setValidFrom] = useState(today);
   const [termsState, setTermsState] = useState<"idle" | "saved" | string>("idle");
 
+  // One payment form at a time: a new payment, or the one being corrected.
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const confirm = useRef<HTMLDialogElement>(null);
   const [paidOn, setPaidOn] = useState(today);
   const [amount, setAmount] = useState("");
   const [comment, setComment] = useState("");
@@ -75,17 +80,45 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
     }
   }
 
+  function openForm(edited?: Props["payments"][number]) {
+    setPaymentError(null);
+    setEditing(edited?.id ?? null);
+    setAdding(!edited);
+    setPaidOn(edited?.paidOn ?? today);
+    setAmount(edited ? major(edited.amountMinor) : "");
+    setComment(edited?.comment ?? "");
+  }
+
+  function closeForm() {
+    setAdding(false);
+    setEditing(null);
+  }
+
   async function onPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPaymentError(null);
     try {
-      await routerClient.teacher.payments.addPayment.mutate({ studentId, amount, paidOn, comment });
-      setAdding(false);
+      if (editing) await routerClient.teacher.payments.updatePayment.mutate({ id: editing, amount, paidOn, comment });
+      else await routerClient.teacher.payments.addPayment.mutate({ studentId, amount, paidOn, comment });
+      closeForm();
       setAmount("");
       setComment("");
       router.refresh();
     } catch (cause) {
       setPaymentError(message(cause, "Не получилось сохранить оплату"));
+    }
+  }
+
+  async function onDelete() {
+    if (!deleting) return;
+    try {
+      await routerClient.teacher.payments.deletePayment.mutate({ id: deleting });
+      confirm.current?.close();
+      setDeleting(null);
+      router.refresh();
+    } catch {
+      setPaymentError("Не получилось удалить оплату. Обновите страницу и попробуйте ещё раз");
+      confirm.current?.close();
     }
   }
 
@@ -156,7 +189,7 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
       </form>
 
       {!free &&
-        (adding ? (
+        (adding || editing ? (
           <form onSubmit={onPayment} className="flex flex-wrap items-end gap-3">
             <Labelled id="payment-date" label="Дата">
               <input id="payment-date" type="date" required value={paidOn} onChange={(e) => setPaidOn(e.target.value)} className={field} />
@@ -175,7 +208,7 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
               <input id="payment-comment" value={comment} onChange={(e) => setComment(e.target.value)} className={field} />
             </Labelled>
             <Button type="submit">Сохранить оплату</Button>
-            <Button variant="secondary" onClick={() => setAdding(false)}>
+            <Button variant="secondary" onClick={closeForm}>
               Отмена
             </Button>
             {paymentError && (
@@ -185,21 +218,63 @@ export function StudentPayments({ studentId, today, terms, payments, balance, ru
             )}
           </form>
         ) : (
-          <Button variant="secondary" className="self-start" onClick={() => setAdding(true)}>
+          <Button variant="secondary" className="self-start" onClick={() => openForm()}>
             Добавить оплату
           </Button>
         ))}
 
       {!free && payments.length > 0 && terms && (
-        <ul className="flex flex-col gap-1 text-small">
+        <ul aria-label="Оплаты ученика" className="flex flex-col gap-1 text-small">
           {payments.map((p) => (
-            <li key={p.id}>
-              {dayMonth(p.paidOn)} · {formatMoney(p.amountMinor, terms.currency)}
-              {p.comment && ` · ${p.comment}`}
+            <li key={p.id} className="flex flex-wrap items-center gap-x-3">
+              <span>
+                {dayMonth(p.paidOn)} · {formatMoney(p.amountMinor, terms.currency)}
+                {p.comment && ` · ${p.comment}`}
+              </span>
+              {!adding && !editing && (
+                <>
+                  <button type="button" onClick={() => openForm(p)} className="text-green-600 hover:text-green-700">
+                    Изменить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentError(null);
+                      setDeleting(p.id);
+                      confirm.current?.showModal();
+                    }}
+                    className="text-danger hover:underline"
+                  >
+                    Удалить
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {paymentError && !adding && !editing && (
+        <p role="alert" className="text-small text-danger">
+          {paymentError}
+        </p>
+      )}
+      <dialog
+        ref={confirm}
+        aria-labelledby="payment-delete-title"
+        onClose={() => setDeleting(null)}
+        className="rounded-card border border-border p-6 backdrop:bg-black/30"
+      >
+        <h2 id="payment-delete-title" className="text-h3 font-semibold">
+          Удалить оплату?
+        </h2>
+        <p className="mt-2 text-small text-text-secondary">Баланс пересчитается без неё.</p>
+        <div className="mt-4 flex gap-3">
+          <Button onClick={onDelete}>Удалить</Button>
+          <Button variant="secondary" onClick={() => confirm.current?.close()}>
+            Отмена
+          </Button>
+        </div>
+      </dialog>
       {terms && !free && (
         <p className="text-small text-text-muted">
           Сейчас: {PAYMENT_FORMATS.find((f) => f.id === terms.format)?.label}, {formatMoney(terms.priceMinor, terms.currency)}{" "}
