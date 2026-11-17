@@ -59,6 +59,7 @@ const submission = z
           verdict: z.boolean().nullable(),
           marked: z.boolean().nullable(),
           key: z.string().nullable(),
+          file: z.object({ kind: z.enum(["audio", "image"]), url: z.string() }).strict().nullable(),
         })
         .strict(),
     ),

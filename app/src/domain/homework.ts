@@ -71,6 +71,11 @@ export function answerFileUrl(homeworkId: string, taskIndex: number): string {
   return `/api/files/answers/${homeworkId}/${taskIndex}`;
 }
 
+/** The address of a recording or file in one attempt, current or earlier: what «Проверка домашек» plays (#93). */
+export function attemptAnswerFileUrl(homeworkId: string, attempt: number, taskIndex: number): string {
+  return `/api/files/answers/${homeworkId}/attempts/${attempt}/${taskIndex}`;
+}
+
 /** Today's calendar date in a time zone, as YYYY-MM-DD: what "today" is for the student. */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -101,7 +106,7 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
       return answer.words.join(" ");
     case "written":
       return answer.text.trim() || null;
-    // shortcut: the review names a recording or a file but does not play or show it, until the review plays them (#93)
+    // The review plays a recording and shows a photo next to these words (#93).
     case "voice":
       return "Голосовая запись";
     case "file":

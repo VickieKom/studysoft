@@ -262,4 +262,71 @@ describe("open answers", () => {
     // A new upload goes to the new attempt.
     expect((await put(headers, id, "3", PNG)).status).toBe(200);
   });
+
+  it("serves each attempt's own recording to the review, and the same 404 as a missing file to anyone else (#93)", async () => {
+    const { id, studentId, headers, student } = await studentWithHomework("Попытки записи");
+    const first = webmRecording(1.5);
+    expect((await put(headers, id, "2", first)).status).toBe(200);
+    expect((await put(headers, id, "3", PNG)).status).toBe(200);
+    await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() });
+    const firstSubmission = (await teacher.teacher.review.list({ studentId }))[0]!.submissionId!;
+    await teacher.teacher.review.reopen({ id: firstSubmission });
+    // iOS Safari records MP4 (architecture 11.1).
+    const second = mp4Recording(2);
+    expect((await put(headers, id, "2", second, { "Content-Type": "audio/mp4" })).status).toBe(200);
+    await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() });
+
+    const earlier = await teacher.teacher.review.get({ id: firstSubmission });
+    expect(earlier.tasks[2]!.file).toEqual({ kind: "audio", url: `/api/files/answers/${id}/attempts/1/2` });
+    expect(earlier.tasks[3]!.file).toEqual({ kind: "image", url: `/api/files/answers/${id}/attempts/1/3` });
+    expect(earlier.tasks[1]!.file).toBeNull();
+    const current = (await teacher.teacher.review.list({ studentId }))[0]!.submissionId!;
+    expect((await teacher.teacher.review.get({ id: current })).tasks[2]!.file?.url).toBe(`/api/files/answers/${id}/attempts/2/2`);
+    // The second attempt has no photo.
+    expect((await teacher.teacher.review.get({ id: current })).tasks[3]!.file).toBeNull();
+
+    const attemptFile = async (requestHeaders: Headers, attempt: string, task: string, extra: Record<string, string> = {}) => {
+      const response = await handleAnswerFileRequest(
+        new Request(`${env().APP_URL}/api/files/answers/${id}/attempts/${attempt}/${task}`, {
+          headers: { cookie: requestHeaders.get("cookie") ?? "", ...extra },
+        }),
+        id,
+        task,
+        attempt,
+      );
+      return {
+        status: response.status,
+        type: response.headers.get("Content-Type"),
+        range: response.headers.get("Content-Range"),
+        body: Buffer.from(await response.arrayBuffer()),
+      };
+    };
+    expect((await attemptFile(teacherHeaders, "1", "2")).body.equals(first)).toBe(true);
+    const played = await attemptFile(teacherHeaders, "2", "2");
+    expect(played).toMatchObject({ status: 200, type: "audio/mp4" });
+    expect(played.body.equals(second)).toBe(true);
+    // Byte ranges, as Safari asks for them.
+    expect(await attemptFile(teacherHeaders, "1", "2", { Range: "bytes=0-1" })).toMatchObject({
+      status: 206,
+      range: `bytes 0-1/${first.length}`,
+    });
+    // The address without an attempt still serves the current one, as the student's page uses it.
+    expect((await get(teacherHeaders, id, "2")).body.equals(second)).toBe(true);
+
+    const missing = await attemptFile(teacherHeaders, "2", "3");
+    expect(missing.status).toBe(404);
+    for (const [requestHeaders, attempt] of [
+      [await signedInHeaders(teacherB), "1"],
+      [new Headers(), "1"],
+      [teacherHeaders, "3"],
+      [teacherHeaders, "0"],
+      [teacherHeaders, "x"],
+    ] as const) {
+      const response = await attemptFile(requestHeaders, attempt, "2");
+      expect({ status: response.status, body: response.body.toString() }).toEqual({
+        status: 404,
+        body: missing.body.toString(),
+      });
+    }
+  });
 });

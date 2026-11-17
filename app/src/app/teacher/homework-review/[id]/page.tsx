@@ -63,6 +63,11 @@ export default async function SubmissionPage({ params }: Props) {
             <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
               {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
             </p>
+            {task.file?.kind === "audio" && <audio controls preload="metadata" src={task.file.url} className="mt-2 w-full" />}
+            {task.file?.kind === "image" && (
+              // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
+              <img src={task.file.url} alt={`Фото к заданию ${task.index + 1}`} className="mt-2 max-h-96 rounded-control border border-border" />
+            )}
             {task.verdict === false && task.key && (
               <p className="mt-1 text-small text-green-700">Правильный ответ: {task.key}</p>
             )}
