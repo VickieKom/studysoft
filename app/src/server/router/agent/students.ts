@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { TASK_TYPES, taskSourceSchema } from "../../../domain/homework-format";
 import { LEVELS, STATUSES } from "../../../domain/student";
 import { buildStudentContext } from "../../crm/context";
 import { listStudents } from "../../crm/students";
@@ -21,6 +22,29 @@ const studentContext = z
     whatWorks: z.string().nullable(),
     gaps: z.string().nullable(),
     notes: z.array(z.object({ body: z.string(), createdAt: z.iso.datetime() }).strict()),
+    recentHomework: z.array(
+      z
+        .object({
+          title: z.string(),
+          submittedAt: z.iso.datetime(),
+          comment: z.string().nullable(),
+          tasks: z.array(
+            z
+              .object({
+                prompt: z.string(),
+                type: z.enum(TASK_TYPES),
+                topic: z.string().nullable(),
+                source: taskSourceSchema.nullable(),
+                answer: z.string().nullable(),
+                correct: z.boolean().nullable(),
+                markedByTeacher: z.boolean(),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    ),
+    mistakesByTopic: z.array(z.object({ topic: z.string(), count: z.number().int() }).strict()),
   })
   .strict();
 
@@ -44,6 +68,7 @@ export const agentStudentsRouter = router({
         ...context,
         level: context.level as (typeof LEVELS)[number],
         notes: context.notes.map((note) => ({ body: note.body, createdAt: note.createdAt.toISOString() })),
+        recentHomework: context.recentHomework.map((h) => ({ ...h, submittedAt: h.submittedAt.toISOString() })),
       };
     }),
 });

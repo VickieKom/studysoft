@@ -7,7 +7,7 @@ Connects the teacher's AI assistant to the platform (#3). The assistant runs in 
 | Tool | What it returns |
 |------|-----------------|
 | `list_students` | The teacher's students: id, first name, status |
-| `get_student_context` | For one student: first name, age, school year, CEFR level, textbook and current unit, interests, what works, gaps, and the latest 5 notes |
+| `get_student_context` | For one student: first name, age, school year, CEFR level, textbook and current unit, interests, what works, gaps, the latest 5 notes, and the latest 3 submitted homework (each task with its topic, source, the answer, right or wrong, the teacher's mark and comment) with the mistakes by topic across them |
 | `get_homework_format` | The homework format the platform accepts, with its version (the text of `docs/homework-format.md`) |
 | `save_homework_draft` | Saves a homework for a student as a draft marked «от ассистента»; replaces the assistant's draft until the teacher edits it, then makes a new one. Never publishes (#43) |
 | `read_homework_draft` | The assistant's latest draft for a student, as the teacher may have changed it |

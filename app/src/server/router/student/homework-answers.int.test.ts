@@ -46,7 +46,7 @@ async function studentWithHomework(firstName: string) {
   );
   const cookie = response.headers.getSetCookie().find((c) => c.startsWith(`${LINK_SESSION_COOKIES.student}=`))!.split(";")[0]!;
   const { id } = await teacher.teacher.homework.import({ studentId, json: json(openAnswers) });
-  await teacher.teacher.homework.publish({ id, dueDate: inDays(3) });
+  await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(3) });
   return { id, studentId, headers: new Headers({ cookie }), student: createServerCaller(new Headers({ cookie })) };
 }
 
@@ -81,6 +81,9 @@ beforeAll(async () => {
 });
 
 afterAll(closeDb);
+
+// The revision the teacher's page sends back with publishing and saving tasks (#99).
+const revisionOf = async (id: string) => (await teacher.teacher.homework.get({ id })).revision;
 
 describe("open answers", () => {
   it("keeps a written answer and refuses one that does not fit its task", async () => {

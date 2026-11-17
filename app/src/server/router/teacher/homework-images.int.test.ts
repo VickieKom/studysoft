@@ -91,6 +91,9 @@ beforeAll(async () => {
 
 afterAll(closeDb);
 
+// The revision the teacher's page sends back with publishing and saving tasks (#99).
+const revisionOf = async (id: string) => (await teacher.teacher.homework.get({ id })).revision;
+
 describe("pictures in homework", () => {
   it("are stored on import and served to the teacher, and to the student only in their published homework", async () => {
     const own = await student("Картинка");
@@ -110,7 +113,7 @@ describe("pictures in homework", () => {
     // A draft: not even its own student.
     expect(await fetchImage(own.headers, id, "0")).toEqual(missing);
 
-    await teacher.teacher.homework.publish({ id, dueDate: inDays(2) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(2) });
     expect((await fetchImage(own.headers, id, "0")).status).toBe(200);
     const opened = await own.caller.student.homework.open({ id });
     expect(opened.tasks[0]!.image).toBe(`/api/files/homework/${id}/0`);
@@ -150,6 +153,7 @@ describe("pictures in homework", () => {
 
     const { tasks } = await teacher.teacher.homework.updateTasks({
       id,
+      revision: await revisionOf(id),
       tasks: [kept, { ...kept, prompt: "New", image: PNG }],
     });
     expect(tasks[0]!.image).toBe(kept!.image);
@@ -157,11 +161,11 @@ describe("pictures in homework", () => {
     expect(tasks[1]!.image).not.toBe(kept!.image);
     expect((await fetchImage(teacherHeaders, id, "1")).status).toBe(200);
 
-    await expect(teacher.teacher.homework.updateTasks({ id, tasks: [foreign] })).rejects.toMatchObject({
+    await expect(teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [foreign] })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: expect.stringMatching(/^Задание 1, поле image/),
     });
-    await expect(otherTeacher.teacher.homework.updateTasks({ id, tasks: [kept] })).rejects.toMatchObject({
+    await expect(otherTeacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [kept] })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -183,7 +187,7 @@ describe("pictures in homework", () => {
 
     // «Ниже» on the first task: the same address now has the other picture.
     const [a, b] = (await teacher.teacher.homework.get({ id })).tasks;
-    await teacher.teacher.homework.updateTasks({ id, tasks: [b, a] });
+    await teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [b, a] });
     const moved = await fetchWithTag(teacherHeaders, id, "0", first.etag!);
     expect(moved.status).toBe(200);
     expect(moved.etag).not.toBe(first.etag);
