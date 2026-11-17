@@ -13,6 +13,7 @@ import { studentHomeworkRouter } from "./student/homework";
 import { parentMeRouter } from "./parent/me";
 import { studentMeRouter } from "./student/me";
 import { homeworkRouter } from "./teacher/homework";
+import { libraryRouter } from "./teacher/library";
 import { paymentsRouter } from "./teacher/payments";
 import { reviewRouter } from "./teacher/review";
 import { scheduleRouter, settingsRouter } from "./teacher/schedule";
@@ -36,6 +37,7 @@ export const appRouter = router({
     links: linksTeacherRouter,
     homework: homeworkRouter,
     review: reviewRouter,
+    library: libraryRouter,
     schedule: scheduleRouter,
     payments: paymentsRouter,
     settings: settingsRouter,
@@ -67,6 +69,7 @@ export { handleHomeworkImageRequest } from "../homework/images";
 
 /** A student's recordings and files for homework tasks: uploaded by the student, served to them and their teacher (#35). */
 export { handleAnswerFileRequest, handleAnswerFileUpload } from "../homework/answer-files";
+export { handleLibraryFileRequest } from "../library/files";
 
 /** True when a procedure refused because there is no valid session. */
 export function isUnauthorized(error: unknown): boolean {

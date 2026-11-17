@@ -373,6 +373,30 @@ export const blob = pgTable(
   (t) => [index("blob_teacher_id_idx").on(t.teacherId)],
 );
 
+// The teacher's library (#115): games now, warm-ups and videos next. A game
+// is one HTML file in the blob store; the tags are what the filters read.
+export const libraryMaterial = pgTable(
+  "library_material",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    level: text("level").notNull(),
+    // Free text, as in the homework format; the filter offers the ones in use.
+    topic: text("topic"),
+    ageGroup: text("age_group").notNull(),
+    blobId: uuid("blob_id")
+      .notNull()
+      .references(() => blob.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("library_material_teacher_id_idx").on(t.teacherId)],
+);
+
 // A student's weekly slot (#80; architecture 8.6): a weekday and a local time
 // in the student's time zone, so a lesson stays "Tuesday at 17:00" for the
 // student when clocks change. Lessons are created from it ahead of time.

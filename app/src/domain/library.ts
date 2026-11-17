@@ -1,0 +1,26 @@
+// Values shared by the library's screens and its server validation (#115).
+
+/** Material types; textbooks and characters come later (#6, stage 3). */
+export const MATERIAL_KINDS = ["game", "warmup", "video"] as const;
+export type MaterialKind = (typeof MATERIAL_KINDS)[number];
+/** The type filter, plural as the filter reads. */
+export const MATERIAL_KIND_FILTERS: Record<MaterialKind, string> = { game: "Игры", warmup: "Разминки", video: "Видео" };
+
+/** Age groups the teacher works with (product vision, section 3). */
+export const AGE_GROUPS = ["younger", "teens"] as const;
+export type AgeGroup = (typeof AGE_GROUPS)[number];
+export const AGE_GROUP_LABELS: Record<AgeGroup, string> = { younger: "младшие", teens: "подростки" };
+
+/** A game is one self-contained HTML file, as AI chats save them. */
+export const MAX_GAME_BYTES = 5 * 1024 * 1024;
+export const MAX_TITLE_LENGTH = 200;
+export const MAX_TOPIC_LENGTH = 100;
+
+/**
+ * The sandbox a game runs in, framed and when its address is opened (#115).
+ * Without allow-same-origin the page gets an opaque origin: no cookies, no
+ * storage, no access to the page around it. Forms, dialogs and pointer lock
+ * are what self-made games use.
+ */
+// shortcut: games may load scripts from the network (AI-made games often use a CDN); whether to forbid it is decided with the maintainer (#115)
+export const GAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-pointer-lock";
