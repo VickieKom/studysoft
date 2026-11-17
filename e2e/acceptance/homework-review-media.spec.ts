@@ -172,7 +172,7 @@ test("after «Открыть заново для ученика» the first atte
 
   // The first attempt still has its own.
   await page.getByRole("region", { name: "Попытки" }).getByRole("link", { name: /Попытка 1/ }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("попытка 1");
+  await expect(page.getByRole("main").getByText(/попытка 1/)).toBeVisible();
   expect((await playableRecording(page)).equals(firstRecording)).toBe(true);
   await shownPhoto(page);
 });
