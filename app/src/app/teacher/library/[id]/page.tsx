@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LibraryDelete } from "@/components/library-delete";
+import { LibraryOpenToStudent } from "@/components/library-open-to-student";
 import { AGE_GROUP_LABELS, GAME_SANDBOX, MATERIAL_KIND_FILTERS } from "@/domain/library";
+import { timeIn } from "@/domain/schedule";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
 
@@ -15,6 +17,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * One material (#115). A game runs in a sandboxed frame — scripts, but an
  * origin of its own — so it cannot reach this page or the platform's cookies.
  * A warm-up (#116) is its picture, full width, or its list of questions.
+ * During a lesson the teacher opens it to the student (#118).
  */
 export default async function MaterialPage({ params }: Props) {
   const { id } = await params;
@@ -27,6 +30,10 @@ export default async function MaterialPage({ params }: Props) {
     if (isNotFound(error)) notFound();
     throw error;
   }
+  const isGame = material.kind === "game";
+  const [inLesson, opened] = isGame
+    ? await Promise.all([caller.teacher.library.studentsInLesson(), caller.teacher.library.openedTo({ id })])
+    : [[], null];
 
   return (
     <main className="flex flex-col gap-4">
@@ -56,6 +63,16 @@ export default async function MaterialPage({ params }: Props) {
           <LibraryDelete id={material.id} />
         </div>
       </header>
+      {isGame && (
+        <div className="flex flex-col gap-2">
+          {opened?.students.map((s) => (
+            <p key={s.name} className="text-small text-text-secondary">
+              Открыта ученику: {s.name} до {timeIn(new Date(s.until), opened.timeZone)}
+            </p>
+          ))}
+          <LibraryOpenToStudent id={material.id} students={inLesson} />
+        </div>
+      )}
       {material.questions ? (
         <ol aria-label="Вопросы" className="flex list-decimal flex-col gap-3 pl-6 text-h3">
           {material.questions.map((question, i) => (

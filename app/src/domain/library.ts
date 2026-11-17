@@ -13,6 +13,8 @@ export const AGE_GROUP_LABELS: Record<AgeGroup, string> = { younger: "младш
 
 /** A game is one self-contained HTML file, as AI chats save them. */
 export const MAX_GAME_BYTES = 5 * 1024 * 1024;
+/** A game opened to a student stays open this long after the end of the lesson it was opened in (#118). */
+export const GAME_ACCESS_AFTER_LESSON_MS = 60 * 60 * 1000;
 /** A warm-up is a picture or a list of conversation questions (#116). */
 export const WARMUP_FORMATS = ["picture", "questions"] as const;
 export type WarmupFormat = (typeof WARMUP_FORMATS)[number];

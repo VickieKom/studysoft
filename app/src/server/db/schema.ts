@@ -652,3 +652,37 @@ export const paymentRevision = pgTable(
   },
   (t) => [index("payment_revision_teacher_id_idx").on(t.teacherId), index("payment_revision_created_at_idx").on(t.createdAt)],
 );
+
+// A game the teacher opened to a student during a lesson (#118): the student
+// plays it behind their link until `until`, one hour after that lesson's end.
+// Opening it again in a later lesson moves `until`; a game deleted from the
+// library takes its access with it.
+export const gameAccess = pgTable(
+  "game_access",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => libraryMaterial.id, { onDelete: "cascade" }),
+    // A lesson removed from the schedule takes the access it gave with it.
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => lesson.id, { onDelete: "cascade" }),
+    until: timestamp("until", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "game_access_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("game_access_material_student_idx").on(t.materialId, t.studentId),
+    index("game_access_student_id_idx").on(t.studentId),
+  ],
+);
