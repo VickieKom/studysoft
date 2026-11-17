@@ -1,7 +1,7 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, db } from "../db/client";
-import { blob, homework, homeworkAnswer } from "../db/schema";
+import { blob, homework, homeworkAnswer, libraryMaterial } from "../db/schema";
 import { createServerCaller } from "../router";
 import { seedTeachers, signedInHeaders } from "../testing/requests";
 import { blobStore, removeUnreferencedBlobs, saveBlob } from "./store";
@@ -99,5 +99,23 @@ describe("removeUnreferencedBlobs", () => {
 
     // A second run finds nothing more.
     expect((await removeUnreferencedBlobs(db())).removed).toBe(0);
+  });
+
+  it("keeps the file of a library game past the grace period (#115)", async () => {
+    const { id } = await teacher.teacher.library.addGame({
+      title: "Cleanup",
+      level: "A2",
+      topic: "",
+      ageGroup: "younger",
+      html: "<!doctype html><html><body>stub</body></html>",
+    });
+    const [row] = await db().select({ blobId: libraryMaterial.blobId }).from(libraryMaterial).where(eq(libraryMaterial.id, id));
+    const file = row!.blobId;
+
+    // Past the grace period, the game still refers to its file: it stays, and the run does not fail on the reference.
+    await age([file]);
+    await removeUnreferencedBlobs(db());
+    expect(await rowsOf([file])).toEqual([file]);
+    expect(await blobStore().read(file)).not.toBeNull();
   });
 });
