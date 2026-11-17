@@ -360,7 +360,7 @@ erDiagram
 | `price_history`, `level_history` | `crm` | Permanent | History of the lesson price and the level: past charges are never recomputed |
 | `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42); a lesson's note is kept on the `lesson` row instead (#82), so it never joins the notes the assistant reads. A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
 | `textbook`, `textbook_file` | `library` | Permanent | Files are visible to the teacher only |
-| `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed" |
+| `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed". The parse also fills each unit's task bank: workbook exercises as tasks in the homework format with their keys (#6); its tables are designed with that slice |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
 | `homework`, `task` | `homework` | Permanent | The document in the homework format (`docs/homework-format.md`), stored as imported. Statuses: draft, published, submitted ("сдана", #34), missed ("не сдана"). Tasks do not change after publishing; a deadline is a calendar date; at most one published homework per student, kept by a partial unique index |
 | `homework_submission`, `homework_answer` | `homework` | Permanent; voice recordings per the retention setting | One submission per attempt, with its idempotency key and score; one current submission per homework (a homework belongs to one student), enforced by a partial unique index. «Открыть заново для ученика» closes the current one, which stays in the history as it was, and starts a blank attempt (#36). One answer row per task and attempt: saved as the student goes (a written answer as its text, a recording or a file as a reference to its blob, #35), and on submission every task gets one with its topic and skill, the platform's correctness for auto-checked tasks, and later the teacher's mark, which wins (#34, #36) |
@@ -464,17 +464,25 @@ sequenceDiagram
     participant G as Assistant agent
     participant M as MCP server
 
-    T->>A: 1. Uploads a textbook PDF
-    A->>F: 2. Stores the file
+    T->>A: 1. Uploads the set: student's book, workbook, teacher's book
+    A->>F: 2. Stores the files
     A->>F: 3. Renders pages to images
     T->>G: 4. Asks to parse the textbook
-    G->>M: 5. get_textbook_pages
-    G->>M: 6. save_textbook_structure: units, pages, vocabulary, answer keys
-    M->>A: 7. Parse with status "in review"
-    T->>A: 8. Corrects and confirms
+    G->>M: 5. get_textbook_text: text layer with word coordinates
+    G->>M: 6. get_textbook_pages: page images, for pictures and layout
+    G->>M: 7. save_textbook_structure: units, lessons, pages, vocabulary, keys
+    G->>M: 8. save_task_bank: workbook exercises as tasks with keys
+    M->>A: 9. Parse and bank with status "in review"
+    T->>A: 10. Checks the structure; picks tasks for a homework
 ```
 
-This flow is provisional. Step 3 is deterministic and needs no agent; it runs in the background and its status is recorded in the database. Steps 5–6 are the riskiest part of stage 1: it is unknown whether an agent copes with scanned pages and how many pages it can read in one session. A spike in the backlog confirms or changes the flow (section 11).
+The spike on one real set (#6) confirmed an agent can do it: all 391 pages in one session, the structure of the whole set in about 8 minutes, no errors on unit boundaries, vocabulary or answer keys in the three units checked, and one unit's workbook turned into homework tasks that all passed the format at the first import. It also changed the flow:
+
+- **Text first, images second.** The agent works from the text layer and word coordinates (answer keys and word lists in the teacher's book come in columns); a scanned book needs OCR first, which in the spike ran on the agent's side. Page images serve the pictures and the layout: what is circled, ticked, or drawn. Where OCR runs for a scan uploaded to the platform is decided when the slice is cut.
+- **Units are lessons.** A unit is its numbered lessons; review, culture and exam sections between units are lessons of their own, so lesson setup can propose the next one and the teacher can skip one.
+- **The result is a task bank, not a structure to correct.** Each workbook exercise becomes a task in the homework format with its key, its instruction, its example and its pictures cut out one by one; the layout (tables, letters, numbering) is drawn by the task's interface. The teacher picks tasks from a unit's bank for a homework rather than checking every item, and sees each one as the student will. What the format still lacks for that is filed as #127–#131.
+
+Step 3 is deterministic and needs no agent; it runs in the background and its status is recorded in the database. The bank, its tables and the selection screen get their own slice.
 
 #### Scenario: a task from an issue to staging
 
@@ -795,7 +803,7 @@ All accepted on 2026-11-11. A decision is changed by editing its row in a pull r
 
 | Risk | Probability | Impact | What we do |
 |------|-------------|--------|-----------|
-| Textbook parsing by an agent gives unusable results: scans, hundreds of pages, answer keys from the teacher's book | High | High: lessons, homework and vocabulary all stand on the parse | The first backlog task is a spike on one real textbook. Fallback: the teacher enters page ranges for units by hand; the rest is added later |
+| Textbook parsing by an agent gives unusable results: scans, hundreds of pages, answer keys from the teacher's book | Low after the spike (#6) | High: lessons, homework and vocabulary all stand on the parse | The spike on one real set found no errors on boundaries, vocabulary or keys in three units. The remaining risk is carrying exercises over whole — pictures, per-gap choices, audio, the book's layout (#127–#131). Fallback: the teacher enters page ranges for units by hand; the rest is added later |
 | The size of the requirements against "build everything at once": dozens of slices before the first benefit | High | High: the project eats time needed for students | The backlog is ordered by the teacher's pains, not by sections. The first benefit is homework behind a link |
 | Learning content reaches the open repository through test data: an agent copies textbook text or the teacher's material into a test | Medium | High: git history cannot be cleaned | All test data in the guarded `deploy/seed`; the rule in `AGENTS.md`; the product owner knows it and watches her own scenarios |
 | An agent bypasses the client–server boundary: sends too much to the client or reads the database from a component | Medium | High: leaked homework answers or another tenant's data | The `server-boundary` check; an explicit output schema on every procedure; tests on response shapes for students and parents |
