@@ -3,8 +3,10 @@
 // wrapper over it, and later generations (homework drafts, #43) reuse it and
 // store its snapshot with the draft.
 //
-// Never in the context: the last name, contacts, payments, links (#18).
+// Never in the context: the last name, contacts, payments, links (#18), and
+// the keys of homework tasks.
 import type { Database } from "../db/client";
+import { type RecentHomework, recentResults } from "../homework/review";
 import { listNotes } from "./notes";
 import { findStudent } from "./students";
 
@@ -22,6 +24,9 @@ export type StudentContext = {
   whatWorks: string | null;
   gaps: string | null;
   notes: { body: string; createdAt: Date }[];
+  /** The latest submitted homework, newest first, and their mistakes by topic (#44). */
+  recentHomework: RecentHomework[];
+  mistakesByTopic: { topic: string; count: number }[];
 };
 
 /** The context of one student of this teacher, or null — another teacher's student is the same as a missing one. */
@@ -46,5 +51,6 @@ export async function buildStudentContext(
     whatWorks: card.whatWorks,
     gaps: card.gaps,
     notes,
+    ...(await recentResults(db, teacherId, studentId)),
   };
 }
