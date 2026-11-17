@@ -172,6 +172,8 @@ test("a game can be renamed and retagged, and once deleted it is gone with its f
 test("another teacher gets the same 404 for a game's page and its file as for missing ones", async ({ page, browser }) => {
   await openLibrary(page);
   await materials(page).filter({ hasText: "Colour hunt" }).getByRole("link", { name: "Открыть" }).click();
+  // The game's own page, not the list the click starts from.
+  await expect(page.getByRole("heading", { level: 1, name: "Colour hunt" })).toBeVisible();
   const gamePage = page.url();
   const file = new URL((await page.locator("iframe").getAttribute("src"))!, page.url()).toString();
   const missingPage = gamePage.replace(/[0-9a-f-]{36}$/, "00000000-0000-4000-8000-000000000000");
