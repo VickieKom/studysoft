@@ -209,7 +209,15 @@ async function copyLink(page: Page, name: "Ссылка ученика" | "Сс�
   return page.evaluate(() => navigator.clipboard.readText());
 }
 
-/** Every page text and response body a fresh browser saw through a link. */
+/**
+ * Random identifiers can contain any run of digits, so they are blanked out
+ * before the text is searched for the synthetic amounts (#122).
+ */
+function withoutIds(text: string): string {
+  return text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>");
+}
+
+/** Every page text and response body a fresh browser saw through a link, without identifiers. */
 async function seenThrough(browser: Browser, link: string, firstName: string): Promise<string> {
   const context = await browser.newContext({ storageState: NO_SESSION });
   const page = await context.newPage();
@@ -221,7 +229,7 @@ async function seenThrough(browser: Browser, link: string, firstName: string): P
   await expect(page.getByText(firstName).first()).toBeVisible();
   await page.reload();
   await expect(page.getByText(firstName).first()).toBeVisible();
-  const seen = [await page.locator("body").innerText(), ...(await Promise.all(bodies))].join("\n");
+  const seen = withoutIds([await page.locator("body").innerText(), ...(await Promise.all(bodies))].join("\n"));
   await context.close();
   return seen;
 }
@@ -262,7 +270,7 @@ test("payments, prices and the balance reach neither the student, nor the parent
     await agentCall(assistant, token, "agent.listStudents"),
     await agentCall(assistant, token, "agent.studentContext", { studentId }),
   ]) {
-    for (const hidden of ["1731", "7731", "Синтетический комментарий 731"]) expect(answer).not.toContain(hidden);
+    for (const hidden of ["1731", "7731", "Синтетический комментарий 731"]) expect(withoutIds(answer)).not.toContain(hidden);
   }
   await assistant.dispose();
 });
