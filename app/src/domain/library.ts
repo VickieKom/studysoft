@@ -13,6 +13,14 @@ export const AGE_GROUP_LABELS: Record<AgeGroup, string> = { younger: "младш
 
 /** A game is one self-contained HTML file, as AI chats save them. */
 export const MAX_GAME_BYTES = 5 * 1024 * 1024;
+/** A warm-up is a picture or a list of conversation questions (#116). */
+export const WARMUP_FORMATS = ["picture", "questions"] as const;
+export type WarmupFormat = (typeof WARMUP_FORMATS)[number];
+export const WARMUP_FORMAT_LABELS: Record<WarmupFormat, string> = { picture: "Картинка", questions: "Вопросы" };
+/** A warm-up picture, as a homework picture: PNG, JPEG or WebP up to 2 MB. */
+export const MAX_PICTURE_BYTES = 2 * 1024 * 1024;
+export const MAX_QUESTIONS = 30;
+export const MAX_QUESTION_LENGTH = 300;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_TOPIC_LENGTH = 100;
 

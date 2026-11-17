@@ -5,12 +5,17 @@ import {
   type AgeGroup,
   MATERIAL_KINDS,
   MAX_GAME_BYTES,
+  MAX_PICTURE_BYTES,
+  MAX_QUESTION_LENGTH,
+  MAX_QUESTIONS,
   MAX_TITLE_LENGTH,
   MAX_TOPIC_LENGTH,
 } from "../../../domain/library";
 import { LEVELS } from "../../../domain/student";
 import {
   createGame,
+  createPictureWarmup,
+  createQuestionsWarmup,
   deleteMaterial,
   findMaterial,
   listMaterials,
@@ -33,6 +38,25 @@ const tags = z.object({
   ageGroup: z.enum(AGE_GROUPS),
 });
 
+/** The lines of the questions field as sent; checked by `checkQuestions`, so the teacher reads a plain message. */
+const questions = z.array(z.string().max(10 * MAX_QUESTION_LENGTH)).max(10 * MAX_QUESTIONS);
+
+/** A questions warm-up's questions: each trimmed, empty lines dropped; 1 to 30, each at most 300 characters. */
+function checkQuestions(lines: string[]): string[] {
+  const list = lines.map((q) => q.trim()).filter((q) => q !== "");
+  const refuse = (message: string) => new TRPCError({ code: "BAD_REQUEST", message });
+  if (list.length === 0) throw refuse("Нужен хотя бы один вопрос");
+  if (list.length > MAX_QUESTIONS) throw refuse(`Не больше ${MAX_QUESTIONS} вопросов`);
+  if (list.some((q) => q.length > MAX_QUESTION_LENGTH)) throw refuse(`Вопрос длиннее ${MAX_QUESTION_LENGTH} символов`);
+  return list;
+}
+
+/**
+ * The schema lets through twice the limit, so a picture a little over 2 MB
+ * gets the size message from the check rather than a schema error.
+ */
+const MAX_PICTURE_BASE64 = Math.ceil((2 * MAX_PICTURE_BYTES) / 3) * 4;
+
 const material = z
   .object({
     id: z.uuid(),
@@ -41,7 +65,10 @@ const material = z
     level: z.enum(LEVELS),
     topic: z.string().nullable(),
     ageGroup: z.enum(AGE_GROUPS),
-    fileUrl: z.string(),
+    /** A game's page or a warm-up's picture; null for a questions warm-up. */
+    fileUrl: z.string().nullable(),
+    questions: z.array(z.string()).nullable(),
+    warmup: z.boolean(),
   })
   .strict();
 
@@ -52,10 +79,12 @@ const output = (m: Material) => ({
   level: m.level,
   topic: m.topic,
   ageGroup: m.ageGroup as AgeGroup,
-  fileUrl: `/api/files/library/${m.id}`,
+  fileUrl: m.hasFile ? `/api/files/library/${m.id}` : null,
+  questions: m.questions,
+  warmup: m.warmup,
 });
 
-/** «Библиотека» (#115): the teacher's games; warm-ups and videos come next. */
+/** «Библиотека» (#115): the teacher's games and warm-ups (#116); videos come next. */
 export const libraryRouter = router({
   list: teacherProcedure
     .input(
@@ -95,12 +124,36 @@ export const libraryRouter = router({
       return created;
     }),
 
-  update: teacherProcedure
-    .input(tags.extend({ id: z.uuid() }))
+  /** A warm-up: a picture (base64, PNG, JPEG or WebP, at most 2 MB) or a list of questions (#116). */
+  addWarmup: teacherProcedure
+    .input(
+      z.discriminatedUnion("format", [
+        tags.extend({ format: z.literal("picture"), picture: z.base64().max(MAX_PICTURE_BASE64) }),
+        tags.extend({ format: z.literal("questions"), questions }),
+      ]),
+    )
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { id, ...rest } = input;
-      if (!(await updateMaterial(ctx.db, ctx.teacherId, id, rest))) throw notFound();
+      if (input.format === "questions") {
+        const { format: _f, questions: list, ...rest } = input;
+        return createQuestionsWarmup(ctx.db, ctx.teacherId, rest, checkQuestions(list));
+      }
+      const { format: _f, picture, ...rest } = input;
+      const created = await createPictureWarmup(ctx.db, ctx.teacherId, rest, Buffer.from(picture, "base64"));
+      if (created === "too_big") throw new TRPCError({ code: "BAD_REQUEST", message: "Картинка больше 2 МБ" });
+      if (created === "not_picture")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Нужна картинка PNG, JPEG или WebP" });
+      return created;
+    }),
+
+  /** Title and tags; a game's warm-up mark; a questions warm-up's questions. */
+  update: teacherProcedure
+    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), questions: questions.optional() }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, questions: lines, ...rest } = input;
+      const changes = { ...rest, ...(lines ? { questions: checkQuestions(lines) } : {}) };
+      if (!(await updateMaterial(ctx.db, ctx.teacherId, id, changes))) throw notFound();
       return { id };
     }),
 
