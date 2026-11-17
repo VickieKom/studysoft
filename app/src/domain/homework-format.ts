@@ -15,6 +15,8 @@ const source = z.union([
     .object({ book: text, unit: z.string().optional(), page: z.string().optional(), exercise: z.string().optional() })
     .strict(),
 ]);
+/** Where a task comes from: the teacher's own, or a textbook exercise. */
+export const taskSourceSchema = source;
 
 /** The largest picture a task may carry (#33): plenty for a picture next to an exercise. */
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;

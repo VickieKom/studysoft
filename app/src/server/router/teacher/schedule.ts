@@ -17,6 +17,8 @@ import {
   overlaps,
   restoreLesson,
   setMeetingLink,
+  upcomingLessons,
+  type WeekLesson,
   weekLessons,
 } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
@@ -65,47 +67,56 @@ const meetingLink = z
   .transform((value) => (value === "" ? null : value));
 const ok = z.object({ ok: z.literal(true) });
 
+// The lessons of a period as the schedule shows them: the week (#80) and «Список» (#85).
+const lessonsOutput = z
+  .object({
+    timeZone: z.string(),
+    lessons: z.array(
+      z
+        .object({
+          id: z.uuid(),
+          studentId: z.uuid(),
+          studentName: z.string(),
+          studentTimeZone: z.string(),
+          startsAt: z.iso.datetime(),
+          durationMinutes: z.number().int(),
+          kind: z.enum(["regular", "intro"]),
+          ...markOutput,
+          movedFrom: z.iso.datetime().nullable(),
+          meetingLink: z.string().nullable(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+function lessonsResult(found: { timeZone: string; lessons: WeekLesson[] }) {
+  return {
+    timeZone: found.timeZone,
+    lessons: found.lessons.map((l) => ({
+      ...l,
+      startsAt: l.startsAt.toISOString(),
+      movedFrom: l.movedFrom?.toISOString() ?? null,
+      kind: l.kind === "intro" ? ("intro" as const) : ("regular" as const),
+      status: status(l.status),
+      needsMark: needsMark(l),
+    })),
+  };
+}
+
 export const scheduleRouter = router({
   /** The week starting on this Monday, in the teacher's time zone. */
   week: teacherProcedure
     .input(z.object({ monday: z.iso.date() }))
-    .output(
-      z
-        .object({
-          timeZone: z.string(),
-          lessons: z.array(
-            z
-              .object({
-                id: z.uuid(),
-                studentId: z.uuid(),
-                studentName: z.string(),
-                studentTimeZone: z.string(),
-                startsAt: z.iso.datetime(),
-                durationMinutes: z.number().int(),
-                kind: z.enum(["regular", "intro"]),
-                ...markOutput,
-                movedFrom: z.iso.datetime().nullable(),
-                meetingLink: z.string().nullable(),
-              })
-              .strict(),
-          ),
-        })
-        .strict(),
-    )
+    .output(lessonsOutput)
     .query(async ({ ctx, input }) => {
-      const week = await weekLessons(ctx.db, ctx.teacherId, input.monday);
-      return {
-        timeZone: week.timeZone,
-        lessons: week.lessons.map((l) => ({
-          ...l,
-          startsAt: l.startsAt.toISOString(),
-          movedFrom: l.movedFrom?.toISOString() ?? null,
-          kind: l.kind === "intro" ? ("intro" as const) : ("regular" as const),
-          status: status(l.status),
-          needsMark: needsMark(l),
-        })),
-      };
+      return lessonsResult(await weekLessons(ctx.db, ctx.teacherId, input.monday));
     }),
+
+  /** «Список» (#85): the lessons from now on, in time order, cancelled ones left out. */
+  upcoming: teacherProcedure
+    .output(lessonsOutput)
+    .query(async ({ ctx }) => lessonsResult(await upcomingLessons(ctx.db, ctx.teacherId))),
 
   /** «+ Урок»: a one-off lesson at the student's local date and time. */
   addLesson: teacherProcedure

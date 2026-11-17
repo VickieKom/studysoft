@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { HomeworkDraft } from "@/components/homework-draft";
 import { HomeworkPublish } from "@/components/homework-publish";
-import { HomeworkDraftEditor } from "@/components/homework-draft-editor";
 import { HomeworkTaskPreview } from "@/components/homework-task-preview";
 import { HOMEWORK_STATUS_LABELS } from "@/domain/homework";
 import { isNotFound } from "@/server/router";
@@ -33,6 +33,15 @@ export default async function HomeworkPage({ params }: Props) {
   }
   if (homework.studentId !== student.id) notFound();
 
+  const heading = (
+    <div className="flex items-center gap-3">
+      <h1 className="text-h1 font-bold">{homework.title}</h1>
+      <span className="rounded-full bg-green-50 px-2 py-0.5 text-caption text-green-700">
+        {HOMEWORK_STATUS_LABELS[homework.status]}
+      </span>
+    </div>
+  );
+
   return (
     <main className="max-w-3xl">
       <p className="mb-4">
@@ -40,25 +49,29 @@ export default async function HomeworkPage({ params }: Props) {
           ← {student.firstName}
         </Link>
       </p>
-      <header className="mb-6 flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-h1 font-bold">{homework.title}</h1>
-          <span className="rounded-full bg-green-50 px-2 py-0.5 text-caption text-green-700">
-            {HOMEWORK_STATUS_LABELS[homework.status]}
-          </span>
-        </div>
-        <HomeworkPublish homeworkId={homework.id} status={homework.status} dueDate={homework.dueDate} />
-      </header>
       {homework.status === "draft" ? (
-        <HomeworkDraftEditor homeworkId={homework.id} tasks={homework.tasks} />
+        <HomeworkDraft homeworkId={homework.id} tasks={homework.tasks} revision={homework.revision}>
+          {heading}
+        </HomeworkDraft>
       ) : (
-        <ol className="flex flex-col gap-4">
-          {homework.tasks.map((task, index) => (
-            <li key={index} className="rounded-card border border-border p-4">
-              <HomeworkTaskPreview task={task} number={index + 1} homeworkId={homework.id} />
-            </li>
-          ))}
-        </ol>
+        <>
+          <header className="mb-6 flex flex-col gap-3">
+            {heading}
+            <HomeworkPublish
+              homeworkId={homework.id}
+              status={homework.status}
+              dueDate={homework.dueDate}
+              revision={homework.revision}
+            />
+          </header>
+          <ol className="flex flex-col gap-4">
+            {homework.tasks.map((task, index) => (
+              <li key={index} className="rounded-card border border-border p-4">
+                <HomeworkTaskPreview task={task} number={index + 1} homeworkId={homework.id} />
+              </li>
+            ))}
+          </ol>
+        </>
       )}
     </main>
   );

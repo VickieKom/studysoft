@@ -15,6 +15,14 @@ import {
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+// The teacher's page is older than the draft (#99): she reloads and sees the new version.
+const changed = () =>
+  new TRPCError({
+    code: "CONFLICT",
+    message: "Черновик изменился, пока страница была открыта. Обновите страницу, чтобы увидеть новую версию",
+  });
+// The revision the page has seen, as `get` gave it (an md5 in hex).
+const revision = z.string().max(64);
 
 const summary = z.object({
   id: z.uuid(),
@@ -53,10 +61,13 @@ export const homeworkRouter = router({
       return (await listHomework(ctx.db, ctx.teacherId, input.studentId)).map(({ createdAt: _c, ...rest }) => rest);
     }),
 
-  /** The preview for the teacher: tasks with their keys, so a wrong key is caught before publishing. */
+  /**
+   * The preview for the teacher: tasks with their keys, so a wrong key is
+   * caught before publishing, and the revision her page sends back (#99).
+   */
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema) }))
+    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema), revision }))
     .query(async ({ ctx, input }) => {
       const found = await findHomework(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();
@@ -67,29 +78,36 @@ export const homeworkRouter = router({
   /**
    * Saves the edited tasks of a draft (#37). The whole list is validated
    * against the homework format; the message names the task and the field.
+   * A page older than the draft is refused (#99); the check here spares
+   * storing its pictures, the one under the lock decides.
    */
   updateTasks: teacherProcedure
-    .input(z.object({ id: z.uuid(), tasks: z.array(z.unknown()).max(50) }))
-    .output(z.object({ tasks: z.array(taskSchema) }))
+    .input(z.object({ id: z.uuid(), revision, tasks: z.array(z.unknown()).max(50) }))
+    .output(z.object({ tasks: z.array(taskSchema), revision }))
     .mutation(async ({ ctx, input }) => {
       const draft = await findHomework(ctx.db, ctx.teacherId, input.id);
       if (!draft || draft.status !== "draft") throw notFound();
+      if (draft.revision !== input.revision) throw changed();
       const checked = validateHomework({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: input.tasks });
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
       // New pictures come as data URLs; a stored one may stay only if this draft already has it.
       const keep = imageRefs({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: draft.tasks });
       const stored = await storeImages(ctx.db, ctx.teacherId, checked.homework, keep);
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
-      if (!(await updateDraftTasks(ctx.db, ctx.teacherId, input.id, stored.homework))) throw notFound();
-      return { tasks: stored.homework.tasks };
+      const saved = await updateDraftTasks(ctx.db, ctx.teacherId, input.id, input.revision, stored.homework);
+      if (saved === "not_found") throw notFound();
+      if (saved === "changed") throw changed();
+      return { tasks: stored.homework.tasks, revision: saved.revision };
     }),
 
+  /** Publishes the version of the draft the teacher's page has seen, and no other (#99). */
   publish: teacherProcedure
-    .input(z.object({ id: z.uuid(), dueDate: z.iso.date() }))
+    .input(z.object({ id: z.uuid(), revision, dueDate: z.iso.date() }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.dueDate);
+      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.revision, input.dueDate);
       if (published === "not_found") throw notFound();
+      if (published === "changed") throw changed();
       if (published === "past")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Срок не может быть раньше сегодняшнего дня" });
       return { id: input.id };

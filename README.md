@@ -4,7 +4,7 @@ An open-source platform for private language tutors. It keeps everything around 
 
 ## Status
 
-Early. The repository holds the foundation: architecture, decisions, the rules for coding agents, and the first checks. The application itself is being built in vertical slices tracked in [issues](../../issues).
+Stage 1 is being built in vertical slices tracked in [issues](../../issues). Working today: teacher sign-in; student cards with statuses, profile, contacts and notes; student and parent links; homework from import or the assistant, with seven task types, pictures, automatic checking and the review section; the assistant connection through MCP; the schedule with recurring slots in two time zones, moved and cancelled lessons, the lesson history, prices, payments and the balance. Not built yet: the library, the lesson mode, the teacher overview, and everything of stages 2 and 3. Staging is being set up.
 
 ## Principles
 

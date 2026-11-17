@@ -55,6 +55,14 @@ type Row = {
   originId: string | null;
 };
 
+/**
+ * The version of a homework's document that a teacher's page has seen (#99):
+ * the text of jsonb is canonical, so the same content always gives the same
+ * revision. Publishing and saving tasks send it back and are refused when the
+ * draft changed meanwhile, for instance because the assistant replaced it.
+ */
+const revision = sql<string>`md5(${homework.document}::text)`;
+
 function taskCount(document: unknown): number {
   return (document as HomeworkDocument).tasks.length;
 }
@@ -102,9 +110,9 @@ export async function findHomework(
   db: Database,
   teacherId: string,
   id: string,
-): Promise<(HomeworkSummary & { studentId: string; tasks: Task[] }) | null> {
+): Promise<(HomeworkSummary & { studentId: string; tasks: Task[]; revision: string }) | null> {
   const [row] = await db
-    .select({ ...summaryColumns, studentId: homework.studentId })
+    .select({ ...summaryColumns, studentId: homework.studentId, revision })
     .from(homework)
     .leftJoin(draftOrigin, eq(draftOrigin.homeworkId, homework.id))
     .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId)));
@@ -113,49 +121,70 @@ export async function findHomework(
     ...toSummary(row),
     studentId: row.studentId,
     tasks: (row.document as HomeworkDocument).tasks,
+    revision: row.revision,
   };
 }
 
 /**
  * Replaces the tasks of a draft (#37): the editor sends the whole list after
- * every change. Returns false when there is no such draft; a published
- * homework never changes.
+ * every change, with the revision its page has seen. Returns the new revision,
+ * "not_found" when there is no such draft (a published homework never
+ * changes), and "changed" when the draft is no longer the version the page
+ * saw (#99). The draft is locked before the revision is compared, so a save of
+ * the assistant's waits and is seen.
  */
-export async function updateDraftTasks(db: Database, teacherId: string, id: string, document: HomeworkDocument): Promise<boolean> {
+export async function updateDraftTasks(
+  db: Database,
+  teacherId: string,
+  id: string,
+  seen: string,
+  document: HomeworkDocument,
+): Promise<{ revision: string } | "not_found" | "changed"> {
   return db.transaction(async (tx) => {
-    const rows = await tx
+    const [draft] = await tx
+      .select({ revision })
+      .from(homework)
+      .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
+      .for("update");
+    if (!draft) return "not_found";
+    if (draft.revision !== seen) return "changed";
+    const [saved] = await tx
       .update(homework)
       .set({ document: homeworkSchema.parse(document), title: document.title })
-      .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
-      .returning({ id: homework.id });
-    if (rows.length === 0) return false;
+      .where(eq(homework.id, id))
+      .returning({ revision });
+    if (!saved) throw new Error("updateDraftTasks: update returned no row");
     // An assistant's draft the teacher edited is hers now: the assistant's next save makes a new one (#43).
     await tx
       .update(draftOrigin)
       .set({ teacherEditedAt: sql`now()` })
       .where(and(eq(draftOrigin.homeworkId, id), isNull(draftOrigin.teacherEditedAt)));
-    return true;
+    return saved;
   });
 }
 
 /**
  * Publishes a draft with a deadline. The student's previously published
  * homework is closed as "missed" in the same transaction (product
- * requirements 5.1.6, item 4). Returns false when there is no such draft.
+ * requirements 5.1.6, item 4). Returns "not_found" when there is no such
+ * draft, and "changed" when the draft is no longer the version the teacher's
+ * page saw (#99): she publishes only what she has seen.
  */
 export async function publishHomework(
   db: Database,
   teacherId: string,
   id: string,
+  seen: string,
   dueDate: string,
-): Promise<"published" | "not_found" | "past"> {
+): Promise<"published" | "not_found" | "changed" | "past"> {
   return db.transaction(async (tx) => {
     const [draft] = await tx
-      .select({ studentId: homework.studentId })
+      .select({ studentId: homework.studentId, revision })
       .from(homework)
       .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
       .for("update");
     if (!draft) return "not_found";
+    if (draft.revision !== seen) return "changed";
     // Publishing for one student goes one at a time: two drafts published at
     // the same moment both succeed, the later one closing the earlier, instead
     // of the second meeting the one-published index (#65).
