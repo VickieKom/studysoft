@@ -84,6 +84,9 @@ async function publish(page: Page, card: string, title: string) {
  * only «cat» of the animals, leaves the rest blank and submits anyway.
  */
 async function doHomework(student: Page, link: string) {
+  // From a blank page: going to the same link again would only change the
+  // fragment, and the page with the earlier result would stay.
+  await student.goto("about:blank");
   await student.goto(link);
   const first = autoChecked.tasks[0]!.prompt;
   await expect(student.getByText(first).or(control(student, "Начать"))).toBeVisible();
