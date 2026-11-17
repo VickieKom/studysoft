@@ -71,7 +71,7 @@ export { handleHomeworkImageRequest } from "../homework/images";
 
 /** A student's recordings and files for homework tasks: uploaded by the student, served to them and their teacher (#35). */
 export { handleAnswerFileRequest, handleAnswerFileUpload } from "../homework/answer-files";
-export { handleLibraryFileRequest } from "../library/files";
+export { handleLibraryFileRequest, handleLibraryVideoUpload } from "../library/files";
 
 /** True when a procedure refused because there is no valid session. */
 export function isUnauthorized(error: unknown): boolean {

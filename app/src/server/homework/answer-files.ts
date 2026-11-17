@@ -13,6 +13,7 @@ import {
 } from "../../domain/homework-format";
 import { teacherIdFromHeaders } from "../access/auth";
 import { linkSessionFromHeaders } from "../access/links";
+import { byteRange } from "../blob/range";
 import { readBlob, saveBlob } from "../blob/store";
 import { type Database, db } from "../db/client";
 import { homework, homeworkAnswer } from "../db/schema";
@@ -121,22 +122,6 @@ async function requester(database: Database, headers: Headers): Promise<{ teache
   if (teacherId) return { teacherId };
   const session = await linkSessionFromHeaders(database, headers, "student");
   return session?.role === "student" ? { teacherId: session.teacherId, studentId: session.studentId } : null;
-}
-
-/** One byte range of `size` bytes ("bytes=0-1", "bytes=100-", "bytes=-500"), or null when there is none to honour. */
-function byteRange(header: string | null, size: number): { start: number; end: number } | "unsatisfiable" | null {
-  const match = header ? /^bytes=(\d*)-(\d*)$/.exec(header.trim()) : null;
-  if (!match || (match[1] === "" && match[2] === "")) return null;
-  let start: number;
-  let end: number;
-  if (match[1] === "") {
-    start = Math.max(0, size - Number(match[2]));
-    end = size - 1;
-  } else {
-    start = Number(match[1]);
-    end = match[2] === "" ? size - 1 : Math.min(Number(match[2]), size - 1);
-  }
-  return start > end || start >= size ? "unsatisfiable" : { start, end };
 }
 
 /**

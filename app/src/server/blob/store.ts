@@ -1,17 +1,35 @@
 // The blob store (#33; architecture, decision 8): put and read a file by id.
 // A file adapter on a disk volume now; an S3 adapter can replace it without
 // touching the callers. Who may read a file is decided by its caller, never
-// here: there are no direct links to files.
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+// here: there are no direct links to files. A large file — a video, #117 —
+// is written as it arrives and read in pieces, never held whole in memory.
+import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { blob } from "../db/schema";
 import { env } from "../env";
 
+/** An open stored file: its size, and one stream of its bytes or a close. */
+export interface BlobReader {
+  size: number;
+  /** Bytes from `start` to `end`, both included; the whole file by default. Closes the file when the stream ends or is cancelled. */
+  stream(range?: { start: number; end: number }): ReadableStream<Uint8Array>;
+  /** Closes the file when no stream is read from it. */
+  close(): Promise<void>;
+}
+
 export interface BlobStore {
   put(id: string, bytes: Uint8Array): Promise<void>;
+  /**
+   * Writes the chunks as they come and returns the size, or "too_big" as soon
+   * as they pass `limit`: then nothing is kept and the rest is not read.
+   */
+  putStream(id: string, chunks: AsyncIterable<Uint8Array>, limit: number): Promise<number | "too_big">;
   read(id: string): Promise<Uint8Array | null>;
+  /** Opens a file for reading in pieces; null when it is not there. */
+  open(id: string): Promise<BlobReader | null>;
   /** Removes the file; a file that is not there is not an error. */
   remove(id: string): Promise<void>;
 }
@@ -32,8 +50,51 @@ export function fileStore(dir: string): BlobStore {
       await writeFile(partial, bytes, { flag: "wx" });
       await rename(partial, path(id));
     },
+    async putStream(id, chunks, limit) {
+      await mkdir(dir, { recursive: true });
+      const partial = `${path(id)}.partial`;
+      const file = await open(partial, "wx");
+      let size = 0;
+      let kept = false;
+      try {
+        // Leaving the loop early cancels the source: an oversized upload is not read to its end.
+        for await (const chunk of chunks) {
+          size += chunk.byteLength;
+          if (size > limit) return "too_big";
+          await file.write(chunk);
+        }
+        await file.close();
+        await rename(partial, path(id));
+        kept = true;
+        return size;
+      } finally {
+        if (!kept) {
+          await file.close().catch(() => {});
+          await rm(partial, { force: true });
+        }
+      }
+    },
     async remove(id) {
       await rm(path(id), { force: true });
+    },
+    async open(id) {
+      let file: Awaited<ReturnType<typeof open>>;
+      try {
+        file = await open(path(id), "r");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+      }
+      // The size of the file this handle holds, even if the name is removed meanwhile.
+      const { size } = await file.stat();
+      return {
+        size,
+        stream(range) {
+          const nodeStream = file.createReadStream(range ? { start: range.start, end: range.end } : {});
+          return Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+        },
+        close: () => file.close(),
+      };
     },
     async read(id) {
       try {
@@ -59,6 +120,72 @@ export async function saveBlob(db: Database, teacherId: string, bytes: Uint8Arra
   await blobStore().put(id, bytes);
   await db.insert(blob).values({ id, teacherId, contentType, size: bytes.byteLength });
   return id;
+}
+
+/** How many bytes a stream upload reads before it decides the file's type. */
+const HEAD_BYTES = 64;
+
+/**
+ * Keeps a file of this teacher that arrives as a stream (#117) and returns
+ * its id. Its type comes from its first bytes: `sniff` names it or refuses
+ * it before anything is written. Past `limit` bytes the upload stops and
+ * nothing is kept. The bytes go first, then the row, as in saveBlob.
+ */
+export async function saveBlobStream(
+  db: Database,
+  teacherId: string,
+  body: ReadableStream<Uint8Array>,
+  { limit, sniff }: { limit: number; sniff: (head: Uint8Array) => string | null },
+): Promise<string | "too_big" | "unsupported"> {
+  const reader = body.getReader();
+  try {
+    const first: Uint8Array[] = [];
+    let headSize = 0;
+    let ended = false;
+    while (headSize < HEAD_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) {
+        ended = true;
+        break;
+      }
+      first.push(value);
+      headSize += value.byteLength;
+    }
+    const head = new Uint8Array(Buffer.concat(first));
+    const contentType = sniff(head);
+    if (!contentType) return "unsupported";
+
+    async function* chunks() {
+      yield head;
+      if (ended) return;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    }
+    const id = crypto.randomUUID();
+    const size = await blobStore().putStream(id, chunks(), limit);
+    if (size === "too_big") return "too_big";
+    await db.insert(blob).values({ id, teacherId, contentType, size });
+    return id;
+  } finally {
+    // Whatever was not read — a refused or oversized upload — is dropped, not buffered.
+    await reader.cancel().catch(() => {});
+  }
+}
+
+/** A stored file of this teacher, open for reading in pieces (#117), or null. */
+export async function openBlob(
+  db: Database,
+  teacherId: string,
+  id: string,
+): Promise<{ reader: BlobReader; contentType: string } | null> {
+  if (!UUID.test(id)) return null;
+  const [row] = await db.select({ teacherId: blob.teacherId, contentType: blob.contentType }).from(blob).where(eq(blob.id, id));
+  if (!row || row.teacherId !== teacherId) return null;
+  const reader = await blobStore().open(id);
+  return reader ? { reader, contentType: row.contentType } : null;
 }
 
 /** A file of this teacher, or null. */

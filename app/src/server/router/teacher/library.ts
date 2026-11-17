@@ -10,12 +10,15 @@ import {
   MAX_QUESTIONS,
   MAX_TITLE_LENGTH,
   MAX_TOPIC_LENGTH,
+  MAX_URL_LENGTH,
 } from "../../../domain/library";
 import { LEVELS } from "../../../domain/student";
 import {
   createGame,
   createPictureWarmup,
   createQuestionsWarmup,
+  createVideoFile,
+  createVideoLink,
   deleteMaterial,
   findMaterial,
   listMaterials,
@@ -65,10 +68,12 @@ const material = z
     level: z.enum(LEVELS),
     topic: z.string().nullable(),
     ageGroup: z.enum(AGE_GROUPS),
-    /** A game's page or a warm-up's picture; null for a questions warm-up. */
+    /** A game's page, a warm-up's picture or an own video; null for a questions warm-up and a video link. */
     fileUrl: z.string().nullable(),
     questions: z.array(z.string()).nullable(),
     warmup: z.boolean(),
+    // A video link's address; null for every other material.
+    url: z.string().nullable(),
   })
   .strict();
 
@@ -82,9 +87,10 @@ const output = (m: Material) => ({
   fileUrl: m.hasFile ? `/api/files/library/${m.id}` : null,
   questions: m.questions,
   warmup: m.warmup,
+  url: m.url,
 });
 
-/** «Библиотека» (#115): the teacher's games and warm-ups (#116); videos come next. */
+/** «Библиотека» (#115): the teacher's games, warm-ups (#116) and videos (#117). */
 export const libraryRouter = router({
   list: teacherProcedure
     .input(
@@ -121,6 +127,29 @@ export const libraryRouter = router({
       if (created === "too_big") throw new TRPCError({ code: "BAD_REQUEST", message: "Файл больше 5 МБ" });
       if (created === "not_html")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Это не HTML-страница: нужна игра одним файлом .html" });
+      return created;
+    }),
+
+  /** A video link: http or https (#117). Checked in the module, so the form shows the message. */
+  addVideoLink: teacherProcedure
+    .input(tags.extend({ url: z.string().trim().max(MAX_URL_LENGTH) }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { url, ...rest } = input;
+      const created = await createVideoLink(ctx.db, ctx.teacherId, rest, url);
+      if (created === "not_a_link")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Нужна ссылка, которая начинается с http:// или https://" });
+      return created;
+    }),
+
+  /** An own video: its file is uploaded first with PUT to /api/files/library, which answers its id (#117). */
+  addVideoFile: teacherProcedure
+    .input(tags.extend({ file: z.uuid() }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { file, ...rest } = input;
+      const created = await createVideoFile(ctx.db, ctx.teacherId, rest, file.toLowerCase());
+      if (created === "no_file") throw new TRPCError({ code: "BAD_REQUEST", message: "Не нашли загруженное видео. Загрузите файл ещё раз" });
       return created;
     }),
 

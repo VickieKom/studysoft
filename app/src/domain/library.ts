@@ -21,6 +21,11 @@ export const WARMUP_FORMAT_LABELS: Record<WarmupFormat, string> = { picture: "К
 export const MAX_PICTURE_BYTES = 2 * 1024 * 1024;
 export const MAX_QUESTIONS = 30;
 export const MAX_QUESTION_LENGTH = 300;
+/** An own video file (#117): decided by the product owner, with the disk of the stand and staging in mind. */
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+/** The video files a browser plays (#117); other formats are converted by the teacher before uploading. */
+export const VIDEO_FILE_ACCEPT = ".mp4,.m4v,.webm,.mov,video/mp4,video/webm,video/quicktime";
+export const MAX_URL_LENGTH = 2000;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_TOPIC_LENGTH = 100;
 

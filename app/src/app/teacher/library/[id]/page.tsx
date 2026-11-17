@@ -14,7 +14,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * One material (#115). A game runs in a sandboxed frame — scripts, but an
  * origin of its own — so it cannot reach this page or the platform's cookies.
- * A warm-up (#116) is its picture, full width, or its list of questions.
+ * A warm-up (#116) is its picture, full width, or its list of questions. A
+ * video plays in the page, or its link opens in a new tab (#117).
  */
 export default async function MaterialPage({ params }: Props) {
   const { id } = await params;
@@ -70,6 +71,26 @@ export default async function MaterialPage({ params }: Props) {
           referrerPolicy="no-referrer"
           className="h-[70vh] w-full rounded-card border border-border bg-bg"
         />
+      ) : material.kind === "video" && material.fileUrl ? (
+        <video
+          src={material.fileUrl}
+          controls
+          preload="metadata"
+          aria-label={material.title}
+          className="max-h-[70vh] w-full rounded-card border border-border bg-bg"
+        />
+      ) : material.kind === "video" && material.url ? (
+        <p className="flex flex-col gap-2">
+          <a
+            href={material.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-10 items-center self-start rounded-control bg-green-600 px-4 text-button font-semibold text-on-accent hover:bg-green-700"
+          >
+            Смотреть
+          </a>
+          <span className="break-all text-small text-text-secondary">{material.url}</span>
+        </p>
       ) : (
         material.fileUrl && (
           // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the teacher's session, so a permission-checked file cannot go through it
