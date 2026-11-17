@@ -8,7 +8,7 @@ The architectural style is a modular monolith in TypeScript: one Next.js applica
 
 This document has two readers. One is a person who needs to understand how the system is put together and why. The other is a coding agent that implements tasks and must stay inside these boundaries.
 
-Status: target architecture. The repository holds the foundation; application code arrives in vertical slices. Product requirements will live in `docs/product/`.
+Status: target architecture. The repository holds the foundation; application code arrives in vertical slices. Product requirements live in [docs/product/](product/README.md).
 
 ---
 
