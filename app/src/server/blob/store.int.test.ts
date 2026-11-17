@@ -58,7 +58,11 @@ describe("removeUnreferencedBlobs", () => {
     const before = await teacher.teacher.homework.get({ id });
     const [kept, replaced] = before.tasks.map((t) => idOf(t.image));
     // The second picture is replaced in the editor.
-    const { tasks } = await teacher.teacher.homework.updateTasks({ id, tasks: [before.tasks[0]!, { ...before.tasks[1]!, image: PNG }] });
+    const { tasks, revision } = await teacher.teacher.homework.updateTasks({
+      id,
+      revision: before.revision,
+      tasks: [before.tasks[0]!, { ...before.tasks[1]!, image: PNG }],
+    });
     const replacement = idOf(tasks[1]!.image);
 
     // Another homework of the teacher refers to the first picture too, as a new assistant draft does.
@@ -88,7 +92,7 @@ describe("removeUnreferencedBlobs", () => {
     for (const stays of [kept!, replacement, recording]) expect(await blobStore().read(stays)).not.toBeNull();
 
     // Once the first homework drops the picture, the copy still keeps it.
-    await teacher.teacher.homework.updateTasks({ id, tasks: [{ ...tasks[0]!, image: PNG }, tasks[1]!] });
+    await teacher.teacher.homework.updateTasks({ id, revision, tasks: [{ ...tasks[0]!, image: PNG }, tasks[1]!] });
     await age([kept!]);
     await removeUnreferencedBlobs(db());
     expect(await rowsOf([kept!])).toEqual([kept!]);
