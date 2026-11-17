@@ -50,7 +50,7 @@ export default async function LibraryPage({ searchParams }: Props) {
         </div>
       ) : (
         <>
-          <nav aria-label="Тип материала" className="flex flex-wrap gap-2">
+          <nav aria-label="Фильтр по типу" className="flex flex-wrap gap-2">
             {tabs.map((t) => (
               <Link
                 key={t.href}
