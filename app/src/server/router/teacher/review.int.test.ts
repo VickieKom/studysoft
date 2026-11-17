@@ -40,7 +40,7 @@ async function submitted(firstName: string, gap = "are", animals = [0]) {
     .split(";")[0]!;
   const student = createServerCaller(new Headers({ cookie }));
   const { id: homeworkId } = await teacher.teacher.homework.import({ studentId, json: json(review) });
-  await teacher.teacher.homework.publish({ id: homeworkId, dueDate: inDays(3) });
+  await teacher.teacher.homework.publish({ id: homeworkId, revision: await revisionOf(homeworkId), dueDate: inDays(3) });
   await answerAndSubmit(student, homeworkId, gap, animals);
   const row = (await teacher.teacher.review.list({ studentId }))[0]!;
   return { studentId, homeworkId, student, submissionId: row.submissionId! };
@@ -64,6 +64,9 @@ beforeAll(async () => {
 });
 
 afterAll(closeDb);
+
+// The revision the teacher's page sends back with publishing and saving tasks (#99).
+const revisionOf = async (id: string) => (await teacher.teacher.homework.get({ id })).revision;
 
 describe("teacher.review", () => {
   it("lists a submission as waiting and shows every answer, the keys of mistakes and mistakes by topic", async () => {
@@ -153,7 +156,7 @@ describe("teacher.review", () => {
   it("does not reopen while the student has another published homework", async () => {
     const { studentId, submissionId } = await submitted("Занято");
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(review) });
-    await teacher.teacher.homework.publish({ id, dueDate: inDays(4) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(4) });
     await expect(teacher.teacher.review.reopen({ id: submissionId })).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
     });

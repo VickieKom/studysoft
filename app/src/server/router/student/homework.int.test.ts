@@ -41,7 +41,7 @@ async function studentWithHomework(firstName: string) {
   });
   const cookie = response.headers.getSetCookie().find((c) => c.startsWith(`${LINK_SESSION_COOKIES.student}=`))!.split(";")[0]!;
   const { id } = await teacher.teacher.homework.import({ studentId, json: json(autoChecked) });
-  await teacher.teacher.homework.publish({ id, dueDate: inDays(3) });
+  await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(3) });
   return { id, studentId, cookie, student: createServerCaller(new Headers({ cookie })) };
 }
 
@@ -69,6 +69,9 @@ beforeAll(async () => {
 });
 
 afterAll(closeDb);
+
+// The revision the teacher's page sends back with publishing and saving tasks (#99).
+const revisionOf = async (id: string) => (await teacher.teacher.homework.get({ id })).revision;
 
 describe("student.homework", () => {
   it("never sends a key before submission, from any student procedure", async () => {
@@ -167,7 +170,7 @@ describe("student.homework", () => {
     expect((await student.student.homework.open({ id })).answers[0]).toEqual(right[0]);
 
     const { id: next } = await teacher.teacher.homework.import({ studentId, json: json(autoChecked) });
-    await teacher.teacher.homework.publish({ id: next, dueDate: inDays(4) });
+    await teacher.teacher.homework.publish({ id: next, revision: await revisionOf(next), dueDate: inDays(4) });
     await expect(student.student.homework.open({ id })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await student.student.homework.current()).toMatchObject({ id: next, result: null });
   });
@@ -177,7 +180,7 @@ describe("student.homework", () => {
     await student.student.homework.saveAnswer({ id, taskIndex: 0, answer: right[0]! });
     await teacher.teacher.homework.unpublish({ id });
     expect(await db().select().from(homeworkAnswer).where(eq(homeworkAnswer.homeworkId, id))).toHaveLength(0);
-    await teacher.teacher.homework.publish({ id, dueDate: inDays(2) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(2) });
     expect((await student.student.homework.open({ id })).answers).toEqual([null, null, null, null, null]);
   });
 
@@ -218,7 +221,7 @@ describe("student.homework", () => {
       studentId,
       json: json({ version: 1, title: "Shuffle", tasks: [order, match] }),
     });
-    await teacher.teacher.homework.publish({ id, dueDate: inDays(2) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(2) });
 
     const { tasks } = await createServerCaller(new Headers({ cookie })).student.homework.open({ id });
     // Not the order a seed made of the homework id and the task number gives...

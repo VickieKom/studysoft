@@ -16,7 +16,18 @@ const control =
  * format and keeps the draft as it was when something is invalid. Nothing asks
  * for confirmation, like the rest of the workspace.
  */
-export function HomeworkDraftEditor({ homeworkId, tasks: initial }: { homeworkId: string; tasks: Task[] }) {
+export function HomeworkDraftEditor({
+  homeworkId,
+  tasks: initial,
+  revision,
+  onSaved,
+}: {
+  homeworkId: string;
+  tasks: Task[];
+  /** The version of the draft this page shows; a save over a newer one is refused (#99). */
+  revision: string;
+  onSaved: (revision: string) => void;
+}) {
   const [tasks, setTasks] = useState(initial);
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [newType, setNewType] = useState<TaskType>("single_choice");
@@ -28,13 +39,14 @@ export function HomeworkDraftEditor({ homeworkId, tasks: initial }: { homeworkId
     setPending(true);
     setError(null);
     try {
-      const saved = await routerClient.teacher.homework.updateTasks.mutate({ id: homeworkId, tasks: next });
+      const saved = await routerClient.teacher.homework.updateTasks.mutate({ id: homeworkId, revision, tasks: next });
       setTasks(saved.tasks);
+      onSaved(saved.revision);
       return true;
     } catch (cause) {
       const code = (cause as { data?: { code?: string } } | null)?.data?.code;
-      // The server's own messages are in Russian only for an invalid homework.
-      if (code === "BAD_REQUEST" && cause instanceof Error) setError(cause.message);
+      // The server's own messages are in Russian only for an invalid homework and a changed draft.
+      if ((code === "BAD_REQUEST" || code === "CONFLICT") && cause instanceof Error) setError(cause.message);
       else if (code === "NOT_FOUND") setError("Домашка уже опубликована в другой вкладке. Обновите страницу");
       else setError("Не получилось сохранить. Попробуйте ещё раз");
       return false;

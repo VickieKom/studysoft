@@ -42,6 +42,9 @@ beforeAll(async () => {
 
 afterAll(closeDb);
 
+// The revision the teacher's page sends back with publishing and saving tasks (#99).
+const revisionOf = async (id: string) => (await teacher.teacher.homework.get({ id })).revision;
+
 describe("teacher.homework", () => {
   it("imports a valid homework as a draft and previews it with the keys for the teacher", async () => {
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(allTypes) });
@@ -68,11 +71,11 @@ describe("teacher.homework", () => {
   it("publishes with a deadline, closes the previous one as missed, and shows only the current one to the student", async () => {
     const student = createServerCaller(new Headers({ cookie: studentCookie }));
     const { id: first } = await teacher.teacher.homework.import({ studentId, json: json(allTypes) });
-    await teacher.teacher.homework.publish({ id: first, dueDate: today(2) });
+    await teacher.teacher.homework.publish({ id: first, revision: await revisionOf(first), dueDate: today(2) });
     expect(await student.student.homework.current()).toMatchObject({ dueDate: today(2), taskCount: 8, result: null });
 
     const { id: second } = await teacher.teacher.homework.import({ studentId, json: json(short) });
-    await teacher.teacher.homework.publish({ id: second, dueDate: today(5) });
+    await teacher.teacher.homework.publish({ id: second, revision: await revisionOf(second), dueDate: today(5) });
 
     const list = await teacher.teacher.homework.list({ studentId });
     expect(list.find((h) => h.id === first)?.status).toBe("missed");
@@ -80,14 +83,14 @@ describe("teacher.homework", () => {
     expect(await student.student.homework.current()).toMatchObject({ id: second, dueDate: today(5), taskCount: 2, result: null });
 
     // Only a draft can be published.
-    await expect(teacher.teacher.homework.publish({ id: first, dueDate: today(3) })).rejects.toMatchObject({
+    await expect(teacher.teacher.homework.publish({ id: first, revision: await revisionOf(first), dueDate: today(3) })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
   it("never sends a key to the student", async () => {
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(allTypes) });
-    await teacher.teacher.homework.publish({ id, dueDate: today(1) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: today(1) });
     const raw = await (await routerRequest("student.homework.current", { headers: { cookie: studentCookie } })).text();
     expect(raw).toContain("taskCount");
     expect(raw).not.toContain("carrots");
@@ -97,7 +100,7 @@ describe("teacher.homework", () => {
   it("takes a published homework back to a draft", async () => {
     const student = createServerCaller(new Headers({ cookie: studentCookie }));
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(short) });
-    await teacher.teacher.homework.publish({ id, dueDate: today(3) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: today(3) });
     await teacher.teacher.homework.unpublish({ id });
 
     expect((await teacher.teacher.homework.get({ id })).status).toBe("draft");
@@ -116,7 +119,7 @@ describe("teacher.homework", () => {
     }
     for (const target of [id, missing]) {
       await expect(otherTeacher.teacher.homework.get({ id: target })).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(otherTeacher.teacher.homework.publish({ id: target, dueDate: today(1) })).rejects.toMatchObject({
+      await expect(otherTeacher.teacher.homework.publish({ id: target, revision: await revisionOf(id), dueDate: today(1) })).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
       await expect(otherTeacher.teacher.homework.unpublish({ id: target })).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -131,7 +134,7 @@ describe("teacher.homework.updateTasks", () => {
     const added = { type: "single_choice", prompt: "Pick a colour.", options: ["blue", "table"], answer: 0 };
     const fixed = { ...gap, prompt: "Fill in the gap.", answers: [["is", "'s"]] };
 
-    const { tasks } = await teacher.teacher.homework.updateTasks({ id, tasks: [fixed, added, written] });
+    const { tasks } = await teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [fixed, added, written] });
     expect(tasks.map((t) => t.prompt)).toEqual(["Fill in the gap.", "Pick a colour.", "Write about your pet."]);
     const preview = await teacher.teacher.homework.get({ id });
     expect(preview.tasks).toEqual([fixed, added, written]);
@@ -141,21 +144,21 @@ describe("teacher.homework.updateTasks", () => {
   it("refuses an invalid list with a message naming the task and the field, and keeps the draft", async () => {
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
     const noKey = { ...editor.tasks[0], answers: [[]] };
-    await expect(teacher.teacher.homework.updateTasks({ id, tasks: [noKey] })).rejects.toMatchObject({
+    await expect(teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [noKey] })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: expect.stringMatching(/^Задание 1, поле answers/),
     });
-    await expect(teacher.teacher.homework.updateTasks({ id, tasks: [] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect((await teacher.teacher.homework.get({ id })).tasks).toEqual(editor.tasks);
   });
 
   it("changes only this teacher's drafts", async () => {
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
-    await expect(otherTeacher.teacher.homework.updateTasks({ id, tasks: editor.tasks })).rejects.toMatchObject({
+    await expect(otherTeacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: editor.tasks })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await teacher.teacher.homework.publish({ id, dueDate: today(2) });
-    await expect(teacher.teacher.homework.updateTasks({ id, tasks: editor.tasks.slice(1) })).rejects.toMatchObject({
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: today(2) });
+    await expect(teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: editor.tasks.slice(1) })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect((await teacher.teacher.homework.get({ id })).tasks).toEqual(editor.tasks);
@@ -165,8 +168,8 @@ describe("teacher.homework.updateTasks", () => {
     const student = createServerCaller(new Headers({ cookie: studentCookie }));
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(editor) });
     const [gap, ...rest] = editor.tasks;
-    await teacher.teacher.homework.updateTasks({ id, tasks: [{ ...gap, answers: [["is", "'s"]] }, ...rest] });
-    await teacher.teacher.homework.publish({ id, dueDate: today(1) });
+    await teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [{ ...gap, answers: [["is", "'s"]] }, ...rest] });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: today(1) });
     await student.student.homework.saveAnswer({ id, taskIndex: 0, answer: { type: "gap", gaps: ["’s"] } });
     expect(await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() })).toEqual({
       correct: 1,
@@ -177,23 +180,24 @@ describe("teacher.homework.updateTasks", () => {
 
   it("refuses a deadline before the student's today and takes today", async () => {
     const { id } = await teacher.teacher.homework.import({ studentId, json: json(short) });
-    await expect(teacher.teacher.homework.publish({ id, dueDate: today(-1) })).rejects.toMatchObject({
+    await expect(teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: today(-1) })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "Срок не может быть раньше сегодняшнего дня",
     });
     expect((await teacher.teacher.homework.get({ id })).status).toBe("draft");
     // Today in the student's time zone (Moscow here), whatever the server's is.
     const moscowToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow" }).format(new Date());
-    await teacher.teacher.homework.publish({ id, dueDate: moscowToday });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: moscowToday });
     expect((await teacher.teacher.homework.get({ id })).status).toBe("published");
   });
 
   it("publishes two drafts at the same moment one after the other, without an error", async () => {
     const { id: first } = await teacher.teacher.homework.import({ studentId, json: json(short) });
     const { id: second } = await teacher.teacher.homework.import({ studentId, json: json(short) });
+    const [firstSeen, secondSeen] = [await revisionOf(first), await revisionOf(second)];
     const results = await Promise.allSettled([
-      teacher.teacher.homework.publish({ id: first, dueDate: today(2) }),
-      teacher.teacher.homework.publish({ id: second, dueDate: today(3) }),
+      teacher.teacher.homework.publish({ id: first, revision: firstSeen, dueDate: today(2) }),
+      teacher.teacher.homework.publish({ id: second, revision: secondSeen, dueDate: today(3) }),
     ]);
     expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
     const statuses = [(await teacher.teacher.homework.get({ id: first })).status, (await teacher.teacher.homework.get({ id: second })).status];
