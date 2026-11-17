@@ -96,7 +96,7 @@ test("publishing a draft the assistant replaced after the page loaded is refused
 
   await page.getByLabel("Срок").fill(due());
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Черновик изменился");
+  await expect(page.getByRole("alert").filter({ hasText: "Черновик изменился" })).toBeVisible();
   await expect(page.getByText("Опубликована", { exact: true })).toHaveCount(0);
 
   // Nothing was published.
@@ -139,7 +139,7 @@ test("saving an edit on a page older than the assistant's replacement is refused
     .click();
   await page.getByLabel("Текст задания").fill("Edited on a stale page.");
   await page.getByRole("button", { name: "Сохранить задание", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Черновик изменился");
+  await expect(page.getByRole("alert").filter({ hasText: "Черновик изменился" })).toBeVisible();
 
   // The assistant's version is intact, and the teacher's stale edit is not in it.
   await page.reload();
