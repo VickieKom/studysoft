@@ -3,7 +3,7 @@
 // were. A submission waits for review until the teacher has opened it and
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { answerKey, answerText } from "../../domain/homework";
+import { answerKey, answerText, attemptAnswerFileUrl } from "../../domain/homework";
 import { type HomeworkDocument, storedAnswerSchema, type Task } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
@@ -90,6 +90,8 @@ export type ReviewTask = {
   verdict: boolean | null;
   marked: boolean | null;
   key: string | null;
+  /** A recording or file to play or show, from this submission's own attempt (#93). */
+  file: { kind: "audio" | "image"; url: string } | null;
 };
 
 export type ReviewSubmission = {
@@ -114,8 +116,15 @@ const NO_TOPIC = "Без темы";
 
 type StoredRow = { taskIndex: number; answer: unknown; correct: boolean | null; mark: boolean | null };
 
-/** The tasks of one submission with the student's answers and the verdicts. */
-function reviewTasks(tasks: Task[], answers: StoredRow[]): ReviewTask[] {
+/**
+ * The tasks of one submission with the student's answers and the verdicts; a
+ * recording or file points at that submission's own attempt (#93).
+ */
+function reviewTasks(
+  submission: { homeworkId: string; attempt: number },
+  tasks: Task[],
+  answers: StoredRow[],
+): ReviewTask[] {
   const byIndex = new Map(answers.map((a) => [a.taskIndex, a]));
   return tasks.map((task, index) => {
     const stored = byIndex.get(index);
@@ -131,6 +140,13 @@ function reviewTasks(tasks: Task[], answers: StoredRow[]): ReviewTask[] {
       verdict: stored?.mark ?? stored?.correct ?? null,
       marked: stored?.mark ?? null,
       key: answerKey(task),
+      file:
+        parsed.success && (parsed.data.type === "voice" || parsed.data.type === "file") && parsed.data.type === task.type
+          ? {
+              kind: parsed.data.contentType.startsWith("image/") ? "image" : "audio",
+              url: attemptAnswerFileUrl(submission.homeworkId, submission.attempt, index),
+            }
+          : null,
     };
   });
 }
@@ -205,7 +221,7 @@ export async function recentResults(
       .from(homeworkAnswer)
       .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
     const document = (row.document as HomeworkDocument).tasks;
-    const tasks = reviewTasks(document, answers);
+    const tasks = reviewTasks(row, document, answers);
     all.push(...tasks);
     recentHomework.push({
       title: row.title,
@@ -259,7 +275,7 @@ export async function findSubmission(db: Database, teacherId: string, id: string
     })
     .from(homeworkAnswer)
     .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
-  const tasks = reviewTasks((row.document as HomeworkDocument).tasks, answers);
+  const tasks = reviewTasks(row, (row.document as HomeworkDocument).tasks, answers);
 
   const attempts = await db
     .select({
