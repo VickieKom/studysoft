@@ -74,7 +74,7 @@ async function addPastLesson(page: Page, firstName: string, days: number, time =
   await control(page, "+ Урок").click();
   await page.getByLabel("Ученик").selectOption({ label: firstName });
   await page.getByLabel("Дата").fill(isoDate(date));
-  await page.getByLabel("Время").fill(time);
+  await page.getByLabel("Время", { exact: true }).fill(time);
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
   await expect(control(page, "+ Урок")).toBeVisible();
   await expect(lessonOf(await openWeekWith(page, date), firstName).first()).toBeVisible();
