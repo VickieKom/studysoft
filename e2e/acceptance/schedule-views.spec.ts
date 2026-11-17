@@ -145,7 +145,7 @@ test("«Список» shows the lessons from now on, grouped by date, with both
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Ссылка на встречу").fill(meeting);
   await dialog.getByRole("button", { name: "Сохранить ссылку", exact: true }).click();
-  await expect(dialog.getByText("Сохранено")).toBeVisible();
+  await expect(dialog.getByText("Ссылка сохранена")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("region", { name: dayLabel(first) }).locator(`a[href="${meeting}"]`)).toBeVisible();
   await expect(page.getByRole("region", { name: dayLabel(second) }).locator(`a[href="${meeting}"]`)).toHaveCount(0);
