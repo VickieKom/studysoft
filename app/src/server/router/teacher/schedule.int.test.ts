@@ -146,3 +146,29 @@ describe("teacher.schedule", () => {
     expect(week.lessons.some((l) => l.studentName === "Чужой")).toBe(false);
   });
 });
+
+describe("teacher.schedule.upcoming (#85)", () => {
+  it("lists the lessons from now on in time order, without the past and cancelled ones or another teacher's", async () => {
+    const studentId = await newStudent("Ближайшие");
+    // Midnight of the student's today has passed.
+    const today = dateIn(new Date(), "Europe/Moscow");
+    await teacher.teacher.schedule.addLesson({ studentId, date: today, time: "00:00", durationMinutes: 60, intro: false });
+    await teacher.teacher.schedule.addLesson({ studentId, date: ahead(4), time: "12:00", durationMinutes: 60, intro: false });
+    await teacher.teacher.schedule.addLesson({ studentId, date: ahead(3), time: "10:00", durationMinutes: 60, intro: false });
+    await teacher.teacher.schedule.addLesson({ studentId, date: ahead(5), time: "09:00", durationMinutes: 60, intro: false });
+    const cancelled = (await lessonsOf(studentId)).find((l) => dateIn(l.startsAt, "Europe/Moscow") === ahead(5))!;
+    await teacher.teacher.schedule.cancel({ lessonId: cancelled.id, charged: false });
+
+    const upcoming = await teacher.teacher.schedule.upcoming();
+    expect(upcoming.timeZone).toBe("Asia/Bangkok");
+    const own = upcoming.lessons.filter((l) => l.studentId === studentId);
+    expect(own.map((l) => [dateIn(new Date(l.startsAt), "Europe/Moscow"), timeIn(new Date(l.startsAt), "Europe/Moscow")])).toEqual([
+      [ahead(3), "10:00"],
+      [ahead(4), "12:00"],
+    ]);
+    const starts = upcoming.lessons.map((l) => l.startsAt);
+    expect(starts).toEqual([...starts].sort());
+    expect(upcoming.lessons.every((l) => new Date(l.startsAt) > new Date())).toBe(true);
+    expect((await otherTeacher.teacher.schedule.upcoming()).lessons.some((l) => l.studentId === studentId)).toBe(false);
+  });
+});
