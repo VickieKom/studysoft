@@ -16,6 +16,9 @@ test.use({ storageState: TEACHER_SESSION, permissions: ["clipboard-read", "clipb
 // The game and the students made by one scenario are used by the next ones.
 test.describe.configure({ mode: "serial" });
 
+// A student's browser has no teacher session: contexts made here would otherwise inherit hers from test.use.
+const NO_SESSION = { cookies: [], origins: [] };
+
 const game = (name: string) =>
   Buffer.from(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${name}</title></head>
@@ -54,9 +57,9 @@ async function copyStudentLink(page: Page): Promise<string> {
   return page.evaluate(() => navigator.clipboard.readText());
 }
 
-/** Opens a link in a fresh browser, as the student would, and waits for their page. */
+/** Opens a link in a fresh browser without any session, as the student would, and waits for their page. */
 async function openAsStudent(browser: Browser, link: string, firstName: string): Promise<Page> {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ storageState: NO_SESSION });
   const page = await context.newPage();
   await page.goto(link);
   await expect(page.getByText(firstName)).toBeVisible();
