@@ -90,7 +90,7 @@ async function addPastLesson(page: Page, firstName: string): Promise<Date> {
   await control(page, "+ Урок").click();
   await page.getByLabel("Ученик").selectOption({ label: firstName });
   await page.getByLabel("Дата").fill(isoDate(date));
-  await page.getByLabel("Время").fill("10:00");
+  await page.getByLabel("Время", { exact: true }).fill("10:00");
   await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
   // Saved before the scenario moves on: the form has closed and «+ Урок» is back.
   await expect(control(page, "+ Урок")).toBeVisible();
