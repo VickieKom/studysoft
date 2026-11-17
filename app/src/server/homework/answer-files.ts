@@ -21,6 +21,8 @@ import { isAudioOnly, sniffMedia, VOICE_TYPES, voiceDuration } from "./media";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TASK_INDEX = /^(0|[1-9]\d{0,2})$/;
+// An attempt number as the review links it: 1, 2, …
+const ATTEMPT = /^[1-9]\d{0,8}$/;
 // The same 404 as a missing homework picture: nothing tells "not yours" from "not there".
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
@@ -139,12 +141,19 @@ function byteRange(header: string | null, size: number): { start: number; end: n
 
 /**
  * Serves the recording or file answering a task, from the homework's current
- * attempt. The teacher who owns the homework sees it; the student only in
- * their own published or submitted homework. A missing answer, a foreign
- * homework and no session all answer the same 404.
+ * attempt or, given one, from that attempt (#93: «Проверка домашек» plays
+ * earlier attempts too). The teacher who owns the homework sees it; the
+ * student only in their own published or submitted homework. A missing
+ * answer, a foreign homework and no session all answer the same 404.
  */
-export async function handleAnswerFileRequest(request: Request, homeworkId: string, taskIndex: string): Promise<Response> {
+export async function handleAnswerFileRequest(
+  request: Request,
+  homeworkId: string,
+  taskIndex: string,
+  attempt?: string,
+): Promise<Response> {
   if (!UUID.test(homeworkId) || !TASK_INDEX.test(taskIndex)) return notFound();
+  if (attempt !== undefined && !ATTEMPT.test(attempt)) return notFound();
   const database = db();
   const owner = await requester(database, request.headers);
   if (!owner) return notFound();
@@ -156,7 +165,7 @@ export async function handleAnswerFileRequest(request: Request, homeworkId: stri
       homeworkAnswer,
       and(
         eq(homeworkAnswer.homeworkId, homework.id),
-        eq(homeworkAnswer.attempt, homework.attempt),
+        attempt === undefined ? eq(homeworkAnswer.attempt, homework.attempt) : eq(homeworkAnswer.attempt, Number(attempt)),
         eq(homeworkAnswer.taskIndex, Number(taskIndex)),
       ),
     )

@@ -3,7 +3,7 @@
 // were. A submission waits for review until the teacher has opened it and
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { answerKey, answerText } from "../../domain/homework";
+import { answerKey, answerText, attemptAnswerFileUrl } from "../../domain/homework";
 import { type HomeworkDocument, storedAnswerSchema } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
@@ -90,6 +90,8 @@ export type ReviewTask = {
   verdict: boolean | null;
   marked: boolean | null;
   key: string | null;
+  /** A recording or file to play or show, from this submission's own attempt (#93). */
+  file: { kind: "audio" | "image"; url: string } | null;
 };
 
 export type ReviewSubmission = {
@@ -162,6 +164,13 @@ export async function findSubmission(db: Database, teacherId: string, id: string
       verdict: stored?.mark ?? stored?.correct ?? null,
       marked: stored?.mark ?? null,
       key: answerKey(task),
+      file:
+        parsed.success && (parsed.data.type === "voice" || parsed.data.type === "file") && parsed.data.type === task.type
+          ? {
+              kind: parsed.data.contentType.startsWith("image/") ? "image" : "audio",
+              url: attemptAnswerFileUrl(row.homeworkId, row.attempt, index),
+            }
+          : null,
     };
   });
 
