@@ -217,7 +217,7 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
         </span>
       </header>
 
-      <h1 className="text-task-title font-bold">{task.prompt}</h1>
+      <h1 className="whitespace-pre-line text-task-title font-bold">{task.prompt}</h1>
       {task.image && (
         // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
         // eslint-disable-next-line @next/next/no-img-element -- same reason as above
@@ -368,7 +368,7 @@ function Gap({ task, answer, onChange }: BodyProps & { task: { type: "gap"; text
     onChange(next.every((g) => g === "") ? null : { type: "gap", gaps: next }, typing);
   }
   return (
-    <p className="text-answer leading-10">
+    <p className="whitespace-pre-line text-answer leading-10">
       {parts.map((part, i) => (
         <span key={i}>
           {part}

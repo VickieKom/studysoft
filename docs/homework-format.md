@@ -17,7 +17,7 @@ Content lives in the platform's database, never in this repository. The example 
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `type` | yes | One of the types below |
-| `prompt` | yes | The instruction the student reads |
+| `prompt` | yes | The instruction the student reads. A line break (`\n`) is shown as a new line |
 | `topic` | no | Free text, for grouping mistakes and gaps, for example "Present Simple" |
 | `skill` | no | `grammar`, `vocabulary`, `reading`, `writing`, `speaking` or `listening` |
 | `source` | no | Where the task comes from: `{ "book": "Workbook", "unit": "0", "page": "6", "exercise": "2" }` (every key optional except `book`), or the string `"own"` for the teacher's own task |
@@ -51,7 +51,7 @@ A text with one or more gaps, each written as `___` (three underscores).
 
 | Field | Meaning |
 |-------|---------|
-| `text` | The text with gaps |
+| `text` | The text with gaps. A line break (`\n`) is shown as a new line, so a workbook's one sentence per line stays that way |
 | `answers` | One list per gap, in order: the accepted variants for that gap |
 | `options` | Optional: words to choose from. Without it the student types |
 

@@ -12,7 +12,7 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
       <p className="text-caption text-text-muted">
         {number}. {TASK_TYPE_LABELS[task.type]}
       </p>
-      <p className="mt-1 font-semibold">{task.prompt}</p>
+      <p className="mt-1 whitespace-pre-line font-semibold">{task.prompt}</p>
       {task.image && (
         // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
         // eslint-disable-next-line @next/next/no-img-element -- same reason as above
@@ -22,7 +22,7 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
           className="mt-2 max-h-64 rounded-control border border-border"
         />
       )}
-      {"text" in task && <p className="mt-2">{task.text}</p>}
+      {"text" in task && <p className="mt-2 whitespace-pre-line">{task.text}</p>}
       {"options" in task && task.options && (
         <p className="mt-2 flex flex-wrap gap-2">
           {task.options.map((option, i) => (

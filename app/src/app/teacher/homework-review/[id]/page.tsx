@@ -59,7 +59,7 @@ export default async function SubmissionPage({ params }: Props) {
               {task.index + 1}. {TASK_TYPE_LABELS[task.type as keyof typeof TASK_TYPE_LABELS]}
               {task.topic && ` · ${task.topic}`}
             </p>
-            <p className="mt-1 font-semibold">{task.prompt}</p>
+            <p className="mt-1 whitespace-pre-line font-semibold">{task.prompt}</p>
             <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
               {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
             </p>
