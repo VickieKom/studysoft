@@ -59,6 +59,10 @@ async function uploadGame(
   await page.getByLabel("Тема").fill(topic);
   await page.getByLabel("Возраст").selectOption({ label: age });
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  // Saved, back on the list, or refused with a message: either way the upload is over before the scenario moves on.
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Библиотека", exact: true }).or(page.getByRole("alert").filter({ hasText: /МБ|HTML/ })),
+  ).toBeVisible();
 }
 
 test("an empty library says so and offers «Загрузить»", async ({ browser }) => {
