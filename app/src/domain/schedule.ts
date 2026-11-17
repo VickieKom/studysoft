@@ -100,6 +100,17 @@ export function slotDates(weekday: number, from: string, days: number): string[]
   return dates;
 }
 
+/** The views of «Расписание» (#85); the week is the default. */
+export const SCHEDULE_VIEWS = ["day", "week", "list"] as const;
+export type ScheduleView = (typeof SCHEDULE_VIEWS)[number];
+export const SCHEDULE_VIEW_LABELS: Record<ScheduleView, string> = { day: "День", week: "Неделя", list: "Список" };
+/** The cookie that keeps the chosen view in this browser. */
+export const SCHEDULE_VIEW_COOKIE = "schedule-view";
+
+export function scheduleView(value: string | undefined): ScheduleView | null {
+  return (SCHEDULE_VIEWS as readonly string[]).includes(value ?? "") ? (value as ScheduleView) : null;
+}
+
 /** «вторник, 17 ноября»: how the week names a day. */
 export function dayLabel(date: string): string {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString("ru-RU", {
