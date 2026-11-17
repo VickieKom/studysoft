@@ -6,10 +6,16 @@ import { formatDueDate } from "@/domain/homework";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
-type Props = { homeworkId: string; status: "draft" | "published" | "submitted" | "missed"; dueDate: string | null };
+type Props = {
+  homeworkId: string;
+  status: "draft" | "published" | "submitted" | "missed";
+  dueDate: string | null;
+  /** The version of the draft this page shows; publishing anything newer is refused (#99). */
+  revision: string;
+};
 
 /** Publish a draft with a deadline, or take a published homework back (#32). */
-export function HomeworkPublish({ homeworkId, status, dueDate }: Props) {
+export function HomeworkPublish({ homeworkId, status, dueDate, revision }: Props) {
   const router = useRouter();
   const [date, setDate] = useState("");
   const [pending, setPending] = useState(false);
@@ -23,9 +29,9 @@ export function HomeworkPublish({ homeworkId, status, dueDate }: Props) {
       router.refresh();
     } catch (cause) {
       const code = (cause as { data?: { code?: string } } | null)?.data?.code;
-      // The server's message is meant for the teacher only for a wrong deadline.
+      // The server's message is meant for the teacher only for a wrong deadline and a changed draft.
       setError(
-        code === "BAD_REQUEST" && cause instanceof Error
+        (code === "BAD_REQUEST" || code === "CONFLICT") && cause instanceof Error
           ? cause.message
           : "Не получилось. Обновите страницу и попробуйте ещё раз",
       );
@@ -37,7 +43,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate }: Props) {
   async function onPublish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!date) return;
-    await run(() => routerClient.teacher.homework.publish.mutate({ id: homeworkId, dueDate: date }));
+    await run(() => routerClient.teacher.homework.publish.mutate({ id: homeworkId, revision, dueDate: date }));
   }
 
   if (status === "missed" || status === "submitted") return null;

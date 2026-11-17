@@ -33,6 +33,9 @@ beforeAll(async () => {
 
 afterAll(closeDb);
 
+// The revision the teacher's page sends back with publishing and saving tasks (#99).
+const revisionOf = async (id: string) => (await teacher.teacher.homework.get({ id })).revision;
+
 describe("agent homework drafts", () => {
   it("give the format with its version", async () => {
     const format = await assistant.agent.homeworkFormat();
@@ -65,7 +68,7 @@ describe("agent homework drafts", () => {
     const studentId = await newStudent("Правка");
     const { id } = await assistant.agent.saveHomeworkDraft({ studentId, homework: titled(short, "Hers") });
     const edited = { ...short.tasks[0], prompt: "Edited by the teacher." };
-    await teacher.teacher.homework.updateTasks({ id, tasks: [edited, ...short.tasks.slice(1)] });
+    await teacher.teacher.homework.updateTasks({ id, revision: await revisionOf(id), tasks: [edited, ...short.tasks.slice(1)] });
 
     const next = await assistant.agent.saveHomeworkDraft({ studentId, homework: titled(short, "Next") });
     expect(next.id).not.toBe(id);
@@ -76,10 +79,10 @@ describe("agent homework drafts", () => {
   it("make a new draft once the old one is published, and never publish", async () => {
     const studentId = await newStudent("Публикация");
     const { id } = await assistant.agent.saveHomeworkDraft({ studentId, homework: titled(short, "Published") });
-    await expect(assistant.teacher.homework.publish({ id, dueDate: inDays(2) })).rejects.toMatchObject({
+    await expect(assistant.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(2) })).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     });
-    await teacher.teacher.homework.publish({ id, dueDate: inDays(2) });
+    await teacher.teacher.homework.publish({ id, revision: await revisionOf(id), dueDate: inDays(2) });
     const next = await assistant.agent.saveHomeworkDraft({ studentId, homework: titled(short, "After") });
     expect(next.id).not.toBe(id);
     expect((await teacher.teacher.homework.get({ id })).title).toBe("Published");
