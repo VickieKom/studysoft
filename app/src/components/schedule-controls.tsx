@@ -153,6 +153,8 @@ type Slot = {
   id: string;
   weekday: number;
   startTime: string;
+  /** The teacher's weekday and time when her zone differs (#100). */
+  teacher: { weekday: number; startTime: string } | null;
   durationMinutes: number;
   validFrom: string;
   validUntil: string | null;
@@ -164,7 +166,8 @@ const dateLabel = (date: string) => dayMonthIn(new Date(`${date}T12:00:00Z`), "U
 /**
  * The student's weekly slots on the card, with «Добавить слот» (#80) and
  * «Изменить слот» from a date (#81): lessons from that date follow the new
- * day and time; earlier ones and the ones changed by hand stay.
+ * day and time; earlier ones and the ones changed by hand stay. A slot reads
+ * in the student's current zone, and in the teacher's when hers differs (#100).
  */
 export function StudentSlots({ studentId, slots, today }: { studentId: string; slots: Slot[]; today: string }) {
   const router = useRouter();
@@ -209,6 +212,8 @@ export function StudentSlots({ studentId, slots, today }: { studentId: string; s
             <li key={slot.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>
                 {weekdayLabel(slot.weekday)}, {slot.startTime} · {slot.durationMinutes} мин
+                {slot.teacher &&
+                  ` · у вас ${slot.teacher.weekday === slot.weekday ? "" : `${weekdayLabel(slot.teacher.weekday).toLowerCase()}, `}${slot.teacher.startTime}`}
                 {slot.validFrom > today && ` · с ${dateLabel(slot.validFrom)}`}
                 {slot.validUntil && ` · до ${dateLabel(slot.validUntil)} включительно`}
               </span>

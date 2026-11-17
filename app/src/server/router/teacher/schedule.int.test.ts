@@ -57,6 +57,36 @@ describe("teacher.schedule", () => {
     expect(after.length).toBe(5);
   });
 
+  it("keeps a slot's moment when the student's time zone changes, and shows it in the new zone and the teacher's (#100)", async () => {
+    const studentId = await newStudent("Переезд");
+    const first = ahead(2);
+    await teacher.teacher.schedule.addSlot({ studentId, weekday: weekdayOf(first), startTime: "17:00", durationMinutes: 60 });
+    const before = await lessonsOf(studentId);
+    // The teacher is in Bangkok (UTC+7): the student's 17:00 in Moscow is her 21:00, the same weekday.
+    expect(await teacher.teacher.schedule.slots({ studentId })).toEqual([
+      expect.objectContaining({
+        weekday: weekdayOf(first),
+        startTime: "17:00",
+        teacher: { weekday: weekdayOf(first), startTime: "21:00" },
+      }),
+    ]);
+
+    await teacher.teacher.students.update({ ...base, id: studentId, firstName: "Переезд", status: "active", timeZone: "Asia/Bangkok" });
+
+    const after = await lessonsOf(studentId);
+    expect(after.map((l) => [l.id, l.startsAt.getTime()])).toEqual(before.map((l) => [l.id, l.startsAt.getTime()]));
+    // Now the student's zone is the teacher's: one time, 21:00, and no second one.
+    expect(await teacher.teacher.schedule.slots({ studentId })).toEqual([
+      expect.objectContaining({ weekday: weekdayOf(first), startTime: "21:00", teacher: null }),
+    ]);
+
+    // Topping up keeps adding lessons at the slot's moment, not at 17:00 in the new zone.
+    await topUpLessons(db(), teacherId, new Date(Date.now() + 7 * 86_400_000));
+    const topped = await lessonsOf(studentId);
+    expect(topped.length).toBeGreaterThan(before.length);
+    expect(topped.every((l) => timeIn(l.startsAt, "Asia/Bangkok") === "21:00")).toBe(true);
+  });
+
   it("shows the week in the teacher's time zone with the student's zone alongside", async () => {
     const studentId = await newStudent("Неделя");
     const date = ahead(2);
