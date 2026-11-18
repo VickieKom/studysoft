@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import allTypes from "../../../deploy/seed/homework/demo-all-types.json";
 import choices from "../../../deploy/seed/homework/demo-gap-choices.json";
+import layout from "../../../deploy/seed/homework/demo-layout.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
 import { isAnswered, parseHomework, type StudentTask, studentView } from "./homework-format";
 
@@ -146,5 +147,26 @@ describe("a gap's own options (#128)", () => {
 
   it("accept a key that differs from its option only by case and spaces", () => {
     expect(parseHomework(withTask({ answers: [[" On "], ["plays"], ["Mila"]] })).ok).toBe(true);
+  });
+});
+
+describe("a workbook exercise's parts (#131)", () => {
+  it("accepts a reading text and an example, and the student gets both but no key", () => {
+    const parsed = parseHomework(JSON.stringify(layout));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [blog, , gap] = parsed.homework.tasks;
+    expect(studentView(blog!, "seed")).toMatchObject({ prompt: blog!.prompt, passage: blog!.passage });
+    const view = studentView(gap!, "seed");
+    expect(view).toMatchObject({ type: "gap", example: { text: "0 She ___ a teacher.", answer: "is" } });
+    expect(JSON.stringify(view)).not.toContain("'re");
+  });
+
+  it("refuses an example without its text, an empty reading text and a field it does not know", () => {
+    const task = { type: "written", prompt: "Write." };
+    for (const extra of [{ example: { answer: "is" } }, { passage: "  " }, { example: { text: "x", points: 1 } }]) {
+      const result = parseHomework(JSON.stringify({ version: 1, title: "t", tasks: [{ ...task, ...extra }] }));
+      expect(result.ok).toBe(false);
+    }
   });
 });

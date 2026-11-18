@@ -54,6 +54,8 @@ const submission = z
           type: z.string(),
           prompt: z.string(),
           choices: z.array(z.array(z.string()).nullable()).nullable(),
+          passage: z.string().nullable(),
+          example: z.object({ text: z.string(), answer: z.string().optional() }).strict().nullable(),
           topic: z.string().nullable(),
           answer: z.string().nullable(),
           autoChecked: z.boolean(),

@@ -21,8 +21,13 @@ const current = z
 const text = z.string();
 // A picture goes out as the address it is served at, never as the stored reference.
 const image = z.string().startsWith("/api/files/homework/").optional();
+// The reading text and the example of a workbook exercise (#131): part of the exercise, not keys.
+const parts = {
+  passage: text.optional(),
+  example: z.object({ text, answer: text.optional() }).strict().optional(),
+};
 const studentTask = z.discriminatedUnion("type", [
-  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image }).strict(),
+  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image, ...parts }).strict(),
   z
     .object({
       type: z.literal("gap"),
@@ -32,11 +37,12 @@ const studentTask = z.discriminatedUnion("type", [
       // A gap's own options (#128): what the student picks from, never which is right.
       choices: z.array(z.array(text).nullable()).optional(),
       image,
+      ...parts,
     })
     .strict(),
-  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image }).strict(),
-  z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image }).strict(),
-  z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image }).strict(),
+  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image, ...parts }).strict(),
+  z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image, ...parts }).strict(),
+  z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image, ...parts }).strict(),
   z
     .object({
       type: z.literal("file"),
@@ -44,6 +50,7 @@ const studentTask = z.discriminatedUnion("type", [
       accept: z.array(z.enum(["image", "audio"])),
       hint: text.optional(),
       image,
+      ...parts,
     })
     .strict(),
 ]);

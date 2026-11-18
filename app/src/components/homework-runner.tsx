@@ -14,6 +14,7 @@ import {
 } from "@/domain/homework-format";
 import { HomeworkResult } from "./homework-result";
 import { routerClient } from "./router-client";
+import { TaskExampleLine, TaskPassage } from "./task-parts";
 
 type Props = {
   homeworkId: string;
@@ -218,6 +219,8 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
       </header>
 
       <h1 className="whitespace-pre-line text-task-title font-bold">{task.prompt}</h1>
+      {task.passage && <TaskPassage passage={task.passage} className="text-answer" />}
+      {task.example && <TaskExampleLine example={task.example} className="text-answer" />}
       {task.image && (
         // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
         // eslint-disable-next-line @next/next/no-img-element -- same reason as above

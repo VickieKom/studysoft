@@ -39,6 +39,10 @@ type Props = {
 export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave, onCancel }: Props) {
   const id = useId();
   const [prompt, setPrompt] = useState(task?.prompt ?? "");
+  // The parts of a workbook exercise besides its instruction (#131).
+  const [passage, setPassage] = useState(task?.passage ?? "");
+  const [exampleText, setExampleText] = useState(task?.example?.text ?? "");
+  const [exampleAnswer, setExampleAnswer] = useState(task?.example?.answer ?? "");
   const [topic, setTopic] = useState(task?.topic ?? "");
   const [skill, setSkill] = useState<string>(task?.skill ?? "");
   const [optionsText, setOptionsText] = useState(task && "options" in task && task.options ? task.options.join("\n") : "");
@@ -87,6 +91,10 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
     if (!prompt.trim()) return "Напишите текст задания";
     const common = {
       prompt: prompt.trim(),
+      ...(passage.trim() ? { passage: passage.trim() } : {}),
+      ...(exampleText.trim()
+        ? { example: { text: exampleText.trim(), ...(exampleAnswer.trim() ? { answer: exampleAnswer.trim() } : {}) } }
+        : {}),
       ...(topic.trim() ? { topic: topic.trim() } : {}),
       ...(skill ? { skill: skill as (typeof SKILLS)[number] } : {}),
       ...(task?.source ? { source: task.source } : {}),
@@ -159,6 +167,28 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
       <Labelled id={`${id}-prompt`} label="Текст задания">
         <input id={`${id}-prompt`} value={prompt} onChange={(e) => setPrompt(e.target.value)} className={field} />
       </Labelled>
+      <Labelled id={`${id}-passage`} label="Текст для чтения (если есть)">
+        <textarea
+          id={`${id}-passage`}
+          rows={4}
+          value={passage}
+          onChange={(e) => setPassage(e.target.value)}
+          className="rounded-control border border-border bg-bg px-3 py-2"
+        />
+      </Labelled>
+      <div className="grid grid-cols-[2fr_1fr] gap-3">
+        <Labelled id={`${id}-example`} label="Пример (___ — место ответа)">
+          <input id={`${id}-example`} value={exampleText} onChange={(e) => setExampleText(e.target.value)} className={field} />
+        </Labelled>
+        <Labelled id={`${id}-example-answer`} label="Ответ в примере">
+          <input
+            id={`${id}-example-answer`}
+            value={exampleAnswer}
+            onChange={(e) => setExampleAnswer(e.target.value)}
+            className={field}
+          />
+        </Labelled>
+      </div>
 
       <div className="flex flex-col gap-2">
         {image && (

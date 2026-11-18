@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import type { StoredAnswer, Task } from "./homework-format";
+import type { StoredAnswer, Task, TaskExample } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -117,4 +117,11 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
 /** When a homework was submitted, for the teacher: "12 ноября". */
 export function formatReviewDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
+/** The example's text with its answer where `___` stands, or after it when there is no gap. */
+export function exampleParts(example: TaskExample): { before: string; answer?: string; after: string } {
+  const at = example.text.indexOf("___");
+  if (at < 0 || !example.answer) return { before: example.text, ...(example.answer ? { answer: example.answer } : {}), after: "" };
+  return { before: example.text.slice(0, at), answer: example.answer, after: example.text.slice(at + 3) };
 }

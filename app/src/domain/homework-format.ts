@@ -49,8 +49,22 @@ const image = z
   })
   .refine((value) => (imageDataUrl(value)?.bytes ?? 0) <= MAX_IMAGE_BYTES, { error: "картинка больше 2 МБ" });
 
+/** The longest reading text a task carries: a page of a workbook (#131). */
+export const MAX_PASSAGE_CHARS = 5000;
+
+/**
+ * A workbook exercise's example (#131): shown with its answer, marked as an
+ * example, never answered or checked. In `text`, `___` stands where the
+ * answer goes.
+ */
+const example = z.object({ text, answer: z.string().trim().min(1).optional() }).strict();
+export type TaskExample = z.infer<typeof example>;
+
 const common = {
   prompt: text,
+  // A reading text of its own (#131): a passage, a blog post, a dialogue, notes; shown in regular type with its lines.
+  passage: z.string().trim().min(1).max(MAX_PASSAGE_CHARS).optional(),
+  example: example.optional(),
   topic: z.string().optional(),
   skill: z.enum(SKILLS).optional(),
   source: source.optional(),
@@ -265,9 +279,17 @@ export type StudentTask = (
 ) & {
   /** The address of the task's picture, served after a permission check (#33). */
   image?: string;
+  /** The reading text and the example (#131): part of the exercise, not keys. */
+  passage?: string;
+  example?: TaskExample;
 };
 
 export function studentView(task: Task, seed: string): StudentTask {
+  const parts = { ...(task.passage ? { passage: task.passage } : {}), ...(task.example ? { example: task.example } : {}) };
+  return { ...studentBody(task, seed), ...parts };
+}
+
+function studentBody(task: Task, seed: string): StudentTask {
   switch (task.type) {
     case "single_choice":
     case "multiple_choice":

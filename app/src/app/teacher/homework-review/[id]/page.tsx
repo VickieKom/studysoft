@@ -5,6 +5,7 @@ import { formatReviewDate, TASK_TYPE_LABELS } from "@/domain/homework";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
 import { GapChoices } from "@/components/gap-choices";
+import { TaskExampleLine, TaskPassage } from "@/components/task-parts";
 
 export const metadata = { title: "Сдача — StudySoft" };
 
@@ -61,6 +62,13 @@ export default async function SubmissionPage({ params }: Props) {
               {task.topic && ` · ${task.topic}`}
             </p>
             <p className="mt-1 whitespace-pre-line font-semibold">{task.prompt}</p>
+            {task.passage && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-small text-text-secondary">Текст</summary>
+                <TaskPassage passage={task.passage} className="mt-1" />
+              </details>
+            )}
+            {task.example && <TaskExampleLine example={task.example} className="mt-2 text-small" />}
             {task.choices && <GapChoices choices={task.choices} className="mt-1 text-small" />}
             <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
               {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
