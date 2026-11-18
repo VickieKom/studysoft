@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Task } from "../../domain/homework-format";
-import { checkAnswer, fitsTask, normalize } from "./check";
+import type { OrderTask, Task } from "../../domain/homework-format";
+import { checkAnswer, checkSentences, fitsTask, normalize } from "./check";
 
 const single: Task = { type: "single_choice", prompt: "p", options: ["a", "b", "c"], answer: 1 };
 const multiple: Task = { type: "multiple_choice", prompt: "p", options: ["a", "b", "c", "d"], answers: [0, 2] };
@@ -99,5 +99,47 @@ describe("fitsTask", () => {
     expect(fitsTask(gap, { type: "gap", gaps: ["it's", ""] })).toBe(true);
     expect(fitsTask(match, { type: "match", pairs: [{ left: "hot", right: "small" }] })).toBe(true);
     expect(fitsTask(order, { type: "order", words: ["play", "We"] })).toBe(true);
+  });
+});
+
+describe("an order task of several sentences (#161)", () => {
+  const sentences: Task = {
+    type: "order",
+    prompt: "p",
+    sentences: [
+      { words: ["I", "like", "tea"] },
+      { words: ["We", "go", "home"], alternatives: [["Home", "we", "go"]] },
+    ],
+  };
+
+  it("checks each sentence on its own, alternatives included", () => {
+    expect(checkSentences(sentences as OrderTask, { type: "order", sentences: [["i", "like", "tea"], ["Home", "we", "go"]] })).toEqual([
+      true,
+      true,
+    ]);
+    expect(checkSentences(sentences as OrderTask, { type: "order", sentences: [["tea", "like", "I"], ["We", "go", "home"]] })).toEqual([
+      false,
+      true,
+    ]);
+    // A sentence left out, an answer of the other shape and no answer: wrong.
+    expect(checkSentences(sentences as OrderTask, { type: "order", sentences: [["I", "like", "tea"]] })).toEqual([true, false]);
+    expect(checkSentences(sentences as OrderTask, { type: "order", words: ["I", "like", "tea"] })).toEqual([false, false]);
+    expect(checkSentences(sentences as OrderTask, null)).toEqual([false, false]);
+    expect(checkAnswer(sentences, { type: "order", sentences: [["I", "like", "tea"], ["We", "go", "home"]] })).toBe(true);
+    expect(checkAnswer(sentences, { type: "order", sentences: [["I", "like", "tea"], ["We", "home", "go"]] })).toBe(false);
+  });
+
+  it("a task of one sentence is one point", () => {
+    expect(checkSentences(order as OrderTask, { type: "order", words: ["We", "play", "after", "school"] })).toEqual([true]);
+    expect(checkSentences(order as OrderTask, { type: "order", sentences: [["We", "play", "after", "school"]] })).toEqual([false]);
+  });
+
+  it("fits only words taken from each sentence's own words, one list per sentence", () => {
+    expect(fitsTask(sentences, { type: "order", sentences: [["tea"], []] })).toBe(true);
+    expect(fitsTask(sentences, { type: "order", sentences: [["home"], []] })).toBe(false);
+    expect(fitsTask(sentences, { type: "order", sentences: [["tea", "tea"], []] })).toBe(false);
+    expect(fitsTask(sentences, { type: "order", sentences: [["tea"]] })).toBe(false);
+    expect(fitsTask(sentences, { type: "order", words: ["tea"] })).toBe(false);
+    expect(fitsTask(order, { type: "order", sentences: [["We"]] })).toBe(false);
   });
 });

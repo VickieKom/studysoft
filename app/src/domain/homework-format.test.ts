@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import allTypes from "../../../deploy/seed/homework/demo-all-types.json";
 import choices from "../../../deploy/seed/homework/demo-gap-choices.json";
 import layout from "../../../deploy/seed/homework/demo-layout.json";
+import orderSentences from "../../../deploy/seed/homework/demo-order-sentences.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
-import { isAnswered, parseHomework, type StudentTask, studentView } from "./homework-format";
+import { isAnswered, parseHomework, type StudentTask, studentView, taskPoints } from "./homework-format";
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -74,8 +75,8 @@ describe("studentView", () => {
       const seed = `homework:${i}`;
       const words = studentView({ ...order, words: [...order.words] }, seed);
       expect(words).toEqual(studentView({ ...order, words: [...order.words] }, seed));
-      expect(words.type === "order" && words.words).not.toEqual(order.words);
-      expect(words.type === "order" && [...words.words].sort()).toEqual([...order.words].sort());
+      expect("words" in words && words.words).not.toEqual(order.words);
+      expect("words" in words && [...words.words].sort()).toEqual([...order.words].sort());
 
       const pairs = studentView({ ...match, pairs: match.pairs.map((p) => ({ ...p })) }, seed);
       expect(pairs.type === "match" && pairs.left).toEqual(["hot", "big"]);
@@ -90,13 +91,13 @@ describe("studentView with alternatives", () => {
     for (let i = 0; i < 30; i++) {
       // Both orders of two words are correct: nothing else exists, so it stays as it is.
       const both = studentView({ type: "order", prompt: "p", words, alternatives: [["b", "a"]] }, `seed:${i}`);
-      expect(both.type === "order" && both.words.length).toBe(2);
+      expect("words" in both && both.words.length).toBe(2);
       const three = studentView(
         { type: "order", prompt: "p", words: ["x", "y", "z"], alternatives: [["y", "z", "x"], ["z", "x", "y"]] },
         `seed:${i}`,
       );
       expect(three.type === "order" && [["x", "y", "z"], ["y", "z", "x"], ["z", "x", "y"]]).not.toContainEqual(
-        three.type === "order" && three.words,
+        "words" in three && three.words,
       );
     }
   });
@@ -168,5 +169,50 @@ describe("a workbook exercise's parts (#131)", () => {
       const result = parseHomework(JSON.stringify({ version: 1, title: "t", tasks: [{ ...task, ...extra }] }));
       expect(result.ok).toBe(false);
     }
+  });
+});
+
+describe("an order task of several sentences (#161)", () => {
+  const homework = (task: object) => JSON.stringify({ version: 1, title: "t", tasks: [{ type: "order", prompt: "p", ...task }] });
+
+  it("is one task of a point per sentence; the student gets each sentence shuffled and no right order", () => {
+    const parsed = parseHomework(JSON.stringify(orderSentences));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [task] = parsed.homework.tasks;
+    expect(taskPoints(task!)).toBe(3);
+    expect(taskPoints({ type: "order", prompt: "p", words: ["a", "b"] })).toBe(1);
+    for (let i = 0; i < 30; i++) {
+      const view = studentView(task!, `seed:${i}`);
+      expect(view).not.toHaveProperty("words");
+      const shown = "sentences" in view ? view.sentences : [];
+      expect(shown).toHaveLength(3);
+      orderSentences.tasks[0]!.sentences.forEach(({ words }, n) => {
+        expect([...shown[n]!].sort()).toEqual([...words].sort());
+        expect(shown[n]).not.toEqual(words);
+      });
+      expect(view).toEqual(studentView(task!, `seed:${i}`));
+    }
+  });
+
+  it("refuses both words and sentences, neither, one sentence alone, task-wide alternatives and another sentence's words", () => {
+    const two = [{ words: ["a", "b"] }, { words: ["c", "d"] }];
+    for (const task of [
+      { words: ["a", "b"], sentences: two },
+      {},
+      { sentences: [{ words: ["a", "b"] }] },
+      { sentences: two, alternatives: [["b", "a"]] },
+      { sentences: [{ words: ["a", "b"], alternatives: [["c", "d"]] }, { words: ["c", "d"] }] },
+    ]) {
+      expect(parseHomework(homework(task)).ok).toBe(false);
+    }
+    expect(parseHomework(homework({ sentences: [{ words: ["a", "b"], alternatives: [["b", "a"]] }, { words: ["c", "d"] }] })).ok).toBe(true);
+  });
+
+  it("is answered when every sentence is placed in full", () => {
+    const task: StudentTask = { type: "order", prompt: "p", sentences: [["a", "b"], ["c", "d"]] };
+    expect(isAnswered(task, { type: "order", sentences: [["b", "a"], ["d", "c"]] })).toBe(true);
+    expect(isAnswered(task, { type: "order", sentences: [["b", "a"], ["d"]] })).toBe(false);
+    expect(isAnswered(task, { type: "order", words: ["a", "b"] })).toBe(false);
   });
 });

@@ -3,10 +3,11 @@
 // were. A submission waits for review until the teacher has opened it and
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { answerKey, answerText, attemptAnswerFileUrl } from "../../domain/homework";
-import { type HomeworkDocument, storedAnswerSchema, type Task, type TaskExample } from "../../domain/homework-format";
+import { answerKey, answerText, attemptAnswerFileUrl, sentenceKey } from "../../domain/homework";
+import { type HomeworkDocument, orderSentences, storedAnswerSchema, type Task, type TaskExample } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
+import { countPoints, pointVerdicts, sentenceVerdicts, taskVerdict } from "./points";
 
 const waitingCondition = or(isNull(homeworkSubmission.openedAt), sql`${homeworkSubmission.pendingCount} > 0`);
 
@@ -95,8 +96,18 @@ export type ReviewTask = {
   verdict: boolean | null;
   marked: boolean | null;
   key: string | null;
+  /** Each sentence of an order task of several (#161), its own point; null for any other task. */
+  sentences: ReviewSentence[] | null;
   /** A recording or file to play or show, from this submission's own attempt (#93). */
   file: { kind: "audio" | "image"; url: string } | null;
+};
+
+export type ReviewSentence = {
+  answer: string | null;
+  key: string;
+  /** The teacher's mark if any, else the platform's result. */
+  verdict: boolean;
+  marked: boolean | null;
 };
 
 export type ReviewSubmission = {
@@ -119,7 +130,15 @@ export type ReviewSubmission = {
 
 const NO_TOPIC = "Без темы";
 
-type StoredRow = { taskIndex: number; answer: unknown; correct: boolean | null; mark: boolean | null };
+type StoredRow = { taskIndex: number; answer: unknown; correct: boolean | null; mark: boolean | null; sentences: unknown };
+
+const storedRow = {
+  taskIndex: homeworkAnswer.taskIndex,
+  answer: homeworkAnswer.answer,
+  correct: homeworkAnswer.correct,
+  mark: homeworkAnswer.teacherMark,
+  sentences: homeworkAnswer.sentenceVerdicts,
+};
 
 /**
  * The tasks of one submission with the student's answers and the verdicts; a
@@ -135,6 +154,20 @@ function reviewTasks(
     const stored = byIndex.get(index);
     const parsed = storedAnswerSchema.safeParse(stored?.answer);
     const autoChecked = task.type !== "written" && task.type !== "voice" && task.type !== "file";
+    const answer = parsed.success ? parsed.data : null;
+    const verdicts = stored ? sentenceVerdicts(stored.sentences) : null;
+    const sentences =
+      task.type === "order" && task.sentences && verdicts
+        ? orderSentences(task).map((sentence, i) => {
+            const words = answer?.type === "order" ? answer.sentences?.[i] : undefined;
+            return {
+              answer: words && words.length > 0 ? words.join(" ") : null,
+              key: sentenceKey(sentence),
+              verdict: verdicts[i]?.mark ?? verdicts[i]?.correct ?? false,
+              marked: verdicts[i]?.mark ?? null,
+            };
+          })
+        : null;
     return {
       index,
       type: task.type,
@@ -145,9 +178,10 @@ function reviewTasks(
       topic: task.topic ?? null,
       answer: parsed.success ? answerText(task, parsed.data) : null,
       autoChecked,
-      verdict: stored?.mark ?? stored?.correct ?? null,
+      verdict: stored ? taskVerdict(pointVerdicts(stored)) : null,
       marked: stored?.mark ?? null,
       key: answerKey(task),
+      sentences,
       file:
         parsed.success && (parsed.data.type === "voice" || parsed.data.type === "file") && parsed.data.type === task.type
           ? {
@@ -159,11 +193,12 @@ function reviewTasks(
   });
 }
 
-/** Wrong answers by topic, the most frequent first. */
+/** Wrong answers by topic, the most frequent first; each wrong sentence of an order task counts (#161). */
 function mistakesByTopic(tasks: ReviewTask[]): { topic: string; count: number }[] {
   const mistakes = new Map<string, number>();
   for (const task of tasks) {
-    if (task.verdict === false) mistakes.set(task.topic ?? NO_TOPIC, (mistakes.get(task.topic ?? NO_TOPIC) ?? 0) + 1);
+    const wrong = task.sentences ? task.sentences.filter((s) => !s.verdict).length : task.verdict === false ? 1 : 0;
+    if (wrong > 0) mistakes.set(task.topic ?? NO_TOPIC, (mistakes.get(task.topic ?? NO_TOPIC) ?? 0) + wrong);
   }
   return [...mistakes].map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
 }
@@ -185,6 +220,8 @@ export type RecentHomework = {
     /** The teacher's mark if any, else the platform's result; null while it waits for her. */
     correct: boolean | null;
     markedByTeacher: boolean;
+    /** Each sentence of an order task of several (#161), its own point. */
+    sentences?: { answer: string | null; correct: boolean; markedByTeacher: boolean }[];
   }[];
 };
 
@@ -220,12 +257,7 @@ export async function recentResults(
   const recentHomework: RecentHomework[] = [];
   for (const row of chosen) {
     const answers = await db
-      .select({
-        taskIndex: homeworkAnswer.taskIndex,
-        answer: homeworkAnswer.answer,
-        correct: homeworkAnswer.correct,
-        mark: homeworkAnswer.teacherMark,
-      })
+      .select(storedRow)
       .from(homeworkAnswer)
       .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
     const document = (row.document as HomeworkDocument).tasks;
@@ -242,7 +274,10 @@ export async function recentResults(
         source: document[index]!.source ?? null,
         answer: task.answer,
         correct: task.verdict,
-        markedByTeacher: task.marked !== null,
+        markedByTeacher: task.marked !== null || (task.sentences ?? []).some((s) => s.marked !== null),
+        ...(task.sentences
+          ? { sentences: task.sentences.map((s) => ({ answer: s.answer, correct: s.verdict, markedByTeacher: s.marked !== null })) }
+          : {}),
       })),
     });
   }
@@ -275,12 +310,7 @@ export async function findSubmission(db: Database, teacherId: string, id: string
   if (!row) return null;
 
   const answers = await db
-    .select({
-      taskIndex: homeworkAnswer.taskIndex,
-      answer: homeworkAnswer.answer,
-      correct: homeworkAnswer.correct,
-      mark: homeworkAnswer.teacherMark,
-    })
+    .select(storedRow)
     .from(homeworkAnswer)
     .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
   const tasks = reviewTasks(row, (row.document as HomeworkDocument).tasks, answers);
@@ -336,9 +366,11 @@ export async function markOpened(db: Database, teacherId: string, id: string): P
 
 /**
  * The teacher marks a task of the current submission right or wrong; for an
- * auto-checked task this overrides the platform. The score is counted again
- * from the stored answers. Returns false when there is no such current
- * submission or task.
+ * auto-checked task this overrides the platform. An order task of several
+ * sentences is marked a sentence at a time (product owner, 2026-11-18), so
+ * `sentence` names one for it and is left out for any other task. The score
+ * is counted again from the stored answers. Returns false when there is no
+ * such current submission, task or sentence.
  */
 export async function markTask(
   db: Database,
@@ -346,6 +378,7 @@ export async function markTask(
   id: string,
   taskIndex: number,
   mark: boolean,
+  sentence?: number,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -355,31 +388,28 @@ export async function markTask(
       .where(and(eq(homeworkSubmission.id, id), eq(homework.teacherId, teacherId), eq(homeworkSubmission.isCurrent, true)))
       .for("update", { of: homeworkSubmission });
     if (!row) return false;
-    const updated = await tx
-      .update(homeworkAnswer)
-      .set({ teacherMark: mark, updatedAt: sql`now()` })
-      .where(
-        and(
-          eq(homeworkAnswer.homeworkId, row.homeworkId),
-          eq(homeworkAnswer.attempt, row.attempt),
-          eq(homeworkAnswer.taskIndex, taskIndex),
-        ),
-      )
-      .returning({ id: homeworkAnswer.id });
-    if (updated.length === 0) return false;
-
-    const verdict = sql`coalesce(${homeworkAnswer.teacherMark}, ${homeworkAnswer.correct})`;
-    const [counts] = await tx
-      .select({
-        correct: sql<number>`count(*) filter (where ${verdict} = true)::int`,
-        wrong: sql<number>`count(*) filter (where ${verdict} = false)::int`,
-        pending: sql<number>`count(*) filter (where ${verdict} is null)::int`,
-      })
+    // Every mark of this submission holds its row first, so the sentences read
+    // here cannot change before the write below.
+    const attempt = and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt));
+    const [answer] = await tx
+      .select({ id: homeworkAnswer.id, sentences: homeworkAnswer.sentenceVerdicts })
       .from(homeworkAnswer)
-      .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
+      .where(and(attempt, eq(homeworkAnswer.taskIndex, taskIndex)));
+    if (!answer) return false;
+    const sentences = sentenceVerdicts(answer.sentences);
+    if ((sentences === null) !== (sentence === undefined)) return false;
+    if (sentences && sentence !== undefined) {
+      if (sentence >= sentences.length) return false;
+      const marked = sentences.map((s, i) => (i === sentence ? { ...s, mark } : s));
+      await tx.update(homeworkAnswer).set({ sentenceVerdicts: marked, updatedAt: sql`now()` }).where(eq(homeworkAnswer.id, answer.id));
+    } else {
+      await tx.update(homeworkAnswer).set({ teacherMark: mark, updatedAt: sql`now()` }).where(eq(homeworkAnswer.id, answer.id));
+    }
+
+    const counts = countPoints(await tx.select(storedRow).from(homeworkAnswer).where(attempt));
     await tx
       .update(homeworkSubmission)
-      .set({ correctCount: counts!.correct, wrongCount: counts!.wrong, pendingCount: counts!.pending })
+      .set({ correctCount: counts.correct, wrongCount: counts.wrong, pendingCount: counts.pending })
       .where(eq(homeworkSubmission.id, id));
     return true;
   });

@@ -10,14 +10,19 @@ const markClass = (on: boolean) =>
     on ? "border-accent-600 bg-accent-100 text-accent-900" : "border-border hover:bg-surface"
   }`;
 
-/** «Верно» / «Неверно» on a task; for an auto-checked task it overrides the platform (#36). */
+/**
+ * «Верно» / «Неверно» on a task; for an auto-checked task it overrides the
+ * platform (#36). With `sentence`, on one sentence of an order task (#161).
+ */
 export function ReviewMark({
   submissionId,
   taskIndex,
+  sentence,
   verdict,
 }: {
   submissionId: string;
   taskIndex: number;
+  sentence?: number;
   verdict: boolean | null;
 }) {
   const router = useRouter();
@@ -28,7 +33,7 @@ export function ReviewMark({
     setPending(true);
     setFailed(false);
     try {
-      await routerClient.teacher.review.mark.mutate({ id: submissionId, taskIndex, mark: value });
+      await routerClient.teacher.review.mark.mutate({ id: submissionId, taskIndex, mark: value, ...(sentence === undefined ? {} : { sentence }) });
       router.refresh();
     } catch {
       setFailed(true);

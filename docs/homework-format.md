@@ -70,12 +70,27 @@ Pairs to connect; shown shuffled.
 
 ### `order`
 
-Words to put in order; shown shuffled.
+Words to put in order; shown shuffled. One sentence goes in `words`; a workbook exercise of several sentences under one instruction goes in `sentences` instead. A task has one of the two.
 
 | Field | Meaning |
 |-------|---------|
 | `words` | 2 to 20 words in the correct order |
-| `alternatives` | Optional: other correct orders, each a full list of the same words |
+| `alternatives` | Optional, with `words` only: other correct orders, each a full list of the same words |
+| `sentences` | 2 to 10 objects `{ "words": [...], "alternatives": [...] }`, one per sentence; `alternatives` is optional, as above |
+
+The student orders every sentence on the same screen. Each sentence is its own point: three sentences with two right count 2 right and 1 wrong, the teacher marks each sentence, and every wrong sentence counts in the mistakes by topic.
+
+```json
+{
+  "type": "order",
+  "prompt": "Put the words in order.",
+  "sentences": [
+    { "words": ["I", "like", "green", "apples"] },
+    { "words": ["We", "go", "to", "school", "by", "bus"], "alternatives": [["We", "go", "by", "bus", "to", "school"]] }
+  ],
+  "topic": "word order"
+}
+```
 
 ### `written`
 
@@ -141,4 +156,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131) or `sentences` (#161), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

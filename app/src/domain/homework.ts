@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import type { StoredAnswer, Task, TaskExample } from "./homework-format";
+import { type OrderSentence, orderSentences, type StoredAnswer, type Task, type TaskExample } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -53,12 +53,18 @@ export function answerKey(task: Task): string | null {
     case "match":
       return task.pairs.map((p) => `${p.left} — ${p.right}`).join("; ");
     case "order":
-      return [task.words, ...(task.alternatives ?? [])].map((words) => words.join(" ")).join(" / ");
+      if (task.sentences) return task.sentences.map((sentence, i) => `${i + 1}) ${sentenceKey(sentence)}`).join("; ");
+      return sentenceKey(orderSentences(task)[0]!);
     case "written":
     case "voice":
     case "file":
       return null;
   }
+}
+
+/** One sentence of an order task as the teacher reads its key: the right order and the other right orders. */
+export function sentenceKey(sentence: OrderSentence): string {
+  return [sentence.words, ...(sentence.alternatives ?? [])].map((words) => words.join(" ")).join(" / ");
 }
 
 /** Where a task's picture is served, after a permission check (#33). */
@@ -103,7 +109,8 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
     case "match":
       return answer.pairs.map((p) => `${p.left} — ${p.right}`).join("; ");
     case "order":
-      return answer.words.join(" ");
+      if (answer.sentences) return answer.sentences.map((words, i) => `${i + 1}) ${words.join(" ") || "…"}`).join("; ");
+      return (answer.words ?? []).join(" ");
     case "written":
       return answer.text.trim() || null;
     // The review plays a recording and shows a photo next to these words (#93).

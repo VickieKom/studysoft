@@ -294,6 +294,10 @@ export const homeworkAnswer = pgTable(
     correct: boolean("correct"),
     // The teacher's mark (#36): wins over `correct` when set.
     teacherMark: boolean("teacher_mark"),
+    // An order task of several sentences (#161): each sentence's result and the
+    // teacher's mark on it, [{ correct, mark }], one point each. Null for any
+    // other task; `correct` then says whether every sentence is right.
+    sentenceVerdicts: jsonb("sentence_verdicts"),
     topic: text("topic"),
     skill: text("skill"),
     createdAt: createdAt(),
