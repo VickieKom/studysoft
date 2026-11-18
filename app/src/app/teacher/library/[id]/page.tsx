@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LibraryAddDraft } from "@/components/library-add-draft";
 import { LibraryDelete } from "@/components/library-delete";
 import { LibraryGameFrame } from "@/components/library-game-frame";
 import { LibraryOpenToStudent } from "@/components/library-open-to-student";
@@ -21,6 +22,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * video plays in the page, or its link opens in a new tab (#117). During a
  * lesson the teacher opens a game to the student (#118), or plays it with
  * them on this page: its result goes to that lesson's student (#147).
+ * The assistant's draft (#120) says so and offers «Добавить в библиотеку».
  */
 export default async function MaterialPage({ params }: Props) {
   const { id } = await params;
@@ -48,6 +50,7 @@ export default async function MaterialPage({ params }: Props) {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-h1 font-bold">{material.title}</h1>
+          {material.draft && <p className="text-small font-semibold text-text-secondary">Черновик от ассистента</p>}
           <p className="flex flex-wrap gap-2 text-small text-text-secondary">
             <span>{MATERIAL_KIND_FILTERS[material.kind]}</span>
             {material.kind === "game" && material.warmup && <span>{MATERIAL_KIND_FILTERS.warmup}</span>}
@@ -57,6 +60,7 @@ export default async function MaterialPage({ params }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {material.draft && <LibraryAddDraft id={material.id} />}
           <Link
             href={`/teacher/library/${material.id}/edit`}
             className="inline-flex h-10 items-center rounded-control border border-border px-4 text-button font-semibold hover:bg-surface"

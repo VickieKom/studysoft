@@ -6,6 +6,7 @@ import { handleAuthRequest } from "../access/auth";
 import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, mergeRouters, router } from "./core/trpc";
 import { agentHomeworkRouter } from "./agent/homework";
+import { agentLibraryRouter } from "./agent/library";
 import { agentStudentsRouter } from "./agent/students";
 import { healthRouter } from "./public/health";
 import { linksRouter } from "./public/links";
@@ -30,7 +31,7 @@ export const appRouter = router({
   links: linksRouter,
   student: mergeRouters(studentMeRouter, router({ homework: studentHomeworkRouter, games: studentGamesRouter })),
   parent: parentMeRouter,
-  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter),
+  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter),
   teacher: router({
     session: sessionRouter,
     students: studentsRouter,

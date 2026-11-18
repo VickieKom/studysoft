@@ -7,7 +7,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createPlatform } from "./platform";
-import { createTools, draftInput, studentIdInput } from "./tools";
+import { createTools, draftInput, gameDraftInput, studentIdInput, warmupDraftInput } from "./tools";
 
 const url = process.env.STUDYSOFT_URL;
 const token = process.env.STUDYSOFT_TOKEN;
@@ -77,6 +77,31 @@ server.registerTool(
     inputSchema: studentIdInput,
   },
   (input) => tools.readHomeworkDraft(input),
+);
+
+server.registerTool(
+  "save_game_draft",
+  {
+    title: "Save a game draft to the library",
+    description:
+      "Saves a game you made — one self-contained HTML file — to the teacher's library as a draft, under «От ассистента». " +
+      "Pass the id of your earlier draft to replace it while the teacher has neither edited nor added it; otherwise a new " +
+      "draft is made. Only the teacher adds a draft to the library or deletes it.",
+    inputSchema: gameDraftInput,
+  },
+  (input) => tools.saveGameDraft(input),
+);
+
+server.registerTool(
+  "save_warmup_draft",
+  {
+    title: "Save a warm-up draft to the library",
+    description:
+      "Saves a warm-up — a list of conversation questions or one picture — to the teacher's library as a draft, under " +
+      "«От ассистента». Replacing works as for games. Only the teacher adds it to the library.",
+    inputSchema: warmupDraftInput,
+  },
+  (input) => tools.saveWarmupDraft(input),
 );
 
 await server.connect(new StdioServerTransport());

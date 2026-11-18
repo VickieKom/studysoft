@@ -451,6 +451,11 @@ export const libraryMaterial = pgTable(
     warmup: boolean("warmup").notNull().default(false),
     // A video link, http or https (#117).
     url: text("url"),
+    // A game or warm-up the assistant saved (#120): not in the library until
+    // the teacher adds it. The assistant replaces its draft while
+    // `teacher_edited_at` is empty; after her edit it makes a new one.
+    draft: boolean("draft").notNull().default(false),
+    teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

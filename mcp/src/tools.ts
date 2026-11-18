@@ -7,13 +7,13 @@ type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 
-/** Errors reach the assistant as plain words, never as a stack. */
-function failure(error: unknown): ToolResult {
+/** Errors reach the assistant as plain words, never as a stack. `refused` names what a BAD_REQUEST refused. */
+function failure(error: unknown, refused = "invalid homework"): ToolResult {
   const code = (error as { data?: { code?: string } })?.data?.code;
   const message = (error as { message?: string })?.message ?? "";
   const text =
     code === "BAD_REQUEST"
-      ? `invalid homework, nothing was saved; fix these and save again:\n${message}`
+      ? `${refused}, nothing was saved; fix these and save again:\n${message}`
       : code === "UNAUTHORIZED"
       ? "unauthorized: the token is missing, wrong or revoked — create a new one in «Ассистент»"
       : code === "NOT_FOUND"
@@ -30,6 +30,41 @@ export const draftInput = {
     .record(z.string(), z.unknown())
     .describe("The homework as JSON in the format from get_homework_format: { version, title, tasks }"),
 };
+
+// A game or a warm-up for the library (#120): its title and the tags the library filters by.
+const libraryTags = {
+  id: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("The id of your earlier draft to replace; it is replaced while the teacher has neither edited nor added it"),
+  title: z.string().describe("What the teacher sees in the library, up to 200 characters"),
+  level: z.enum(["A1", "A2", "B1", "B2", "C1"]).describe("CEFR level"),
+  topic: z.string().describe("A topic for the library's filter, up to 100 characters; empty for none"),
+  ageGroup: z.enum(["younger", "teens"]).describe("younger children or teens"),
+};
+
+export const gameDraftInput = {
+  ...libraryTags,
+  html: z
+    .string()
+    .describe(
+      "The whole game as one self-contained HTML file, at most 5 MB. To report the student's answers it posts a result " +
+        "in the game result format (see get_homework_format)",
+    ),
+};
+
+export const warmupDraftInput = {
+  ...libraryTags,
+  format: z.enum(["questions", "picture"]).describe("A list of conversation questions or one picture"),
+  questions: z.array(z.string()).optional().describe("For questions: 1 to 30, each up to 300 characters"),
+  picture: z.string().optional().describe("For a picture: PNG, JPEG or WebP as base64, at most 2 MB"),
+};
+
+type LibraryTags = { id?: string; title: string; level: "A1" | "A2" | "B1" | "B2" | "C1"; topic: string; ageGroup: "younger" | "teens" };
+
+const savedToLibrary = (id: string) =>
+  json({ id, status: "draft", note: "Saved as a draft in «Библиотека» under «От ассистента»; the teacher adds it to the library." });
 
 export function createTools(platform: Platform) {
   return {
@@ -73,6 +108,29 @@ export function createTools(platform: Platform) {
         return json(await platform.agent.readHomeworkDraft.query({ studentId }));
       } catch (error) {
         return failure(error);
+      }
+    },
+    async saveGameDraft(input: LibraryTags & { html: string }): Promise<ToolResult> {
+      try {
+        return savedToLibrary((await platform.agent.saveGameDraft.mutate(input)).id);
+      } catch (error) {
+        return failure(error, "game refused");
+      }
+    },
+    async saveWarmupDraft({
+      format,
+      questions,
+      picture,
+      ...tags
+    }: LibraryTags & { format: "questions" | "picture"; questions?: string[]; picture?: string }): Promise<ToolResult> {
+      try {
+        const saved =
+          format === "questions"
+            ? await platform.agent.saveWarmupDraft.mutate({ ...tags, format, questions: questions ?? [] })
+            : await platform.agent.saveWarmupDraft.mutate({ ...tags, format, picture: picture ?? "" });
+        return savedToLibrary(saved.id);
+      } catch (error) {
+        return failure(error, "warm-up refused");
       }
     },
   };

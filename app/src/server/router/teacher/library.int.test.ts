@@ -105,6 +105,8 @@ describe("teacher.library", () => {
       fileUrl: `/api/files/library/${id}`,
       questions: null,
       warmup: false,
+      // Uploaded by the teacher: in the library at once, not a draft (#120).
+      draft: false,
     });
     const listed = await teacher.teacher.library.list({ kind: "game", topic });
     expect(listed.materials.map((m) => m.id)).toEqual([id]);
