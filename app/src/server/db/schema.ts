@@ -700,7 +700,9 @@ export const gameAccess = pgTable(
 // from, so the latest result per game and lesson is the one that counts.
 // No foreign keys to the game and the lesson: a result is the student's
 // work and outlives a game deleted from the library or a lesson removed
-// from the schedule.
+// from the schedule. A game the teacher runs herself on her page during a
+// lesson keeps its result for the student of that lesson (#147),
+// `played_with_teacher`.
 export const gameResult = pgTable(
   "game_result",
   {
@@ -713,6 +715,7 @@ export const gameResult = pgTable(
     lessonId: uuid("lesson_id").notNull(),
     title: text("title").notNull(),
     answers: jsonb("answers").notNull(),
+    playedWithTeacher: boolean("played_with_teacher").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [

@@ -9,7 +9,7 @@ import type { Database } from "../db/client";
 import { gameAccess, libraryMaterial, student } from "../db/schema";
 
 /** Lessons that count: a cancelled or missed one is not going on. */
-const LIVE_LESSON = sql`l.status NOT IN ('cancelled', 'missed')`;
+export const LIVE_LESSON = sql`l.status NOT IN ('cancelled', 'missed')`;
 
 const nameOf = (firstName: string, lastName: string | null) => (lastName ? `${firstName} ${lastName}` : firstName);
 

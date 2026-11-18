@@ -26,6 +26,8 @@ import {
   materialTopics,
   updateMaterial,
 } from "../../library/library";
+import { gameResultSchema } from "../../../domain/game-result-format";
+import { saveLessonGameResult } from "../../library/game-results";
 import { gameOpenedTo, openGameToStudent, studentsInLesson } from "../../library/student-games";
 import { teacherTimeZone } from "../../access/settings";
 import { router, teacherProcedure } from "../core/trpc";
@@ -193,6 +195,24 @@ export const libraryRouter = router({
       const until = await openGameToStudent(ctx.db, ctx.teacherId, input.id, input.studentId.toLowerCase());
       if (!until) throw new TRPCError({ code: "BAD_REQUEST", message: "Открыть игру можно, пока идёт урок с этим учеником" });
       return { until: until.toISOString() };
+    }),
+
+  /**
+   * A result of a game the teacher runs on her page during a lesson (#147),
+   * kept for the student of that lesson. A missing or another teacher's game
+   * is NOT_FOUND; a message not in the game result format, or a student
+   * without a lesson now (another teacher's included), is BAD_REQUEST.
+   */
+  saveLessonResult: teacherProcedure
+    .input(z.object({ id: z.uuid(), studentId: z.uuid(), result: z.unknown() }))
+    .output(z.object({ kept: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await findMaterial(ctx.db, ctx.teacherId, input.id))) throw notFound();
+      const parsed = gameResultSchema.safeParse(input.result);
+      if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: "Not a game result" });
+      const kept = await saveLessonGameResult(ctx.db, ctx.teacherId, input.id, input.studentId.toLowerCase(), parsed.data.answers);
+      if (!kept) throw new TRPCError({ code: "BAD_REQUEST", message: "Итог игры сохраняется, пока идёт урок с этим учеником" });
+      return { kept: true as const };
     }),
 
   /** A warm-up: a picture (base64, PNG, JPEG or WebP, at most 2 MB) or a list of questions (#116). */

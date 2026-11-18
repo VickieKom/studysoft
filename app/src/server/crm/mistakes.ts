@@ -10,7 +10,9 @@ import { type CountedGameResult, countedGameResults } from "../library/game-resu
 export const MISTAKES_DAYS = 30;
 const DAY_MS = 86_400_000;
 
-export type Mistake = { from: "homework" | "game"; title: string; at: Date; task: string; answer: string | null };
+/** Where a mistake came from: homework, a game the student played by their link, or one the teacher ran in a lesson (#147). */
+export const MISTAKE_SOURCES = ["homework", "game", "lesson_game"] as const;
+export type Mistake = { from: (typeof MISTAKE_SOURCES)[number]; title: string; at: Date; task: string; answer: string | null };
 export type MistakesByTopic = { topic: string; count: number; mistakes: Mistake[] }[];
 
 export const mistakesSince = (now: Date) => new Date(now.getTime() - MISTAKES_DAYS * DAY_MS);
@@ -35,7 +37,7 @@ function gameMistakes(results: CountedGameResult[]) {
     result.answers
       .filter((answer) => !answer.correct)
       .map((answer) => ({
-        from: "game" as const,
+        from: result.playedWithTeacher ? ("lesson_game" as const) : ("game" as const),
         topic: answer.topic ?? null,
         title: result.title,
         at: result.playedAt,

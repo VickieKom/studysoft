@@ -138,6 +138,7 @@ describe("game results", () => {
       {
         title: "Zoo quiz",
         playedAt: expect.any(String),
+        playedWithTeacher: false,
         answers: [
           { task: "Which one is a colour?", answer: "red", correct: true, topic: "colours" },
           { task: "Which one is an animal?", answer: "a table", correct: false, topic: "animals" },

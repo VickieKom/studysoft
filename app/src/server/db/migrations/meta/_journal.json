@@ -176,6 +176,13 @@
       "when": 1795067929535,
       "tag": "0024_game_result",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794981304095,
+      "tag": "0022_played_with_teacher",
+      "breakpoints": true
     }
   ]
 }
