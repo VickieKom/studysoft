@@ -240,7 +240,7 @@ describe("game results", () => {
         createdAt: new Date(Date.now() - 3 * DAY),
       });
     expect(summary(await teacher.teacher.students.mistakes({ studentId }))).toEqual({ second: 1, earlier: 1 });
-    const counted = await countedGameResults(db(), teacherId, studentId, new Date(Date.now() - DAY * MISTAKES_DAYS));
+    const counted = await countedGameResults(db(), teacherId, studentId, { since: new Date(Date.now() - DAY * MISTAKES_DAYS) });
     expect(counted.map((r) => r.answers[0]!.task)).toEqual(["Second try", "Earlier lesson"]);
   });
 
@@ -269,7 +269,10 @@ describe("game results", () => {
     // The recent homework has the gap right and only «cat» of the animals.
     expect(summary(card)).toEqual({ "recent game": 1, animals: 1 });
     expect(card.find((t) => t.topic === "animals")!.mistakes[0]!.title).toBe("Recent homework");
-    expect(summary((await assistant.agent.studentContext({ studentId })).mistakesByTopic)).toEqual({ "recent game": 1, animals: 1 });
+    const context = await assistant.agent.studentContext({ studentId });
+    expect(summary(context.mistakesByTopic)).toEqual({ "recent game": 1, animals: 1 });
+    // The latest game results are not cut at 30 days: only the summary is.
+    expect(context.recentGames.map((g) => g.answers[0]!.task)).toEqual(["Recent game task", "Old game task"]);
 
     // The game is deleted from the library: its mistakes stay, with its title.
     await teacher.teacher.library.remove({ id: game });

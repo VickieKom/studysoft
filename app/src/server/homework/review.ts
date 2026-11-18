@@ -281,14 +281,18 @@ async function latestAttempts(db: Database, teacherId: string, studentId: string
     .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
 }
 
-/** The tasks of one attempt with the student's answers and the verdicts. */
-async function attemptTasks(db: Database, row: { homeworkId: string; attempt: number; document: unknown }) {
+/** The tasks of each attempt with the student's answers and the verdicts, read in one query. */
+async function attemptsTasks<Row extends { homeworkId: string; attempt: number; document: unknown }>(db: Database, rows: Row[]) {
+  if (rows.length === 0) return [];
   const answers = await db
-    .select(storedRow)
+    .select({ homeworkId: homeworkAnswer.homeworkId, attempt: homeworkAnswer.attempt, ...storedRow })
     .from(homeworkAnswer)
-    .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
-  const document = (row.document as HomeworkDocument).tasks;
-  return { document, tasks: reviewTasks(row, document, answers) };
+    .where(inArray(homeworkAnswer.homeworkId, rows.map((row) => row.homeworkId)));
+  return rows.map((row) => {
+    const document = (row.document as HomeworkDocument).tasks;
+    const own = answers.filter((a) => a.homeworkId === row.homeworkId && a.attempt === row.attempt);
+    return { row, document, tasks: reviewTasks(row, document, own) };
+  });
 }
 
 /**
@@ -302,8 +306,7 @@ async function attemptTasks(db: Database, row: { homeworkId: string; attempt: nu
 export async function recentResults(db: Database, teacherId: string, studentId: string): Promise<RecentHomework[]> {
   const chosen = (await latestAttempts(db, teacherId, studentId)).slice(0, CONTEXT_HOMEWORK);
   const recentHomework: RecentHomework[] = [];
-  for (const row of chosen) {
-    const { document, tasks } = await attemptTasks(db, row);
+  for (const { row, document, tasks } of await attemptsTasks(db, chosen)) {
     recentHomework.push({
       title: row.title,
       submittedAt: row.submittedAt,
@@ -339,8 +342,7 @@ export async function homeworkMistakes(
   since: Date,
 ): Promise<HomeworkMistake[]> {
   const mistakes: HomeworkMistake[] = [];
-  for (const row of await latestAttempts(db, teacherId, studentId, since)) {
-    const { tasks } = await attemptTasks(db, row);
+  for (const { row, tasks } of await attemptsTasks(db, await latestAttempts(db, teacherId, studentId, since))) {
     for (const task of tasks) {
       if (task.verdict === false) {
         mistakes.push({ topic: task.topic, task: task.prompt, answer: task.answer, title: row.title, at: row.submittedAt });

@@ -124,7 +124,7 @@ export const studentsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
-      return (await studentMistakes(ctx.db, ctx.teacherId, input.studentId)).byTopic.map((topic) => ({
+      return (await studentMistakes(ctx.db, ctx.teacherId, input.studentId)).map((topic) => ({
         ...topic,
         mistakes: topic.mistakes.map((m) => ({ ...m, at: m.at.toISOString() })),
       }));
