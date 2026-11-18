@@ -62,6 +62,11 @@ export function answerKey(task: Task): string | null {
 }
 
 /** Where a task's picture is served, after a permission check (#33). */
+/** Where a task's recording is served (#127). */
+export function homeworkAudioUrl(homeworkId: string, taskIndex: number): string {
+  return `/api/files/homework/${homeworkId}/${taskIndex}/audio`;
+}
+
 export function homeworkImageUrl(homeworkId: string, taskIndex: number): string {
   return `/api/files/homework/${homeworkId}/${taskIndex}`;
 }

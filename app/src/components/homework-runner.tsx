@@ -223,6 +223,8 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
         // eslint-disable-next-line @next/next/no-img-element -- same reason as above
         <img src={task.image} alt="Картинка к заданию" className="max-h-72 w-full rounded-task object-contain" />
       )}
+      {/* A recording to listen to (#127), as many times as the student likes. */}
+      {task.audio && <audio key={task.audio} controls preload="metadata" src={task.audio} className="w-full" />}
       <TaskBody
         key={index}
         task={task}

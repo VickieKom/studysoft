@@ -124,7 +124,7 @@ async function requester(database: Database, headers: Headers): Promise<{ teache
 }
 
 /** One byte range of `size` bytes ("bytes=0-1", "bytes=100-", "bytes=-500"), or null when there is none to honour. */
-function byteRange(header: string | null, size: number): { start: number; end: number } | "unsatisfiable" | null {
+export function byteRange(header: string | null, size: number): { start: number; end: number } | "unsatisfiable" | null {
   const match = header ? /^bytes=(\d*)-(\d*)$/.exec(header.trim()) : null;
   if (!match || (match[1] === "" && match[2] === "")) return null;
   let start: number;

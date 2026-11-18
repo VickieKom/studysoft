@@ -1,6 +1,6 @@
 # Homework format, version 1
 
-How a homework is written as JSON for the platform: pasted by the teacher in "Импортировать домашку" (#32), saved by the assistant through MCP (#43), and used by the library export. The platform validates every homework against this format and refuses one that does not match, naming the task and the field.
+How a homework is written as JSON for the platform (at most 40 MB of JSON, pictures and recordings included): pasted by the teacher in "Импортировать домашку" (#32), saved by the assistant through MCP (#43), and used by the library export. The platform validates every homework against this format and refuses one that does not match, naming the task and the field.
 
 Content lives in the platform's database, never in this repository. The example below is synthetic.
 
@@ -22,6 +22,7 @@ Content lives in the platform's database, never in this repository. The example 
 | `skill` | no | `grammar`, `vocabulary`, `reading`, `writing`, `speaking` or `listening` |
 | `source` | no | Where the task comes from: `{ "book": "Workbook", "unit": "0", "page": "6", "exercise": "2" }` (every key optional except `book`), or the string `"own"` for the teacher's own task |
 | `image` | no | A picture next to the task, as a data URL: `data:image/png;base64,…`. PNG, JPEG or WebP, at most 2 MB. One picture per task. The platform keeps the file and serves it only to the teacher and to the student whose published homework it is (#33) |
+| `audio` | no | A recording for the student to listen to, as in a workbook's listening exercise: a data URL `data:audio/mpeg;base64,…` (MP3, M4A, WAV or OGG), at most 10 MB. The student plays it on the task as many times as they like. Tasks that use one recording each carry it; the platform keeps one file. Served like a picture: only to the teacher and to the student whose published homework it is (#127) |
 
 ## Task types
 
@@ -135,4 +136,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; an optional field added later, such as `audio` (#127), keeps the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

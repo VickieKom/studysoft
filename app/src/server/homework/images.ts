@@ -1,10 +1,13 @@
-// Pictures in homework tasks (#33). A picture arrives as a data URL inside the
-// homework JSON, is checked and kept in the blob store, and the stored
-// document refers to it as "blob:<id>". It is served only after a permission
-// check: the teacher who owns the homework, or the student whose published
-// homework it is (architecture 8.1). Everything else is the same 404.
+// Pictures (#33) and recordings (#127) in homework tasks. A file arrives as a
+// data URL inside the homework JSON, is checked and kept in the blob store,
+// and the stored document refers to it as "blob:<id>"; the same file in
+// several tasks of one homework is kept once. It is served only after a
+// permission check: the teacher who owns the homework, or the student whose
+// published homework it is (architecture 8.1). Everything else is the same 404.
 import { and, eq } from "drizzle-orm";
 import {
+  type AudioType,
+  audioDataUrl,
   type HomeworkDocument,
   type ImageType,
   imageDataUrl,
@@ -14,6 +17,7 @@ import {
 import { teacherIdFromHeaders } from "../access/auth";
 import { linkSessionFromHeaders } from "../access/links";
 import { readBlob, saveBlob } from "../blob/store";
+import { byteRange } from "./answer-files";
 import { type Database, db } from "../db/client";
 import { homework } from "../db/schema";
 
@@ -30,62 +34,105 @@ function looksLike(type: ImageType, bytes: Uint8Array): boolean {
   }
 }
 
+/** The first bytes of each accepted recording type (#127): MP3 frames or an ID3 tag, an ISO box, RIFF WAVE, Ogg. */
+function looksLikeAudio(type: AudioType, bytes: Uint8Array): boolean {
+  const ascii = (offset: number, length: number) => String.fromCharCode(...bytes.slice(offset, offset + length));
+  switch (type) {
+    case "audio/mpeg":
+      return ascii(0, 3) === "ID3" || (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0);
+    case "audio/mp4":
+      return ascii(4, 4) === "ftyp";
+    case "audio/wav":
+      return ascii(0, 4) === "RIFF" && ascii(8, 4) === "WAVE";
+    case "audio/ogg":
+      return ascii(0, 4) === "OggS";
+  }
+}
+
 export type StoreResult = { ok: true; homework: HomeworkDocument } | { ok: false; errors: string[] };
 
 /**
- * Keeps the new pictures of a validated homework and replaces them with
- * references. A reference may stay only if `keep` has it: the pictures
- * already in this draft. Nothing is stored unless every picture is fine.
+ * Keeps the new pictures and recordings of a validated homework and replaces
+ * them with references. A reference may stay only if `keep` has it: the
+ * files already in this draft. The same data in several tasks is stored once.
+ * Nothing is stored unless every file is fine.
  */
-export async function storeImages(
+export async function storeTaskFiles(
   database: Database,
   teacherId: string,
   document: HomeworkDocument,
   keep: ReadonlySet<string>,
 ): Promise<StoreResult> {
   const errors: string[] = [];
-  const decoded = new Map<number, { type: ImageType; bytes: Uint8Array }>();
+  const decoded = new Map<string, { type: string; bytes: Uint8Array }>();
   for (const [index, task] of document.tasks.entries()) {
-    if (!task.image) continue;
-    const ref = imageRef(task.image);
-    if (ref !== null) {
-      if (!keep.has(ref)) errors.push(`Задание ${index + 1}, поле image: вставьте картинку как data:image/…;base64,…`);
-      continue;
+    for (const field of ["image", "audio"] as const) {
+      const value = task[field];
+      if (!value) continue;
+      const ref = imageRef(value);
+      if (ref !== null) {
+        if (!keep.has(ref)) {
+          errors.push(
+            field === "image"
+              ? `Задание ${index + 1}, поле image: вставьте картинку как data:image/…;base64,…`
+              : `Задание ${index + 1}, поле audio: вставьте запись как data:audio/…;base64,…`,
+          );
+        }
+        continue;
+      }
+      if (decoded.has(value)) continue;
+      if (field === "image") {
+        const data = imageDataUrl(value);
+        const bytes = data ? new Uint8Array(Buffer.from(data.base64, "base64")) : null;
+        if (!data || !bytes || !looksLike(data.type, bytes)) {
+          errors.push(`Задание ${index + 1}, поле image: это не картинка ${data?.type.slice(6).toUpperCase() ?? ""}`.trim());
+          continue;
+        }
+        decoded.set(value, { type: data.type, bytes });
+      } else {
+        const data = audioDataUrl(value);
+        const bytes = data ? new Uint8Array(Buffer.from(data.base64, "base64")) : null;
+        if (!data || !bytes || !looksLikeAudio(data.type, bytes)) {
+          errors.push(`Задание ${index + 1}, поле audio: это не запись MP3, M4A, WAV или OGG`);
+          continue;
+        }
+        decoded.set(value, { type: data.type, bytes });
+      }
     }
-    const data = imageDataUrl(task.image);
-    const bytes = data ? new Uint8Array(Buffer.from(data.base64, "base64")) : null;
-    if (!data || !bytes || !looksLike(data.type, bytes)) {
-      errors.push(`Задание ${index + 1}, поле image: это не картинка ${data?.type.slice(6).toUpperCase() ?? ""}`.trim());
-      continue;
-    }
-    decoded.set(index, { type: data.type, bytes });
   }
   if (errors.length > 0) return { ok: false, errors };
 
-  const tasks: Task[] = [];
-  for (const [index, task] of document.tasks.entries()) {
-    const picture = decoded.get(index);
-    tasks.push(
-      picture ? { ...task, image: `blob:${await saveBlob(database, teacherId, picture.bytes, picture.type)}` } : task,
-    );
-  }
+  const stored = new Map<string, string>();
+  for (const [value, file] of decoded) stored.set(value, `blob:${await saveBlob(database, teacherId, file.bytes, file.type)}`);
+  const tasks: Task[] = document.tasks.map((task) => ({
+    ...task,
+    ...(task.image && stored.has(task.image) ? { image: stored.get(task.image)! } : {}),
+    ...(task.audio && stored.has(task.audio) ? { audio: stored.get(task.audio)! } : {}),
+  }));
   return { ok: true, homework: { ...document, tasks } };
 }
 
-/** The references to stored pictures in a homework. */
-export function imageRefs(document: HomeworkDocument): Set<string> {
-  return new Set(document.tasks.flatMap((task) => (task.image && imageRef(task.image) ? [imageRef(task.image)!] : [])));
+/** The references to stored pictures and recordings in a homework. */
+export function taskFileRefs(document: HomeworkDocument): Set<string> {
+  return new Set(
+    document.tasks.flatMap((task) => [task.image, task.audio].flatMap((value) => (value && imageRef(value) ? [imageRef(value)!] : []))),
+  );
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
 /**
- * Serves a task's picture. The teacher who owns the homework sees it in any
+ * Serves a task's picture, or its recording (#127). The teacher who owns the homework sees it in any
  * status; a student only in their own published homework. A missing task, a
  * foreign homework, a draft and no session all answer the same 404.
  */
-export async function handleHomeworkImageRequest(request: Request, homeworkId: string, taskIndex: string): Promise<Response> {
+export async function handleHomeworkImageRequest(
+  request: Request,
+  homeworkId: string,
+  taskIndex: string,
+  part: "image" | "audio" = "image",
+): Promise<Response> {
   if (!UUID.test(homeworkId) || !/^(0|[1-9]\d{0,2})$/.test(taskIndex)) return notFound();
   const database = db();
 
@@ -108,8 +155,8 @@ export async function handleHomeworkImageRequest(request: Request, homeworkId: s
         ...(owner.studentId ? [eq(homework.studentId, owner.studentId), eq(homework.status, "published")] : []),
       ),
     );
-  const image = (row?.document as HomeworkDocument | undefined)?.tasks[Number(taskIndex)]?.image;
-  const ref = image ? imageRef(image) : null;
+  const value = (row?.document as HomeworkDocument | undefined)?.tasks[Number(taskIndex)]?.[part];
+  const ref = value ? imageRef(value) : null;
   const file = ref ? await readBlob(database, owner.teacherId, ref) : null;
   if (!file || !ref) return notFound();
 
@@ -118,13 +165,24 @@ export async function handleHomeworkImageRequest(request: Request, homeworkId: s
   // the ETag is the file's id, so an unchanged picture costs a 304.
   const caching = { ETag: `"${ref}"`, "Cache-Control": "private, no-cache" };
   if (request.headers.get("If-None-Match") === caching.ETag) return new Response(null, { status: 304, headers: caching });
-  return new Response(Buffer.from(file.bytes), {
-    headers: {
-      ...caching,
-      "Content-Type": file.contentType,
-      "Content-Length": String(file.bytes.byteLength),
-      "X-Content-Type-Options": "nosniff",
-      "Content-Disposition": "inline",
-    },
-  });
+  const headers = {
+    ...caching,
+    "Content-Type": file.contentType,
+    "Accept-Ranges": "bytes",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Disposition": "inline",
+  };
+  // A player seeks in a recording with byte ranges, and Safari plays audio only from a server that answers them.
+  const size = file.bytes.byteLength;
+  const range = part === "audio" ? byteRange(request.headers.get("Range"), size) : null;
+  if (range === "unsatisfiable") {
+    return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
+  }
+  if (range) {
+    return new Response(Buffer.from(file.bytes.subarray(range.start, range.end + 1)), {
+      status: 206,
+      headers: { ...headers, "Content-Range": `bytes ${range.start}-${range.end}/${size}`, "Content-Length": String(range.end - range.start + 1) },
+    });
+  }
+  return new Response(Buffer.from(file.bytes), { headers: { ...headers, "Content-Length": String(size) } });
 }

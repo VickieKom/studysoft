@@ -3,7 +3,7 @@
 // were. A submission waits for review until the teacher has opened it and
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { answerKey, answerText, attemptAnswerFileUrl } from "../../domain/homework";
+import { answerKey, answerText, attemptAnswerFileUrl, homeworkAudioUrl } from "../../domain/homework";
 import { type HomeworkDocument, storedAnswerSchema, type Task } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
@@ -83,6 +83,8 @@ export type ReviewTask = {
   index: number;
   type: string;
   prompt: string;
+  /** Where the task's recording to listen to plays (#127); null without one. */
+  audioUrl: string | null;
   topic: string | null;
   answer: string | null;
   autoChecked: boolean;
@@ -134,6 +136,7 @@ function reviewTasks(
       index,
       type: task.type,
       prompt: task.prompt,
+      audioUrl: task.audio ? homeworkAudioUrl(submission.homeworkId, index) : null,
       topic: task.topic ?? null,
       answer: parsed.success ? answerText(task, parsed.data) : null,
       autoChecked,

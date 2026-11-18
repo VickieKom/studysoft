@@ -60,6 +60,7 @@ export default async function SubmissionPage({ params }: Props) {
               {task.topic && ` · ${task.topic}`}
             </p>
             <p className="mt-1 whitespace-pre-line font-semibold">{task.prompt}</p>
+            {task.audioUrl && <audio controls preload="metadata" src={task.audioUrl} aria-label="Запись к заданию" className="mt-2 w-full" />}
             <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
               {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
             </p>

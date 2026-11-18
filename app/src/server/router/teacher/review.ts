@@ -53,6 +53,7 @@ const submission = z
           index: count,
           type: z.string(),
           prompt: z.string(),
+          audioUrl: z.string().startsWith("/api/files/homework/").nullable(),
           topic: z.string().nullable(),
           answer: z.string().nullable(),
           autoChecked: z.boolean(),

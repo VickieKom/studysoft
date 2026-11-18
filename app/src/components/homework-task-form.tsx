@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useId, useState } from "react";
-import { gapCount, IMAGE_TYPES, MAX_IMAGE_BYTES, SKILLS, type Task, type TaskType } from "@/domain/homework-format";
+import { gapCount, IMAGE_TYPES, MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, SKILLS, type Task, type TaskType } from "@/domain/homework-format";
 import { Button } from "./button";
 
 const SKILL_LABELS: Record<(typeof SKILLS)[number], string> = {
@@ -23,6 +23,8 @@ const lines = (value: string) =>
 type Props = {
   /** Where the task's stored picture is served, to show it while editing. */
   imageUrl: string | null;
+  /** Where the task's stored recording plays (#127), for a task being edited. */
+  audioUrl: string | null;
   type: TaskType;
   task: Task | null;
   pending: boolean;
@@ -36,7 +38,7 @@ type Props = {
  * line. What is missing is said here before saving; the server checks the
  * whole homework against the format again.
  */
-export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave, onCancel }: Props) {
+export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, error, onSave, onCancel }: Props) {
   const id = useId();
   const [prompt, setPrompt] = useState(task?.prompt ?? "");
   const [topic, setTopic] = useState(task?.topic ?? "");
@@ -62,7 +64,20 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
   );
   // The stored reference, a new data URL, or nothing.
   const [image, setImage] = useState<string | undefined>(task?.image);
+  // The stored reference, a new data URL, or nothing (#127).
+  const [audio, setAudio] = useState<string | undefined>(task?.audio);
   const [problem, setProblem] = useState<string | null>(null);
+
+  function pickAudio(file: File | undefined) {
+    if (!file) return;
+    if (file.size > MAX_AUDIO_BYTES) return setProblem("Запись больше 10 МБ");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProblem(null);
+      setAudio(String(reader.result));
+    };
+    reader.readAsDataURL(file);
+  }
 
   function pickImage(file: File | undefined) {
     if (!file) return;
@@ -87,6 +102,7 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
       ...(skill ? { skill: skill as (typeof SKILLS)[number] } : {}),
       ...(task?.source ? { source: task.source } : {}),
       ...(image ? { image } : {}),
+      ...(audio ? { audio } : {}),
     };
     const withHint = hint.trim() ? { hint: hint.trim() } : {};
     switch (type) {
@@ -172,6 +188,30 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
           {image && (
             <Button variant="secondary" onClick={() => setImage(undefined)} disabled={pending}>
               Убрать картинку
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {audio && (
+          <audio controls preload="metadata" src={audio.startsWith("data:") ? audio : (audioUrl ?? undefined)} className="w-full" />
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor={`${id}-audio`} className="text-small text-text-secondary">
+            {audio ? "Заменить запись" : "Запись для прослушивания"}
+            <span className="text-text-muted"> — необязательно, MP3, M4A, WAV или OGG до 10 МБ</span>
+          </label>
+          <input
+            id={`${id}-audio`}
+            type="file"
+            accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg"
+            onChange={(e) => pickAudio(e.target.files?.[0])}
+            className="text-small"
+          />
+          {audio && (
+            <Button variant="secondary" onClick={() => setAudio(undefined)} disabled={pending}>
+              Убрать запись
             </Button>
           )}
         </div>

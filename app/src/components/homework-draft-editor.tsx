@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
+import { homeworkAudioUrl, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
 import { TASK_TYPES, type Task, type TaskType } from "@/domain/homework-format";
 import { HomeworkTaskForm } from "./homework-task-form";
 import { HomeworkTaskPreview } from "./homework-task-preview";
@@ -76,6 +76,7 @@ export function HomeworkDraftEditor({
     <HomeworkTaskForm
       key={String(editing)}
       imageUrl={task?.image && typeof editing === "number" ? homeworkImageUrl(homeworkId, editing) : null}
+      audioUrl={task?.audio && typeof editing === "number" ? homeworkAudioUrl(homeworkId, editing) : null}
       type={task?.type ?? newType}
       task={task}
       pending={pending}

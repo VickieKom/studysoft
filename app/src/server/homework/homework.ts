@@ -18,7 +18,7 @@ import {
 import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
-import { answerFileUrl, homeworkImageUrl, todayIn } from "../../domain/homework";
+import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, todayIn } from "../../domain/homework";
 import { checkAnswer, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
@@ -340,6 +340,7 @@ export async function openHomework(
     tasks: tasks.map((task, index) => ({
       ...studentView(task, shuffleSeed(id, index)),
       ...(task.image ? { image: homeworkImageUrl(id, index) } : {}),
+      ...(task.audio ? { audio: homeworkAudioUrl(id, index) } : {}),
     })),
     answers,
   };
