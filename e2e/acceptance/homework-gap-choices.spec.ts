@@ -54,7 +54,8 @@ test("each gap offers its own options, next to a typed gap; no key reaches the s
     if (response.url().includes("/api/trpc/")) received.push(await response.text().catch(() => ""));
   });
   await student.goto(link);
-  await expect(student.getByRole("heading", { level: 1 }).or(control(student, "Начать"))).toBeVisible();
+  // The homework may open on a start screen first.
+  await expect(student.getByText(choices.tasks[0]!.prompt).or(control(student, "Начать"))).toBeVisible();
   if (await control(student, "Начать").isVisible()) await control(student, "Начать").click();
   await expect(student.getByRole("heading", { level: 1 })).toHaveText(choices.tasks[0]!.prompt);
 
@@ -83,7 +84,8 @@ test("a gap whose key is not among its own options is refused at import, naming 
   const broken = structuredClone(choices);
   broken.tasks[0]!.answers[1] = ["play"];
   await importHomework(page, broken);
-  const alert = page.getByRole("alert");
+  // The import form's own message, not the router's page announcement.
+  const alert = page.getByRole("alert").filter({ hasText: "Задание" });
   await expect(alert).toContainText("Задание 1");
   await expect(alert).toContainText("пропуск 2");
   await expect(page.getByText("Опубликована", { exact: true })).toHaveCount(0);
