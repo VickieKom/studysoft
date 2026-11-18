@@ -13,13 +13,7 @@
 // games are synthetic HTML written here; the homework is synthetic
 // (deploy/seed/homework/demo-auto-checked.json). The assistant's calls are
 // the HTTP calls the MCP server makes with the token, as in #44.
-import {
-  type APIRequestContext,
-  type Browser,
-  expect,
-  type Page,
-  test as base,
-} from "@playwright/test";
+import { type APIRequestContext, type Browser, expect, type Page, test as base } from "@playwright/test";
 import autoChecked from "../../deploy/seed/homework/demo-auto-checked.json" with { type: "json" };
 import { TEACHER_SESSION } from "./sessions";
 
@@ -28,19 +22,13 @@ const NO_SESSION = { cookies: [], origins: [] };
 
 const test = base.extend<{ assistant: APIRequestContext }>({
   assistant: async ({ playwright, baseURL }, use) => {
-    const context = await playwright.request.newContext({
-      baseURL,
-      storageState: NO_SESSION,
-    });
+    const context = await playwright.request.newContext({ baseURL, storageState: NO_SESSION });
     await use(context);
     await context.dispose();
   },
 });
 
-test.use({
-  storageState: TEACHER_SESSION,
-  permissions: ["clipboard-read", "clipboard-write"],
-});
+test.use({ storageState: TEACHER_SESSION, permissions: ["clipboard-read", "clipboard-write"] });
 // One token per teacher, and the student made by the first scenario is used by the next one.
 test.describe.configure({ mode: "serial" });
 
@@ -66,20 +54,8 @@ const zooQuiz = game("Zoo quiz", {
   type: "studysoft.game-result",
   version: 1,
   answers: [
-    {
-      task: "Which one is a colour?",
-      answer: "red",
-      correct: true,
-      topic: "colours",
-      skill: "vocabulary",
-    },
-    {
-      task: "Which one is an animal?",
-      answer: "a table",
-      correct: false,
-      topic: "animals",
-      skill: "vocabulary",
-    },
+    { task: "Which one is a colour?", answer: "red", correct: true, topic: "colours", skill: "vocabulary" },
+    { task: "Which one is an animal?", answer: "a table", correct: false, topic: "animals", skill: "vocabulary" },
   ],
 });
 
@@ -87,15 +63,11 @@ const zooQuiz = game("Zoo quiz", {
 const brokenQuiz = game("Broken quiz", {
   type: "studysoft.game-result",
   version: 1,
-  answers: [
-    { task: "A task of a broken game", correct: "no", topic: "broken topic" },
-  ],
+  answers: [{ task: "A task of a broken game", correct: "no", topic: "broken topic" }],
 });
 
 function control(page: Page, name: string) {
-  return page
-    .getByRole("link", { name, exact: true })
-    .or(page.getByRole("button", { name, exact: true }));
+  return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
 }
 
 async function setTeacherTimeZone(page: Page, label: string) {
@@ -113,28 +85,16 @@ async function createStudent(page: Page, firstName: string) {
   await page.getByLabel("Имя").fill(firstName);
   await page.getByLabel("Часовой пояс").selectOption({ label: "Москва" });
   await page.getByRole("button", { name: "Сохранить" }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: firstName }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: firstName })).toBeVisible();
   const card = page.url();
   await page.evaluate(() => navigator.clipboard.writeText(""));
   await control(page, "Ссылка ученика").click();
-  await expect
-    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/\/s#.+/);
-  return {
-    card,
-    studentId: card.split("/").pop()!,
-    link: await page.evaluate(() => navigator.clipboard.readText()),
-  };
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s#.+/);
+  return { card, studentId: card.split("/").pop()!, link: await page.evaluate(() => navigator.clipboard.readText()) };
 }
 
 /** Opens a link in a fresh browser without any session, as the student would, and waits for their page. */
-async function openAsStudent(
-  browser: Browser,
-  link: string,
-  firstName: string,
-): Promise<Page> {
+async function openAsStudent(browser: Browser, link: string, firstName: string): Promise<Page> {
   const context = await browser.newContext({ storageState: NO_SESSION });
   const page = await context.newPage();
   await page.goto(link);
@@ -160,38 +120,23 @@ async function addLessonNow(page: Page, firstName: string) {
   await control(page, "Расписание").click();
   await control(page, "+ Урок").click();
   await page.getByLabel("Ученик").selectOption({ label: firstName });
-  await page
-    .getByLabel("Дата")
-    .fill(`${part("year")}-${part("month")}-${part("day")}`);
-  await page
-    .getByLabel("Время", { exact: true })
-    .fill(`${part("hour")}:${part("minute")}`);
-  await page
-    .getByRole("button", { name: "Сохранить урок", exact: true })
-    .click();
+  await page.getByLabel("Дата").fill(`${part("year")}-${part("month")}-${part("day")}`);
+  await page.getByLabel("Время", { exact: true }).fill(`${part("hour")}:${part("minute")}`);
+  await page.getByRole("button", { name: "Сохранить урок", exact: true }).click();
   // Saved before the scenario moves on: the form has closed and «+ Урок» is back.
   await expect(control(page, "+ Урок")).toBeVisible();
 }
 
 /** Uploads a game and opens it to the student from its page in the library. */
-async function uploadAndOpenGame(
-  page: Page,
-  title: string,
-  file: Buffer,
-  firstName: string,
-) {
+async function uploadAndOpenGame(page: Page, title: string, file: Buffer, firstName: string) {
   await page.goto("/teacher/library");
   await control(page, "Загрузить").click();
   await page.getByLabel("Тип материала").selectOption({ label: "Игра" });
-  await page
-    .getByLabel("Файл игры")
-    .setInputFiles({ name: "game.html", mimeType: "text/html", buffer: file });
+  await page.getByLabel("Файл игры").setInputFiles({ name: "game.html", mimeType: "text/html", buffer: file });
   await page.getByLabel("Название").fill(title);
   await page.getByLabel("Тема").fill("game results");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Библиотека", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Библиотека", exact: true })).toBeVisible();
 
   await page
     .getByRole("list", { name: "Материалы" })
@@ -199,27 +144,18 @@ async function uploadAndOpenGame(
     .filter({ hasText: title })
     .getByRole("link", { name: "Открыть" })
     .click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: title }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
   await control(page, "Открыть ученику").click();
   await page.getByLabel("Ученик").selectOption({ label: firstName });
   await page.getByRole("button", { name: "Открыть", exact: true }).click();
-  await expect(
-    page.getByText(new RegExp(`Открыта ученику: ${firstName}`)),
-  ).toBeVisible();
+  await expect(page.getByText(new RegExp(`Открыта ученику: ${firstName}`))).toBeVisible();
 }
 
 /** The student opens the game under «Игры» on their page and presses «Finish» inside it. */
 async function play(student: Page, title: string) {
   await student.goto("/s");
-  await student
-    .getByRole("region", { name: "Игры" })
-    .getByRole("link", { name: title })
-    .click();
-  await expect(
-    student.getByRole("heading", { level: 1, name: title }),
-  ).toBeVisible();
+  await student.getByRole("region", { name: "Игры" }).getByRole("link", { name: title }).click();
+  await expect(student.getByRole("heading", { level: 1, name: title })).toBeVisible();
   const frame = student.frameLocator(`iframe[title="${title}"]`);
   await frame.getByRole("button", { name: "Finish" }).click();
   await expect(frame.getByText(`${title} is finished`)).toBeVisible();
@@ -228,34 +164,21 @@ async function play(student: Page, title: string) {
 async function publishHomework(page: Page, card: string, title: string) {
   await page.goto(card);
   await control(page, "Импортировать домашку").click();
-  await page
-    .getByLabel("JSON домашки")
-    .fill(JSON.stringify({ ...autoChecked, title }));
-  await page
-    .getByRole("button", { name: "Импортировать", exact: true })
-    .click();
-  await page
-    .getByLabel("Срок")
-    .fill(new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10));
+  await page.getByLabel("JSON домашки").fill(JSON.stringify({ ...autoChecked, title }));
+  await page.getByRole("button", { name: "Импортировать", exact: true }).click();
+  await page.getByLabel("Срок").fill(new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10));
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
   await expect(page.getByText("Опубликована", { exact: true })).toBeVisible();
 }
 
-const option = (page: Page, name: string) =>
-  page.getByRole("button", { name, exact: true });
-const next = (page: Page) =>
-  page.getByRole("button", { name: "Дальше", exact: true }).click();
+const option = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+const next = (page: Page) => page.getByRole("button", { name: "Дальше", exact: true }).click();
 
 /** The student does the homework with every answer right but the gap: one mistake, in «to be». */
 async function doHomeworkWrongInToBe(student: Page) {
   await student.goto("/s");
-  await expect(
-    student
-      .getByText(autoChecked.tasks[0]!.prompt)
-      .or(control(student, "Начать")),
-  ).toBeVisible();
-  if (await control(student, "Начать").isVisible())
-    await control(student, "Начать").click();
+  await expect(student.getByText(autoChecked.tasks[0]!.prompt).or(control(student, "Начать"))).toBeVisible();
+  if (await control(student, "Начать").isVisible()) await control(student, "Начать").click();
   await option(student, "blue").click();
   await next(student);
   await option(student, "cat").click();
@@ -263,16 +186,12 @@ async function doHomeworkWrongInToBe(student: Page) {
   await next(student);
   await student.getByRole("textbox").fill("is");
   await next(student);
-  for (const [left, right] of [
-    ["hot", "cold"],
-    ["big", "small"],
-  ] as const) {
+  for (const [left, right] of [["hot", "cold"], ["big", "small"]] as const) {
     await option(student, left).click();
     await option(student, right).click();
   }
   await next(student);
-  for (const word of ["We", "play", "after", "school"])
-    await option(student, word).click();
+  for (const word of ["We", "play", "after", "school"]) await option(student, word).click();
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
   await expect(student.getByText(/4\s+верно/)).toBeVisible();
 }
@@ -284,9 +203,7 @@ function mistakes(page: Page) {
 
 /** One topic of «Ошибки по темам»: the item that names the topic, with its mistakes under it. */
 function topic(page: Page, name: string) {
-  return mistakes(page)
-    .getByRole("listitem")
-    .filter({ has: page.getByText(name, { exact: true }) });
+  return mistakes(page).getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) });
 }
 
 async function createToken(page: Page): Promise<string> {
@@ -297,35 +214,20 @@ async function createToken(page: Page): Promise<string> {
   return token.inputValue();
 }
 
-async function studentContext(
-  request: APIRequestContext,
-  token: string,
-  studentId: string,
-) {
+async function studentContext(request: APIRequestContext, token: string, studentId: string) {
   const input = encodeURIComponent(JSON.stringify({ studentId }));
-  const response = await request.get(
-    `/api/trpc/agent.studentContext?input=${input}`,
-    {
-      headers: { authorization: `Bearer ${token}` },
-    },
-  );
+  const response = await request.get(`/api/trpc/agent.studentContext?input=${input}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
   expect(response.status()).toBe(200);
   const body = await response.json();
-  return {
-    mistakesByTopic: body.result.data.mistakesByTopic as {
-      topic: string;
-      count: number;
-    }[],
-    text: JSON.stringify(body),
-  };
+  return { mistakesByTopic: body.result.data.mistakesByTopic as { topic: string; count: number }[], text: JSON.stringify(body) };
 }
 
 let player: { card: string; studentId: string; link: string };
 
 test.beforeAll(async ({ browser }) => {
-  const page = await (
-    await browser.newContext({ storageState: TEACHER_SESSION })
-  ).newPage();
+  const page = await (await browser.newContext({ storageState: TEACHER_SESSION })).newPage();
   await setTeacherTimeZone(page, "Москва");
   await page.context().close();
 });
@@ -376,16 +278,9 @@ test("the student context for the assistant has the game's and the homework's mi
   assistant,
 }) => {
   const token = await createToken(page);
-  const { mistakesByTopic, text } = await studentContext(
-    assistant,
-    token,
-    player.studentId,
-  );
+  const { mistakesByTopic, text } = await studentContext(assistant, token, player.studentId);
 
-  expect(
-    Object.fromEntries(mistakesByTopic.map((m) => [m.topic, m.count])),
-  ).toEqual({ animals: 1, "to be": 1 });
+  expect(Object.fromEntries(mistakesByTopic.map((m) => [m.topic, m.count]))).toEqual({ animals: 1, "to be": 1 });
   expect(text).toContain("Which one is an animal?");
-  for (const hidden of ["broken topic", "A task of a broken game", "/s#"])
-    expect(text).not.toContain(hidden);
+  for (const hidden of ["broken topic", "A task of a broken game", "/s#"]) expect(text).not.toContain(hidden);
 });
