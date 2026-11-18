@@ -6,12 +6,16 @@
 // Never in the context: the last name, contacts, payments, links (#18), and
 // the keys of homework tasks.
 import type { Database } from "../db/client";
+import type { GameAnswer } from "../../domain/game-result-format";
 import { type RecentHomework, recentResults } from "../homework/review";
+import { studentMistakes } from "./mistakes";
 import { listNotes } from "./notes";
 import { findStudent } from "./students";
 
 /** How many of the latest notes the context carries (#3). */
 export const CONTEXT_NOTES = 5;
+/** How many of the latest game results the context carries (#119), as many as homework (#44). */
+export const CONTEXT_GAMES = 3;
 
 export type StudentContext = {
   firstName: string;
@@ -24,8 +28,11 @@ export type StudentContext = {
   whatWorks: string | null;
   gaps: string | null;
   notes: { body: string; createdAt: Date }[];
-  /** The latest submitted homework, newest first, and their mistakes by topic (#44). */
+  /** The latest submitted homework, newest first (#44). */
   recentHomework: RecentHomework[];
+  /** The latest results of games the student played by their link, newest first (#119). */
+  recentGames: { title: string; playedAt: Date; answers: GameAnswer[] }[];
+  /** Mistakes of homework and games over the last 30 days, by topic, the most frequent first (#44, #119). */
   mistakesByTopic: { topic: string; count: number }[];
 };
 
@@ -40,6 +47,7 @@ export async function buildStudentContext(
   const notes = (await listNotes(db, teacherId, studentId))
     .slice(0, CONTEXT_NOTES)
     .map((note) => ({ body: note.body, createdAt: note.createdAt }));
+  const mistakes = await studentMistakes(db, teacherId, studentId);
   return {
     firstName: card.firstName,
     age: card.age,
@@ -51,6 +59,8 @@ export async function buildStudentContext(
     whatWorks: card.whatWorks,
     gaps: card.gaps,
     notes,
-    ...(await recentResults(db, teacherId, studentId)),
+    recentHomework: await recentResults(db, teacherId, studentId),
+    recentGames: mistakes.games.slice(0, CONTEXT_GAMES),
+    mistakesByTopic: mistakes.byTopic.map(({ topic, count }) => ({ topic, count })),
   };
 }

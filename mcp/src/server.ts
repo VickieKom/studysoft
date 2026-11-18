@@ -35,7 +35,8 @@ server.registerTool(
     description:
       "What the teacher knows about a student for preparing homework: first name, age, school year, CEFR level, " +
       "textbook and current unit, interests, what works, gaps, the latest notes, and the latest submitted homework " +
-      "with the answers, right or wrong, and the mistakes by topic, to repeat what was hard.",
+      "with the answers, right or wrong, the latest results of games the student played, and the mistakes by topic " +
+      "from homework and games over the last 30 days, to repeat what was hard.",
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),
@@ -46,8 +47,9 @@ server.registerTool(
   {
     title: "Homework format",
     description:
-      "The homework format the platform accepts, with its version: task types, keys, topic, skill, source. " +
-      "Read it before writing a homework.",
+      "The homework format the platform accepts, with its version: task types, keys, topic, skill, source; " +
+      "and the game result format, with which a game reports the student's answers to the platform. " +
+      "Read it before writing a homework or making a game.",
   },
   () => tools.getHomeworkFormat(),
 );

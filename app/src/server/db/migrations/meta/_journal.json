@@ -169,6 +169,20 @@
       "when": 1795067839639,
       "tag": "0023_game_access",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794978450740,
+      "tag": "0020_game_result",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794981131622,
+      "tag": "0021_game_result",
+      "breakpoints": true
     }
   ]
 }

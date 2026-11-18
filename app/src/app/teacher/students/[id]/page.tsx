@@ -4,6 +4,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
+import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentSlots } from "@/components/schedule-controls";
 import { dateIn, dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
 import { StudentNotes } from "@/components/student-notes";
@@ -26,6 +27,7 @@ export default async function StudentCardPage({ params }: Props) {
   const money = await caller.teacher.payments.get({ studentId: student.id });
   const homework = await caller.teacher.homework.list({ studentId: student.id });
   const past = await caller.teacher.history.list({ studentId: student.id });
+  const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
 
   return (
     <main>
@@ -115,6 +117,7 @@ export default async function StudentCardPage({ params }: Props) {
         </section>
       </div>
       <StudentHomework studentId={student.id} homework={homework} />
+      <StudentMistakes topics={mistakes} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />
     </main>
