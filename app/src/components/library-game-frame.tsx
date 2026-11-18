@@ -29,13 +29,18 @@ export function LibraryGameFrame({
   const frame = useRef<HTMLIFrameElement>(null);
   const [studentId, setStudentId] = useState(students.length === 1 ? students[0]!.studentId : "");
   const [error, setError] = useState<string | null>(null);
+  // Results go one after another, so a later round is never kept before an earlier one (as on the student's page).
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow || !looksLikeGameResult(event.data) || !studentId) return;
+      const result: unknown = event.data;
       setError(null);
-      routerClient.teacher.library.saveLessonResult
-        .mutate({ id, studentId, result: event.data })
-        .catch(() => setError("Итог игры не сохранился: урок уже закончился или игра прислала его не по формату"));
+      queue.current = queue.current.then(() =>
+        routerClient.teacher.library.saveLessonResult
+          .mutate({ id, studentId, result })
+          .catch(() => setError("Итог игры не сохранился: урок уже закончился или игра прислала его не по формату")),
+      );
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
