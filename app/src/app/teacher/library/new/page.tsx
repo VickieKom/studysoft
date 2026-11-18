@@ -4,7 +4,7 @@ import { teacherCaller } from "../../caller";
 
 export const metadata = { title: "Загрузить в библиотеку — StudySoft" };
 
-/** «Загрузить» (#115): a game for now; warm-ups and videos come next. */
+/** «Загрузить» (#115, #116): a game or a warm-up; videos come next. */
 export default async function NewMaterialPage() {
   // Only to require the teacher's session: the layout alone does not protect a page.
   await teacherCaller();

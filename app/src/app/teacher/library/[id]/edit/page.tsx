@@ -10,7 +10,7 @@ type Props = { params: Promise<{ id: string }> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** «Изменить» (#115): the title and the tags; the file stays. */
+/** «Изменить» (#115, #116): the title and the tags, a game's warm-up mark, a questions warm-up's questions; a file stays. */
 export default async function EditMaterialPage({ params }: Props) {
   const { id } = await params;
   if (!UUID.test(id)) notFound();
@@ -31,7 +31,16 @@ export default async function EditMaterialPage({ params }: Props) {
       </p>
       <h1 className="text-h1 font-bold">Изменить материал</h1>
       <LibraryMaterialForm
-        material={{ id: material.id, title: material.title, level: material.level, topic: material.topic ?? "", ageGroup: material.ageGroup }}
+        material={{
+          id: material.id,
+          kind: material.kind,
+          title: material.title,
+          level: material.level,
+          topic: material.topic ?? "",
+          ageGroup: material.ageGroup,
+          warmup: material.warmup,
+          questions: material.questions,
+        }}
       />
     </main>
   );

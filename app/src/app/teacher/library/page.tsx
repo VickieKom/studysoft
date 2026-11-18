@@ -75,6 +75,7 @@ export default async function LibraryPage({ searchParams }: Props) {
                   <span className="font-semibold">{m.title}</span>
                   <span className="flex flex-wrap gap-2 text-caption text-text-secondary">
                     <span>{MATERIAL_KIND_FILTERS[m.kind]}</span>
+                    {m.kind === "game" && m.warmup && <span>{MATERIAL_KIND_FILTERS.warmup}</span>}
                     <span>{m.level}</span>
                     {m.topic && <span>{m.topic}</span>}
                     <span>{AGE_GROUP_LABELS[m.ageGroup]}</span>

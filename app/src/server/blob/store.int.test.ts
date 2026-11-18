@@ -110,7 +110,7 @@ describe("removeUnreferencedBlobs", () => {
       html: "<!doctype html><html><body>stub</body></html>",
     });
     const [row] = await db().select({ blobId: libraryMaterial.blobId }).from(libraryMaterial).where(eq(libraryMaterial.id, id));
-    const file = row!.blobId;
+    const file = row!.blobId!;
 
     // Past the grace period, the game still refers to its file: it stays, and the run does not fail on the reference.
     await age([file]);
