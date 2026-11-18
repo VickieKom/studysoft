@@ -123,7 +123,7 @@ Each section of the platform, with its priority. P1 is stage 1, P2 stage 2, P3 s
 
 **Lesson plan:** a manual plan is P1; an assistant draft from the unit, gaps and interests is P2.
 
-**Sound and video:** sharing video through the call stutters, so external videos get "отправить ученику ссылку". Whether a track played on the stage is heard depends on how the window is shared; the spike #7 finds out and the platform tells the teacher which way to share.
+**Sound and video:** sharing video through the call stutters, so external videos get "отправить ученику ссылку". A track or video played on the stage is heard when the stage is shared with sound, as a tab or as a window (checked in Chrome, #7); at the start of a lesson the platform reminds the teacher: «В Телемосте покажите окно "Экран для ученика" и включите звук».
 
 **After-lesson actions** are one form: mark as held, note, words to vocabulary, publish homework, board snapshot.
 
