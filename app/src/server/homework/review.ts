@@ -3,8 +3,16 @@
 // were. A submission waits for review until the teacher has opened it and
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { answerKey, answerText, attemptAnswerFileUrl, homeworkAudioUrl, sentenceKey } from "../../domain/homework";
-import { type HomeworkDocument, orderSentences, storedAnswerSchema, type Task, type TaskExample } from "../../domain/homework-format";
+import { answerKey, answerText, attemptAnswerFileUrl, homeworkAudioUrl, homeworkPictureUrl, sentenceKey } from "../../domain/homework";
+import {
+  type HomeworkDocument,
+  orderSentences,
+  type StoredAnswer,
+  storedAnswerSchema,
+  type Task,
+  type TaskExample,
+  withPartPictures,
+} from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { countPoints, pointVerdicts, sentenceVerdicts, taskVerdict } from "./points";
@@ -100,6 +108,8 @@ export type ReviewTask = {
   key: string | null;
   /** Each sentence of an order task of several (#161), its own point; null for any other task. */
   sentences: ReviewSentence[] | null;
+  /** Options with pictures (#129), as the student saw them; null when every option is text. */
+  pictureOptions: { images: string[]; text: string | null; chosen: boolean; right: boolean }[] | null;
   /** A recording or file to play or show, from this submission's own attempt (#93). */
   file: { kind: "audio" | "image"; url: string } | null;
 };
@@ -185,6 +195,7 @@ function reviewTasks(
       marked: stored?.mark ?? null,
       key: answerKey(task),
       sentences,
+      pictureOptions: pictureOptions(submission.homeworkId, index, task, parsed.success ? parsed.data : null),
       file:
         parsed.success && (parsed.data.type === "voice" || parsed.data.type === "file") && parsed.data.type === task.type
           ? {
@@ -194,6 +205,21 @@ function reviewTasks(
           : null,
     };
   });
+}
+
+/** A choice task's options with their pictures' addresses, which the student chose and which are right (#129). */
+function pictureOptions(homeworkId: string, index: number, task: Task, answer: StoredAnswer | null): ReviewTask["pictureOptions"] {
+  if (task.type !== "single_choice" && task.type !== "multiple_choice") return null;
+  if (task.options.every((option) => typeof option === "string")) return null;
+  const chosen = answer?.type === "single_choice" ? [answer.choice] : answer?.type === "multiple_choice" ? answer.choices : [];
+  const right = task.type === "single_choice" ? [task.answer] : task.answers;
+  const options = withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, index, n)).options;
+  return options.map((option, i) => ({
+    images: typeof option === "string" ? [] : option.images,
+    text: typeof option === "string" ? option : (option.text ?? null),
+    chosen: chosen.includes(i),
+    right: right.includes(i),
+  }));
 }
 
 /** Wrong answers by topic, the most frequent first; each wrong sentence of an order task counts (#161). */

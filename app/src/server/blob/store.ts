@@ -229,6 +229,8 @@ export async function removeUnreferencedBlobs(
       AND NOT EXISTS (
         SELECT 1 FROM homework AS h, jsonb_array_elements(h.document -> 'tasks') AS task
         WHERE task ->> 'image' = 'blob:' || b.id::text OR task ->> 'audio' = 'blob:' || b.id::text
+          -- The pictures of answer options (#129).
+          OR jsonb_path_exists(task, '$.options[*].images[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))
       )
       AND NOT EXISTS (
         SELECT 1 FROM homework_answer AS a

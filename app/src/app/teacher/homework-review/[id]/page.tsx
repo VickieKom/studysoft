@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReviewComment, ReviewMark, ReviewReopen } from "@/components/review-controls";
-import { formatReviewDate, TASK_TYPE_LABELS } from "@/domain/homework";
+import { formatReviewDate, OPTION_LETTERS, TASK_TYPE_LABELS } from "@/domain/homework";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
 import { GapChoices } from "@/components/gap-choices";
@@ -99,6 +99,29 @@ export default async function SubmissionPage({ params }: Props) {
             {task.file?.kind === "image" && (
               // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
               <img src={task.file.url} alt={`Фото к заданию ${task.index + 1}`} className="mt-2 max-h-96 rounded-control border border-border" />
+            )}
+            {task.pictureOptions && (
+              <ul aria-label="Варианты" className="mt-2 flex flex-wrap gap-2">
+                {task.pictureOptions.map((option, i) => (
+                  <li
+                    key={i}
+                    className={`flex flex-col items-center gap-1 rounded-control border p-2 text-small ${
+                      option.chosen ? (option.right ? "border-green-600" : "border-danger") : "border-border"
+                    }`}
+                  >
+                    <span className="self-start font-bold text-text-secondary">
+                      {OPTION_LETTERS[i]}
+                      {option.chosen && " · ответ ученика"}
+                      {option.right && " · правильный"}
+                    </span>
+                    {option.images.map((src, n) => (
+                      // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
+                      <img key={n} src={src} alt={`Картинка ${n + 1}`} className="max-h-24 rounded-control" />
+                    ))}
+                    {option.text && <span>{option.text}</span>}
+                  </li>
+                ))}
+              </ul>
             )}
             {!task.sentences && task.verdict === false && task.key && (
               <p className="mt-1 text-small text-green-700">Правильный ответ: {task.key}</p>

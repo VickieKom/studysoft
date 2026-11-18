@@ -25,7 +25,7 @@ Keep `prompt` to the instruction itself. A workbook exercise is carried over who
 | `source` | no | Where the task comes from: `{ "book": "Workbook", "unit": "0", "page": "6", "exercise": "2" }` (every key optional except `book`), or the string `"own"` for the teacher's own task |
 | `passage` | no | A reading text of its own — a passage, a blog post, a dialogue, notes — up to 5000 characters. Shown below the instruction in regular type, with its line breaks. Tasks that share one text each carry it, and the student sees it above each of them (#131) |
 | `example` | no | The exercise's example: `{ "text": "0 She ___ a teacher.", "answer": "is" }`. Shown marked as an example, with `answer` in place of `___` (or after the text when there is no gap); it has no field and is never checked or counted (#131) |
-| `image` | no | A picture next to the task, as a data URL: `data:image/png;base64,…`. PNG, JPEG or WebP, at most 2 MB. One picture per task. The platform keeps the file and serves it only to the teacher and to the student whose published homework it is (#33) |
+| `image` | no | A picture next to the task, as a data URL: `data:image/png;base64,…`. PNG, JPEG or WebP, at most 2 MB. One such picture per task; answer options may hold pictures of their own (`single_choice`). The platform keeps the file and serves it only to the teacher and to the student whose published homework it is (#33) |
 | `audio` | no | A recording for the student to listen to, as in a workbook's listening exercise: a data URL `data:audio/mpeg;base64,…` (MP3, M4A, WAV or OGG), at most 10 MB. The student plays it on the task as many times as they like. Tasks that use one recording each carry it; the platform keeps one file. Served like a picture: only to the teacher and to the student whose published homework it is (#127) |
 
 ## Task types
@@ -38,8 +38,19 @@ One correct option.
 
 | Field | Meaning |
 |-------|---------|
-| `options` | 2 to 8 strings |
+| `options` | 2 to 8 options, each a string or a picture option (below) |
 | `answer` | The index of the correct option, from 0 |
+
+An option may be a picture instead of text (#129): `{ "images": ["data:image/png;base64,…"], "text": "caption" }`. It holds 1 to 4 pictures, under the same rules as a task's `image`, and an optional caption. Text and picture options mix freely in one task. When a task has a picture option, the interface draws the letters a, b, c… before every option.
+
+```json
+{
+  "type": "single_choice",
+  "prompt": "Which one is red?",
+  "options": [{ "images": ["data:image/png;base64,…"] }, { "images": ["data:image/png;base64,…"], "text": "green square" }, "no colour"],
+  "answer": 0
+}
+```
 
 ### `multiple_choice`
 
@@ -47,7 +58,7 @@ Several correct options; the student marks all of them.
 
 | Field | Meaning |
 |-------|---------|
-| `options` | 2 to 8 strings |
+| `options` | 2 to 8 options, each a string or a picture option, as in `single_choice` |
 | `answers` | Indexes of every correct option, from 0; at least one |
 
 ### `gap`
@@ -157,4 +168,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), or a wider choice, such as a picture option (#129), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

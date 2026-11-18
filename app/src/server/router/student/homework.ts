@@ -28,8 +28,19 @@ const parts = {
 };
 // A recording to listen to (#127), by its address as a picture is.
 const audio = z.string().startsWith("/api/files/homework/").optional();
+const picture = z.string().startsWith("/api/files/homework/");
 const otherTask = z.discriminatedUnion("type", [
-  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image, audio, ...parts }).strict(),
+  z
+    .object({
+      type: z.enum(["single_choice", "multiple_choice"]),
+      prompt: text,
+      // An option is text, or pictures by their addresses with an optional caption (#129).
+      options: z.array(z.union([text, z.object({ images: z.array(picture).min(1), text: text.optional() }).strict()])),
+      image,
+      audio,
+      ...parts,
+    })
+    .strict(),
   z
     .object({
       type: z.literal("gap"),
