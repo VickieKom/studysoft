@@ -686,3 +686,35 @@ export const gameAccess = pgTable(
     index("game_access_student_id_idx").on(t.studentId),
   ],
 );
+
+// A result a game posted while the student played it behind their link
+// (#119, docs/game-result-format.md): the answers as the format has them,
+// with the game's title at that moment. Kept only while the game is open to
+// the student (`game_access`); `lesson_id` is the lesson that access came
+// from, so the latest result per game and lesson is the one that counts.
+// No foreign keys to the game and the lesson: a result is the student's
+// work and outlives a game deleted from the library or a lesson removed
+// from the schedule.
+export const gameResult = pgTable(
+  "game_result",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    materialId: uuid("material_id").notNull(),
+    lessonId: uuid("lesson_id").notNull(),
+    title: text("title").notNull(),
+    answers: jsonb("answers").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "game_result_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("game_result_student_created_idx").on(t.studentId, t.createdAt),
+  ],
+);

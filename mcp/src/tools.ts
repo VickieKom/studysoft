@@ -50,7 +50,12 @@ export function createTools(platform: Platform) {
     async getHomeworkFormat(): Promise<ToolResult> {
       try {
         const format = await platform.agent.homeworkFormat.query();
-        return { content: [{ type: "text", text: `Homework format, version ${format.version}\n\n${format.description}` }] };
+        // Games report results in a format of their own (#119): the assistant gets it with the homework format.
+        const game = await platform.agent.gameResultFormat.query();
+        const text =
+          `Homework format, version ${format.version}\n\n${format.description}\n\n` +
+          `Game result format, version ${game.version}\n\n${game.description}`;
+        return { content: [{ type: "text", text }] };
       } catch (error) {
         return failure(error);
       }

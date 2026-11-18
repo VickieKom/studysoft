@@ -1,10 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { GAME_RESULT_FORMAT_VERSION } from "../../../domain/game-result-format";
 import { HOMEWORK_FORMAT_VERSION, homeworkSchema, validateHomework } from "../../../domain/homework-format";
 import { buildStudentContext } from "../../crm/context";
 import { readAssistantDraft, replaceableDraft, saveAssistantDraft } from "../../homework/drafts";
 import { HOMEWORK_FORMAT_DESCRIPTION } from "../../homework/format-description";
 import { imageRefs, storeImages } from "../../homework/images";
+import { GAME_RESULT_FORMAT_DESCRIPTION } from "../../library/game-result-format-description";
 import { agentProcedure, router } from "../core/trpc";
 
 // The assistant's homework tools (#43). Drafts only: there is no agent
@@ -18,6 +20,11 @@ export const agentHomeworkRouter = router({
   homeworkFormat: agentProcedure
     .output(z.object({ version: z.literal(HOMEWORK_FORMAT_VERSION), description: z.string() }).strict())
     .query(() => ({ version: HOMEWORK_FORMAT_VERSION, description: HOMEWORK_FORMAT_DESCRIPTION })),
+
+  /** How a game reports the student's answers to the platform (#119), with its version: games the assistant makes use it from the start. */
+  gameResultFormat: agentProcedure
+    .output(z.object({ version: z.literal(GAME_RESULT_FORMAT_VERSION), description: z.string() }).strict())
+    .query(() => ({ version: GAME_RESULT_FORMAT_VERSION, description: GAME_RESULT_FORMAT_DESCRIPTION })),
 
   /**
    * Saves a homework as the assistant's draft for a student, validated like

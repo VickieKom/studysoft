@@ -112,7 +112,8 @@ export type ReviewSubmission = {
   attempts: { id: string; attempt: number; submittedAt: Date; correct: number; wrong: number; isCurrent: boolean }[];
 };
 
-const NO_TOPIC = "Без темы";
+/** Where a mistake without a topic goes in a list by topic. */
+export const NO_TOPIC = "Без темы";
 
 type StoredRow = { taskIndex: number; answer: unknown; correct: boolean | null; mark: boolean | null };
 
@@ -180,19 +181,8 @@ export type RecentHomework = {
   }[];
 };
 
-/**
- * The student's latest submitted homework for the assistant (#44), newest
- * first: each with its latest attempt, the answers as text and right or wrong,
- * and the wrong answers by topic across them. No keys: the assistant gets what
- * the student answered, not the expected answers. A homework published but
- * not submitted is not here; a reopened one shows the attempt it was
- * submitted with.
- */
-export async function recentResults(
-  db: Database,
-  teacherId: string,
-  studentId: string,
-): Promise<{ recentHomework: RecentHomework[]; mistakesByTopic: { topic: string; count: number }[] }> {
+/** Each submitted homework of the student with its latest attempt, newest first; only those submitted since `since` when given. */
+async function latestAttempts(db: Database, teacherId: string, studentId: string, since?: Date) {
   const latest = await db
     .selectDistinctOn([homeworkSubmission.homeworkId], {
       homeworkId: homework.id,
@@ -206,23 +196,39 @@ export async function recentResults(
     .innerJoin(homework, eq(homework.id, homeworkSubmission.homeworkId))
     .where(and(eq(homework.teacherId, teacherId), eq(homework.studentId, studentId)))
     .orderBy(homeworkSubmission.homeworkId, desc(homeworkSubmission.attempt));
-  const chosen = latest.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime()).slice(0, CONTEXT_HOMEWORK);
+  return latest
+    .filter((row) => !since || row.submittedAt >= since)
+    .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+}
 
-  const all: ReviewTask[] = [];
+/** The tasks of one attempt with the student's answers and the verdicts. */
+async function attemptTasks(db: Database, row: { homeworkId: string; attempt: number; document: unknown }) {
+  const answers = await db
+    .select({
+      taskIndex: homeworkAnswer.taskIndex,
+      answer: homeworkAnswer.answer,
+      correct: homeworkAnswer.correct,
+      mark: homeworkAnswer.teacherMark,
+    })
+    .from(homeworkAnswer)
+    .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
+  const document = (row.document as HomeworkDocument).tasks;
+  return { document, tasks: reviewTasks(row, document, answers) };
+}
+
+/**
+ * The student's latest submitted homework for the assistant (#44), newest
+ * first: each with its latest attempt, the answers as text and right or
+ * wrong. No keys: the assistant gets what the student answered, not the
+ * expected answers. A homework published but not submitted is not here; a
+ * reopened one shows the attempt it was submitted with. The mistakes by topic
+ * come from the student's one list of mistakes (#119).
+ */
+export async function recentResults(db: Database, teacherId: string, studentId: string): Promise<RecentHomework[]> {
+  const chosen = (await latestAttempts(db, teacherId, studentId)).slice(0, CONTEXT_HOMEWORK);
   const recentHomework: RecentHomework[] = [];
   for (const row of chosen) {
-    const answers = await db
-      .select({
-        taskIndex: homeworkAnswer.taskIndex,
-        answer: homeworkAnswer.answer,
-        correct: homeworkAnswer.correct,
-        mark: homeworkAnswer.teacherMark,
-      })
-      .from(homeworkAnswer)
-      .where(and(eq(homeworkAnswer.homeworkId, row.homeworkId), eq(homeworkAnswer.attempt, row.attempt)));
-    const document = (row.document as HomeworkDocument).tasks;
-    const tasks = reviewTasks(row, document, answers);
-    all.push(...tasks);
+    const { document, tasks } = await attemptTasks(db, row);
     recentHomework.push({
       title: row.title,
       submittedAt: row.submittedAt,
@@ -238,7 +244,32 @@ export async function recentResults(
       })),
     });
   }
-  return { recentHomework, mistakesByTopic: mistakesByTopic(all) };
+  return recentHomework;
+}
+
+export type HomeworkMistake = { topic: string | null; task: string; answer: string | null; title: string; at: Date };
+
+/**
+ * The wrong answers of the student's homework submitted since `since` (#119),
+ * newest first: the latest attempt of each, with the teacher's mark winning
+ * over the platform's result. A task waiting for her is not a mistake yet.
+ */
+export async function homeworkMistakes(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  since: Date,
+): Promise<HomeworkMistake[]> {
+  const mistakes: HomeworkMistake[] = [];
+  for (const row of await latestAttempts(db, teacherId, studentId, since)) {
+    const { tasks } = await attemptTasks(db, row);
+    for (const task of tasks) {
+      if (task.verdict === false) {
+        mistakes.push({ topic: task.topic, task: task.prompt, answer: task.answer, title: row.title, at: row.submittedAt });
+      }
+    }
+  }
+  return mistakes;
 }
 
 /** One submission of this teacher with every answer, or null. */
