@@ -4,7 +4,7 @@ import { LINK_SESSION_COOKIES, type LinkRole, withStudentLocked } from "../../ac
 import { addPayment, editPayment, removeOldPaymentRevisions } from "../../crm/payments";
 import { and, eq } from "drizzle-orm";
 import { closeDb, db } from "../../db/client";
-import { paymentRevision } from "../../db/schema";
+import { paymentRevision, student } from "../../db/schema";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleRouterRequest } from "../index";
@@ -242,14 +242,30 @@ describe("teacher.payments", () => {
     const { id } = await teacher.teacher.payments.addPayment({ studentId, amount: "6000", paidOn: moscow(0), comment: "" });
     const missing = "00000000-0000-4000-8000-000000000000";
     for (const target of [id, missing]) {
-      await expect(
-        otherTeacher.teacher.payments.updatePayment({ id: target, amount: "1", paidOn: moscow(0), comment: "" }),
-      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      // An invalid amount too: whose the payment is is checked first, so it tells nothing about another teacher's.
+      for (const amount of ["1", "0"]) {
+        await expect(
+          otherTeacher.teacher.payments.updatePayment({ id: target, amount, paidOn: moscow(0), comment: "" }),
+        ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      }
       await expect(otherTeacher.teacher.payments.deletePayment({ id: target })).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
     expect((await teacher.teacher.payments.get({ studentId })).payments).toEqual([
       expect.objectContaining({ id, amountMinor: 600_000 }),
     ]);
+  });
+
+  it("neither corrects nor deletes a deleted student's payment: the same not-found as a missing one", async () => {
+    const studentId = await newStudent("Удалённый с оплатой");
+    await teacher.teacher.payments.saveTerms({ studentId, format: "prepaid", price: "1500", currency: "RUB", validFrom: moscow(0) });
+    const { id } = await teacher.teacher.payments.addPayment({ studentId, amount: "6000", paidOn: moscow(0), comment: "" });
+    await db().update(student).set({ deletedAt: new Date() }).where(eq(student.id, studentId));
+
+    await expect(teacher.teacher.payments.updatePayment({ id, amount: "1", paidOn: moscow(0), comment: "" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(teacher.teacher.payments.deletePayment({ id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await db().select().from(paymentRevision).where(eq(paymentRevision.paymentId, id))).toEqual([]);
   });
 
   it("keeps the values a correction replaced when another one holds the payment: the second waits for the first", async () => {

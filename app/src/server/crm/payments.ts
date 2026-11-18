@@ -1,10 +1,10 @@
 // Prices and payments of a student (#83). Teacher procedures only: payments,
 // prices and the balance never reach a student, a parent or the assistant
 // (architecture 6.3, AGENTS.md rule 4).
-import { and, asc, desc, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lt } from "drizzle-orm";
 import type { Currency, PaymentFormat, Terms } from "../../domain/payments";
 import type { Database } from "../db/client";
-import { payment, paymentRevision, priceTerms } from "../db/schema";
+import { payment, paymentRevision, priceTerms, student } from "../db/schema";
 
 /** The student's terms over time, oldest first. */
 export async function listTerms(db: Pick<Database, "select">, teacherId: string, studentId: string): Promise<Terms[]> {
@@ -63,11 +63,16 @@ export async function addPayment(
   return row.id;
 }
 
-/** Whose a payment of this teacher is, or null: the student to lock before changing it. */
+/**
+ * Whose a payment of this teacher is, or null: the student to lock before
+ * changing it. A deleted student's payment is the same as a missing one, as
+ * everywhere else a student is read.
+ */
 export async function paymentStudent(db: Pick<Database, "select">, teacherId: string, paymentId: string): Promise<string | null> {
   const [row] = await db
     .select({ studentId: payment.studentId })
     .from(payment)
+    .innerJoin(student, and(eq(student.id, payment.studentId), eq(student.teacherId, payment.teacherId), isNull(student.deletedAt)))
     .where(and(eq(payment.id, paymentId), eq(payment.teacherId, teacherId)));
   return row?.studentId ?? null;
 }

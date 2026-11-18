@@ -155,11 +155,14 @@ export const paymentsRouter = router({
     .input(z.object({ id: z.uuid(), amount, paidOn: z.iso.date(), comment }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      if (input.amount <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Сумма должна быть больше нуля" });
+      // Whose it is first: another teacher's payment is NOT_FOUND whatever the amount, as a missing one.
       const studentId = await paymentStudent(ctx.db, ctx.teacherId, input.id);
       if (!studentId) throw notFound();
-      // Under the student's lock, as adding one; the payment's row is locked inside.
-      const edited = await withStudentLocked(ctx.db, ctx.teacherId, studentId, (tx) =>
+      if (input.amount <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Сумма должна быть больше нуля" });
+      // Under the student's lock, as adding one; the payment's row is locked inside. Read again under
+      // the lock, so a student deleted in between is not edited.
+      const edited = await withStudentLocked(ctx.db, ctx.teacherId, studentId, async (tx) =>
+        (await paymentStudent(tx, ctx.teacherId, input.id)) === studentId &&
         editPayment(tx, ctx.teacherId, studentId, input.id, {
           paidOn: input.paidOn,
           amountMinor: input.amount,
@@ -177,8 +180,11 @@ export const paymentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const studentId = await paymentStudent(ctx.db, ctx.teacherId, input.id);
       if (!studentId) throw notFound();
-      const deleted = await withStudentLocked(ctx.db, ctx.teacherId, studentId, (tx) =>
-        deletePayment(tx, ctx.teacherId, studentId, input.id),
+      const deleted = await withStudentLocked(
+        ctx.db,
+        ctx.teacherId,
+        studentId,
+        async (tx) => (await paymentStudent(tx, ctx.teacherId, input.id)) === studentId && deletePayment(tx, ctx.teacherId, studentId, input.id),
       );
       if (!deleted) throw notFound();
       return { id: input.id };
