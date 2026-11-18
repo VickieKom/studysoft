@@ -54,6 +54,7 @@ A text with one or more gaps, each written as `___` (three underscores).
 | `text` | The text with gaps. A line break (`\n`) is shown as a new line, so a workbook's one sentence per line stays that way |
 | `answers` | One list per gap, in order: the accepted variants for that gap |
 | `options` | Optional: words to choose from. Without it the student types |
+| `choices` | Optional: each gap's own options, as in "circle the correct word" (#128) — one entry per gap, in order: a list of 2 to 6 options, or `null` for a gap the student types. Every accepted answer of a gap with options must be one of them. Not together with `options` |
 
 ### `match`
 
@@ -135,4 +136,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; an optional field added later, such as `choices` (#128), keeps the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

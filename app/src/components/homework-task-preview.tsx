@@ -1,5 +1,6 @@
 import { answerKey, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
 import type { Task } from "@/domain/homework-format";
+import { GapChoices } from "./gap-choices";
 
 /**
  * One task as the teacher previews it, key included (#32). Used by the
@@ -23,6 +24,7 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
         />
       )}
       {"text" in task && <p className="mt-2 whitespace-pre-line">{task.text}</p>}
+      {task.type === "gap" && task.choices && <GapChoices choices={task.choices} className="mt-2 text-small" />}
       {"options" in task && task.options && (
         <p className="mt-2 flex flex-wrap gap-2">
           {task.options.map((option, i) => (

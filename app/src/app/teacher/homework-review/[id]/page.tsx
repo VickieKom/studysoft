@@ -4,6 +4,7 @@ import { ReviewComment, ReviewMark, ReviewReopen } from "@/components/review-con
 import { formatReviewDate, TASK_TYPE_LABELS } from "@/domain/homework";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
+import { GapChoices } from "@/components/gap-choices";
 
 export const metadata = { title: "Сдача — StudySoft" };
 
@@ -60,6 +61,7 @@ export default async function SubmissionPage({ params }: Props) {
               {task.topic && ` · ${task.topic}`}
             </p>
             <p className="mt-1 whitespace-pre-line font-semibold">{task.prompt}</p>
+            {task.choices && <GapChoices choices={task.choices} className="mt-1 text-small" />}
             <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
               {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
             </p>

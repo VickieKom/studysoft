@@ -73,6 +73,9 @@ const multipleChoice = z
   .refine((t) => t.answers.every((a) => a < t.options.length), { path: ["answers"], message: "нет варианта с таким номером" });
 
 
+/** How the format compares a key with a gap's own options: as typed answers are compared, ignoring case and spaces. */
+const sameOption = (a: string, b: string) => a.trim().toLocaleLowerCase("en") === b.trim().toLocaleLowerCase("en");
+
 const gap = z
   .object({
     ...common,
@@ -80,11 +83,30 @@ const gap = z
     text,
     answers: z.array(variants).min(1),
     options: z.array(text).min(2).optional(),
+    // A gap's own options (#128), one entry per gap in order; null for a gap the student types.
+    choices: z.array(z.array(text).min(2).max(6).nullable()).optional(),
   })
   .strict()
   .refine((t) => gapCount(t.text) === t.answers.length, {
     path: ["answers"],
     message: "столько же списков ответов, сколько пропусков ___ в тексте",
+  })
+  .superRefine((t, ctx) => {
+    if (!t.choices) return;
+    if (t.options) {
+      ctx.addIssue({ code: "custom", path: ["choices"], message: "общие слова на выбор (options) и варианты у пропусков (choices) вместе не бывают" });
+      return;
+    }
+    if (t.choices.length !== gapCount(t.text)) {
+      ctx.addIssue({ code: "custom", path: ["choices"], message: "столько же элементов, сколько пропусков ___ в тексте (null — пропуск без вариантов)" });
+      return;
+    }
+    t.choices.forEach((own, i) => {
+      const missing = own ? (t.answers[i] ?? []).find((key) => !own.some((option) => sameOption(option, key))) : undefined;
+      if (missing !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["answers", i], message: `пропуск ${i + 1}: ответа «${missing}» нет среди его вариантов` });
+      }
+    });
   });
 
 const match = z
@@ -235,7 +257,7 @@ function shuffled<T>(items: readonly T[], seed: string, solved: readonly (readon
  */
 export type StudentTask = (
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: string[] }
-  | { type: "gap"; prompt: string; text: string; options?: string[] }
+  | { type: "gap"; prompt: string; text: string; options?: string[]; choices?: (string[] | null)[] }
   | { type: "match"; prompt: string; left: string[]; right: string[] }
   | { type: "order"; prompt: string; words: string[] }
   | { type: "written" | "voice"; prompt: string; hint?: string }
@@ -251,7 +273,13 @@ export function studentView(task: Task, seed: string): StudentTask {
     case "multiple_choice":
       return { type: task.type, prompt: task.prompt, options: task.options };
     case "gap":
-      return { type: "gap", prompt: task.prompt, text: task.text, ...(task.options ? { options: task.options } : {}) };
+      return {
+        type: "gap",
+        prompt: task.prompt,
+        text: task.text,
+        ...(task.options ? { options: task.options } : {}),
+        ...(task.choices ? { choices: task.choices } : {}),
+      };
     case "match":
       return {
         type: "match",
