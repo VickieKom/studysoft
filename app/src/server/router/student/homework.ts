@@ -56,7 +56,19 @@ const otherTask = z.discriminatedUnion("type", [
       ...parts,
     })
     .strict(),
-  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image, audio, ...parts }).strict(),
+  z
+    .object({
+      type: z.literal("match"),
+      prompt: text,
+      left: z.array(text),
+      right: z.array(text),
+      // The pictures on the left, by their addresses (#184).
+      leftImages: z.array(z.array(picture).nullable()).optional(),
+      image,
+      audio,
+      ...parts,
+    })
+    .strict(),
   z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image, audio, ...parts }).strict(),
   z
     .object({

@@ -1,6 +1,6 @@
 import { answerKey, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, TASK_TYPE_LABELS } from "@/domain/homework";
-import { type ChoiceOption, type Task, withPartPictures } from "@/domain/homework-format";
-import { ChoiceOptionContent, hasPictureOptions } from "./choice-option";
+import { type ChoiceOption, matchLeftLabel, type Task, withPartPictures } from "@/domain/homework-format";
+import { ChoiceOptionContent, hasPictureOptions, MatchPictures } from "./choice-option";
 import { GapChoices } from "./gap-choices";
 import { TaskExampleLine, TaskPassage } from "./task-parts";
 
@@ -29,6 +29,9 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
       )}
       {task.audio && (
         <audio controls preload="metadata" src={homeworkAudioUrl(homeworkId, number - 1)} className="mt-2 w-full" />
+      )}
+      {task.type === "match" && task.pairs.some((p) => typeof p.left !== "string") && (
+        <PreviewMatchPictures task={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n))} />
       )}
       {task.type === "gap" && (
         <PreviewGapText task={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n))} />
@@ -81,5 +84,23 @@ function PreviewGapText({ task }: { task: Extract<Task, { type: "gap" }> }) {
         </span>
       ))}
     </p>
+  );
+}
+
+/** The pictures on the left of a match task, with each pair's sentence (#184); `task` carries the pictures' addresses. */
+function PreviewMatchPictures({ task }: { task: Extract<Task, { type: "match" }> }) {
+  return (
+    <ol className="mt-2 flex flex-col gap-2 text-small">
+      {task.pairs.map((pair, i) => (
+        <li key={i} className="flex items-center gap-2">
+          {typeof pair.left === "string" ? (
+            pair.left
+          ) : (
+            <MatchPictures images={pair.left.images} pair={i + 1} label={matchLeftLabel(pair.left, i)} />
+          )}
+          <span>— {pair.right}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

@@ -50,3 +50,22 @@ export function ChoiceOptionContent({
     </span>
   );
 }
+
+/**
+ * The pictures on the left of a match pair (#184), with the caption when it
+ * has one; «картинка N», the name of a picture without one, is its alt text.
+ */
+export function MatchPictures({ images, pair, label }: { images: string[]; pair: number; label: string }) {
+  const caption = label === `картинка ${pair}` ? null : label;
+  return (
+    <span className="flex flex-col items-center gap-2">
+      <span className="flex flex-wrap justify-center gap-2">
+        {images.map((src, n) => (
+          // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
+          <img key={n} src={src} alt={n === 0 ? `Картинка ${pair}` : `Картинка ${pair}, ${n + 1}`} className="max-h-32 max-w-full rounded-control" />
+        ))}
+      </span>
+      {caption && <span>{caption}</span>}
+    </span>
+  );
+}

@@ -295,3 +295,34 @@ describe("a picture by each gap (#181)", () => {
     });
   });
 });
+
+describe("pictures to match sentences to (#184)", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const matchTask = (pairs: unknown[]) => parseHomework(JSON.stringify({ version: 1, title: "t", tasks: [{ type: "match", prompt: "p", pairs }] }));
+
+  it("puts pictures on the left, named for the answer, and the student gets them in the left's order", () => {
+    const parsed = matchTask([
+      { left: { images: [PNG] }, right: "one" },
+      { left: { images: [PNG], text: "Tom" }, right: "two" },
+      { left: "text", right: "three" },
+    ]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [task] = parsed.homework.tasks;
+    expect(partPictures(task!).map((p) => p.place)).toEqual(["пара 1, картинка 1", "пара 2, картинка 1"]);
+    const view = studentView(task!, "seed");
+    expect(view).toMatchObject({ type: "match", left: ["картинка 1", "Tom", "text"], leftImages: [[PNG], [PNG], null] });
+    expect(withPartPictures(view, (_, n) => `/picture/${n}`)).toMatchObject({ leftImages: [["/picture/0"], ["/picture/1"], null] });
+  });
+
+  it("refuses a GIF naming the pair, a picture on the right, and two lefts alike when there are pictures", () => {
+    expect(matchTask([{ left: "a", right: "one" }, { left: { images: ["data:image/gif;base64,R0lGODlh"] }, right: "two" }])).toMatchObject({
+      ok: false,
+      errors: [expect.stringMatching(/^Задание 1, пара 2, картинка 1: картинка — PNG, JPEG или WebP/)],
+    });
+    expect(matchTask([{ left: "a", right: { images: [PNG] } }, { left: "b", right: "two" }]).ok).toBe(false);
+    expect(matchTask([{ left: { images: [PNG], text: "same" }, right: "one" }, { left: "same", right: "two" }]).ok).toBe(false);
+    // Text-only tasks are as before.
+    expect(matchTask([{ left: "same", right: "one" }, { left: "same", right: "two" }]).ok).toBe(true);
+  });
+});
