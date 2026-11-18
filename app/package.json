@@ -18,7 +18,8 @@
     "db:seed": "tsx src/server/db/cli/seed.ts",
     "db:create-teacher": "tsx src/server/db/cli/create-teacher.ts",
     "blobs:cleanup": "tsx src/server/db/cli/cleanup-blobs.ts",
-    "payments:cleanup": "tsx src/server/db/cli/cleanup-payments.ts"
+    "payments:cleanup": "tsx src/server/db/cli/cleanup-payments.ts",
+    "cleanup:nightly": "tsx src/server/db/cli/cleanup-nightly.ts"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",
