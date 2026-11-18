@@ -222,6 +222,10 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
           }),
         };
       }
+      case "table":
+        // shortcut: a table is kept as imported, its prompt and other common fields aside; edit its cells here when the editor gets tables (#186)
+        if (task?.type !== "table") return "Таблицу добавляют импортом JSON";
+        return { ...common, type, header: task.header, rows: task.rows };
       case "written":
       case "voice":
         return { ...common, type, ...withHint };
@@ -417,6 +421,8 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
           <textarea id={`${id}-pairs`} rows={4} value={pairsText} onChange={(e) => setPairsText(e.target.value)} className={field} />
         </Labelled>
       )}
+
+      {type === "table" && <p className="text-small text-text-secondary">Клетки таблицы меняются импортом JSON</p>}
 
       {type === "order" && (
         <>

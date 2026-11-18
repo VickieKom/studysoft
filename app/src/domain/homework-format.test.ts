@@ -5,7 +5,17 @@ import layout from "../../../deploy/seed/homework/demo-layout.json";
 import orderSentences from "../../../deploy/seed/homework/demo-order-sentences.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
 import { optionLabel } from "./homework";
-import { audioDataUrl, isAnswered, parseHomework, partPictures, type StudentTask, studentView, taskPoints, withPartPictures } from "./homework-format";
+import {
+  audioDataUrl,
+  isAnswered,
+  parseHomework,
+  partPictures,
+  type StudentTask,
+  studentView,
+  tableBlanks,
+  taskPoints,
+  withPartPictures,
+} from "./homework-format";
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -324,5 +334,50 @@ describe("pictures to match sentences to (#184)", () => {
     expect(matchTask([{ left: { images: [PNG], text: "same" }, right: "one" }, { left: "same", right: "two" }]).ok).toBe(false);
     // Text-only tasks are as before.
     expect(matchTask([{ left: "same", right: "one" }, { left: "same", right: "two" }]).ok).toBe(true);
+  });
+});
+
+describe("a table (#186)", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const tableTask = (task: object) => parseHomework(JSON.stringify({ version: 1, title: "t", tasks: [{ type: "table", prompt: "p", ...task }] }));
+  const good = {
+    header: ["", { images: [PNG], text: "A" }, "B"],
+    rows: [
+      ["red?", { mark: "yes" }, "✗"],
+      ["colour", { gap: ["red"] }, ""],
+    ],
+  };
+
+  it("lists its blanks in reading order, and the student gets the grid without keys", () => {
+    const parsed = tableTask(good);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [task] = parsed.homework.tasks;
+    expect(task!.type === "table" && tableBlanks(task!).map(({ row, column }) => [row, column])).toEqual([
+      [0, 1],
+      [1, 1],
+    ]);
+    expect(partPictures(task!).map((p) => p.place)).toEqual(["шапка, столбец 2, картинка 1"]);
+    const view = studentView(task!, "seed");
+    expect(view).toMatchObject({
+      type: "table",
+      rows: [
+        ["red?", { blank: "mark" }, "✗"],
+        ["colour", { blank: "text" }, ""],
+      ],
+    });
+    expect(JSON.stringify(view)).not.toMatch(/"mark":|"gap":|"red"/);
+    expect(isAnswered(view, { type: "table", cells: ["yes", "red"] })).toBe(true);
+    expect(isAnswered(view, { type: "table", cells: ["yes", " "] })).toBe(false);
+  });
+
+  it("refuses a row unlike the header, no blank, another mark and a GIF in the header, naming the cell", () => {
+    expect(tableTask({ ...good, rows: [["a", { gap: ["b"] }]] }).ok).toBe(false);
+    expect(tableTask({ header: ["a"], rows: [["b"]] }).ok).toBe(false);
+    expect(tableTask({ header: ["a"], rows: [[{ mark: "maybe" }]] })).toMatchObject({ ok: false, errors: [expect.stringMatching(/^Задание 1, строка 1, столбец 1/)] });
+    expect(tableTask({ header: ["a", { images: ["data:image/gif;base64,R0lGODlh"] }], rows: [["b", { gap: ["c"] }]] })).toMatchObject({
+      ok: false,
+      errors: [expect.stringMatching(/^Задание 1, шапка, столбец 2, картинка 1: картинка — PNG, JPEG или WebP/)],
+    });
   });
 });

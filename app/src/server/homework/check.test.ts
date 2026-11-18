@@ -166,3 +166,29 @@ describe("a match with pictures on the left (#184)", () => {
     expect(fitsTask(pictures, { type: "match", pairs: [{ left: "картинка 2", right: "one" }] })).toBe(false);
   });
 });
+
+describe("a table (#186)", () => {
+  const table: Task = {
+    type: "table",
+    prompt: "p",
+    header: ["", "A"],
+    rows: [
+      ["red?", { mark: "yes" }],
+      ["blue?", { mark: "no" }],
+      ["colour", { gap: ["red", "dark red"] }],
+    ],
+  };
+
+  it("is right when every gap and mark is, gaps compared as typed answers", () => {
+    expect(checkAnswer(table, { type: "table", cells: ["yes", "no", " Dark  Red "] })).toBe(true);
+    expect(checkAnswer(table, { type: "table", cells: ["yes", "yes", "red"] })).toBe(false);
+    expect(checkAnswer(table, { type: "table", cells: ["yes", "no"] })).toBe(false);
+    expect(checkAnswer(table, { type: "table", cells: ["yes", "", "red"] })).toBe(false);
+  });
+
+  it("fits one value per blank, a mark being yes, no or not set", () => {
+    expect(fitsTask(table, { type: "table", cells: ["", "no", "anything"] })).toBe(true);
+    expect(fitsTask(table, { type: "table", cells: ["maybe", "no", "red"] })).toBe(false);
+    expect(fitsTask(table, { type: "table", cells: ["yes", "no"] })).toBe(false);
+  });
+});

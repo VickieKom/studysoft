@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import { type ChoiceOption, matchLeftLabel, type OrderSentence, orderSentences, type StoredAnswer, type Task, type TaskExample } from "./homework-format";
+import { type ChoiceOption, matchLeftLabel, type OrderSentence, orderSentences, type StoredAnswer, type Task, type TaskExample, tableBlanks } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -15,6 +15,7 @@ export const TASK_TYPE_LABELS = {
   gap: "Вставить слово",
   match: "Соединить пары",
   order: "Порядок слов",
+  table: "Таблица",
   written: "Письменный ответ",
   voice: "Голосовой ответ",
   file: "Фото или аудио",
@@ -70,6 +71,10 @@ export function answerKey(task: Task): string | null {
     case "order":
       if (task.sentences) return task.sentences.map((sentence, i) => `${i + 1}) ${sentenceKey(sentence)}`).join("; ");
       return sentenceKey(orderSentences(task)[0]!);
+    case "table":
+      return tableBlanks(task)
+        .map(({ row, column, cell }) => `${row + 1}.${column + 1}: ${"gap" in cell ? cell.gap.join(" / ") : MARK_SIGNS[cell.mark]}`)
+        .join("; ");
     case "written":
     case "voice":
     case "file":
@@ -81,6 +86,9 @@ export function answerKey(task: Task): string | null {
 export function sentenceKey(sentence: OrderSentence): string {
   return [sentence.words, ...(sentence.alternatives ?? [])].map((words) => words.join(" ")).join(" / ");
 }
+
+/** How a mark of a table reads (#186). */
+export const MARK_SIGNS = { yes: "✓", no: "✗" } as const;
 
 /** Where a task's picture is served, after a permission check (#33). */
 /** Where a task's recording is served (#127). */
@@ -136,6 +144,17 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
     case "order":
       if (answer.sentences) return answer.sentences.map((words, i) => `${i + 1}) ${words.join(" ") || "…"}`).join("; ");
       return (answer.words ?? []).join(" ");
+    case "table": {
+      if (task.type !== "table") return null;
+      const blanks = tableBlanks(task);
+      return blanks
+        .map(({ row, column, cell }, i) => {
+          const value = answer.cells[i] ?? "";
+          const shown = "mark" in cell ? (MARK_SIGNS[value as keyof typeof MARK_SIGNS] ?? "") : value.trim();
+          return `${row + 1}.${column + 1}: ${shown || "…"}`;
+        })
+        .join("; ");
+    }
     case "written":
       return answer.text.trim() || null;
     // The review plays a recording and shows a photo next to these words (#93).

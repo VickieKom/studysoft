@@ -1,6 +1,6 @@
 // Checking answers on the server (#34; architecture 6.1). The keys stay here:
 // the student's page gets only studentView() and sends answers back.
-import { type Answer, gapCount, matchLeftLabel, type OrderSentence, type OrderTask, orderSentences, type Task } from "../../domain/homework-format";
+import { type Answer, gapCount, matchLeftLabel, type OrderSentence, type OrderTask, orderSentences, type Task, tableBlanks } from "../../domain/homework-format";
 
 // Every apostrophe a keyboard or a phone may produce counts as the plain one.
 const APOSTROPHES = /[‘’ʼʹ`´′]/g;
@@ -33,6 +33,18 @@ export function checkAnswer(task: Task, answer: Answer): boolean {
     }
     case "order":
       return answer.type === "order" && checkSentences(task, answer).every(Boolean);
+    case "table": {
+      // Every blank right, as a gap task's every gap (#186).
+      if (answer.type !== "table") return false;
+      const blanks = tableBlanks(task);
+      return (
+        answer.cells.length === blanks.length &&
+        blanks.every(({ cell }, i) => {
+          const given = answer.cells[i] ?? "";
+          return "gap" in cell ? cell.gap.some((v) => normalize(v) === normalize(given)) : cell.mark === given;
+        })
+      );
+    }
     case "written":
     case "voice":
     case "file":
@@ -101,6 +113,14 @@ export function fitsTask(task: Task, answer: Answer): boolean {
       const usedLeft = new Set(answer.pairs.map((p) => p.left));
       return (
         usedLeft.size === answer.pairs.length && answer.pairs.every((p) => lefts.has(p.left) && rights.has(p.right))
+      );
+    }
+    case "table": {
+      if (task.type !== "table") return false;
+      const blanks = tableBlanks(task);
+      return (
+        answer.cells.length === blanks.length &&
+        blanks.every(({ cell }, i) => !("mark" in cell) || ["yes", "no", ""].includes(answer.cells[i]!))
       );
     }
     case "written":

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { answerFileUrl } from "@/domain/homework";
+import { answerFileUrl, MARK_SIGNS } from "@/domain/homework";
 import {
   type Answer,
   type ChoiceOption,
@@ -11,6 +11,7 @@ import {
   MAX_VOICE_SECONDS,
   MAX_WRITTEN_CHARS,
   type StudentAnswer,
+  type StudentTableCell,
   type StudentTask,
 } from "@/domain/homework-format";
 import { ChoiceOptionContent, hasPictureOptions, MatchPictures } from "./choice-option";
@@ -337,6 +338,8 @@ function TaskBody({
           onPlace={(words) => onChange(words.length > 0 ? { type: "order", words } : null)}
         />
       );
+    case "table":
+      return <Table task={task} answer={answer} onChange={onChange} />;
     case "written":
       return <Written task={task} answer={answer} onChange={onChange} />;
     case "voice":
@@ -516,6 +519,87 @@ function Match({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * A table (#186): the header with its pictures, the body with text and the
+ * blanks to fill. A blank is named by its row and column in the body, from 1.
+ */
+function Table({
+  task,
+  answer,
+  onChange,
+}: BodyProps & { task: { type: "table"; header: ChoiceOption[]; rows: StudentTableCell[][] } }) {
+  const count = task.rows.flat().filter((cell) => typeof cell !== "string").length;
+  const cells = answer?.type === "table" ? answer.cells : Array.from({ length: count }, () => "");
+  function set(i: number, value: string, typing: boolean) {
+    const next = cells.map((c, j) => (j === i ? value : c));
+    onChange(next.every((c) => c === "") ? null : { type: "table", cells: next }, typing);
+  }
+  let blank = 0;
+  return (
+    <div className="overflow-x-auto">
+      <table className="border-collapse text-answer">
+        <thead>
+          <tr>
+            {task.header.map((cell, column) => (
+              <th key={column} scope="col" className="border-2 border-border px-3 py-2 align-bottom font-semibold">
+                <ChoiceOptionContent option={cell} index={column} lettered={false} src={(address) => address} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {task.rows.map((row, r) => (
+            <tr key={r}>
+              {row.map((cell, c) => {
+                const name = `Строка ${r + 1}, столбец ${c + 1}`;
+                if (typeof cell === "string") {
+                  return (
+                    <td key={c} className="border-2 border-border px-3 py-2">
+                      {cell}
+                    </td>
+                  );
+                }
+                const i = blank++;
+                const value = cells[i] ?? "";
+                return (
+                  <td key={c} className="border-2 border-border px-2 py-2 text-center">
+                    {cell.blank === "text" ? (
+                      <input
+                        type="text"
+                        aria-label={name}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={value}
+                        onChange={(event) => set(i, event.target.value, true)}
+                        className="h-11 w-32 max-w-full rounded-control border-2 border-border bg-bg px-2"
+                      />
+                    ) : (
+                      <div role="group" aria-label={name} className="flex justify-center gap-2">
+                        {(["yes", "no"] as const).map((mark) => (
+                          <button
+                            key={mark}
+                            type="button"
+                            aria-pressed={value === mark}
+                            onClick={() => set(i, value === mark ? "" : mark, false)}
+                            className={`h-11 w-11 rounded-control border-2 text-answer font-bold ${tileState(value === mark)}`}
+                          >
+                            {MARK_SIGNS[mark]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

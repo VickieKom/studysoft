@@ -235,6 +235,8 @@ export async function removeUnreferencedBlobs(
           OR jsonb_path_exists(task, '$.gapImages[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))
           -- And of the left side of match pairs (#184).
           OR jsonb_path_exists(task, '$.pairs[*].left.images[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))
+          -- And of a table's header (#186).
+          OR jsonb_path_exists(task, '$.header[*].images[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))
       )
       AND NOT EXISTS (
         SELECT 1 FROM homework_answer AS a

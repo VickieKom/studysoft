@@ -143,7 +143,8 @@ export function HomeworkDraftEditor({
               onChange={(event) => setNewType(event.target.value as TaskType)}
               className="h-10 rounded-control border border-border bg-bg px-3"
             >
-              {TASK_TYPES.map((type) => (
+              {/* A table comes from a JSON import (#186): the editor keeps it, it does not build one. */}
+              {TASK_TYPES.filter((type) => type !== "table").map((type) => (
                 <option key={type} value={type}>
                   {TASK_TYPE_LABELS[type]}
                 </option>

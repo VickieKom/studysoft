@@ -69,6 +69,19 @@ const otherTask = z.discriminatedUnion("type", [
       ...parts,
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("table"),
+      prompt: text,
+      // The header: text, or pictures by their addresses with an optional caption (#186).
+      header: z.array(z.union([z.string(), z.object({ images: z.array(picture).min(1), text: text.optional() }).strict()])),
+      // The body: text, or a blank to fill without its key.
+      rows: z.array(z.array(z.union([z.string(), z.object({ blank: z.enum(["text", "mark"]) }).strict()]))),
+      image,
+      audio,
+      ...parts,
+    })
+    .strict(),
   z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image, audio, ...parts }).strict(),
   z
     .object({

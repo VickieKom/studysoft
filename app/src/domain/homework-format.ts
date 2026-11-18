@@ -253,12 +253,49 @@ const file = z
   })
   .strict();
 
+/** The most columns and rows of a table task (#186): a workbook page's worth. */
+export const MAX_TABLE_COLUMNS = 6;
+export const MAX_TABLE_ROWS = 12;
+export const MARKS = ["yes", "no"] as const;
+
+// A body cell (#186): text (a printed ✓ or ✗ included), a gap with its
+// accepted variants, or a mark the student sets to ✓ (yes) or ✗ (no).
+const tableCell = z.union([
+  z.string(),
+  z.object({ gap: variants }).strict(),
+  z.object({ mark: z.enum(MARKS) }).strict(),
+]);
+export type TableCell = z.infer<typeof tableCell>;
+
+const table = z
+  .object({
+    ...common,
+    type: z.literal("table"),
+    // The header: text, or pictures with an optional caption, as an answer option is.
+    header: z.array(z.union([z.string(), pictureOption])).min(1).max(MAX_TABLE_COLUMNS),
+    rows: z.array(z.array(tableCell).min(1).max(MAX_TABLE_COLUMNS)).min(1).max(MAX_TABLE_ROWS),
+  })
+  .strict()
+  .refine((t) => t.rows.every((row) => row.length === t.header.length), {
+    path: ["rows"],
+    message: "в каждой строке столько же клеток, сколько в шапке",
+  })
+  .refine((t) => tableBlanks(t).length > 0, { path: ["rows"], message: "нужен хотя бы один пропуск или отметка" });
+
+/** The cells the student fills, in reading order: row by row, left to right (#186). */
+export function tableBlanks(task: { rows: TableCell[][] }): { row: number; column: number; cell: Exclude<TableCell, string> }[] {
+  return task.rows.flatMap((cells, row) =>
+    cells.flatMap((cell, column) => (typeof cell === "string" ? [] : [{ row, column, cell }])),
+  );
+}
+
 export const TASK_TYPES = [
   "single_choice",
   "multiple_choice",
   "gap",
   "match",
   "order",
+  "table",
   "written",
   "voice",
   "file",
@@ -270,6 +307,7 @@ export const taskSchema = z.discriminatedUnion("type", [
   gap,
   match,
   order,
+  table,
   written,
   voice,
   file,
@@ -313,6 +351,11 @@ export function partPictures(task: Task): { value: string; place: string }[] {
   if (task.type === "gap") {
     return (task.gapImages ?? []).flatMap((value, i) => (value ? [{ value, place: `пропуск ${i + 1}` }] : []));
   }
+  if (task.type === "table") {
+    return task.header.flatMap((cell, i) =>
+      typeof cell === "string" ? [] : cell.images.map((value, n) => ({ value, place: `шапка, столбец ${i + 1}, картинка ${n + 1}` })),
+    );
+  }
   if (task.type === "match") {
     return task.pairs.flatMap((pair, i) =>
       typeof pair.left === "string" ? [] : pair.left.images.map((value, n) => ({ value, place: `пара ${i + 1}, картинка ${n + 1}` })),
@@ -325,11 +368,16 @@ export function partPictures(task: Task): { value: string; place: string }[] {
 }
 
 /** The task with each picture of its parts replaced, by its position in partPictures(). */
-export function withPartPictures<T extends { type: string; options?: unknown; gapImages?: unknown; pairs?: unknown; leftImages?: unknown }>(
-  task: T,
-  replace: (value: string, n: number) => string,
-): T {
+export function withPartPictures<
+  T extends { type: string; options?: unknown; gapImages?: unknown; pairs?: unknown; leftImages?: unknown; header?: unknown },
+>(task: T, replace: (value: string, n: number) => string): T {
   let n = 0;
+  if (task.type === "table" && Array.isArray(task.header)) {
+    const header = (task.header as ChoiceOption[]).map((cell) =>
+      typeof cell === "string" ? cell : { ...cell, images: cell.images.map((value) => replace(value, n++)) },
+    );
+    return { ...task, header };
+  }
   if (task.type === "match" && Array.isArray(task.pairs)) {
     const pairs = (task.pairs as { left: ChoiceOption; right: string }[]).map((pair) =>
       typeof pair.left === "string" ? pair : { ...pair, left: { ...pair.left, images: pair.left.images.map((value) => replace(value, n++)) } },
@@ -364,6 +412,11 @@ function innermost(issue: z.core.$ZodIssue): z.core.$ZodIssue {
 function place(rest: PropertyKey[]): string {
   const [field, option, part, picture] = rest;
   if (field === "gapImages" && typeof option === "number") return `пропуск ${option + 1}`;
+  if (field === "header" && typeof option === "number") {
+    if (part === "images" && typeof picture === "number") return `шапка, столбец ${option + 1}, картинка ${picture + 1}`;
+    return `шапка, столбец ${option + 1}`;
+  }
+  if (field === "rows" && typeof option === "number" && typeof part === "number") return `строка ${option + 1}, столбец ${part + 1}`;
   if (field === "pairs" && typeof option === "number") {
     if (part === "left" && picture === "images" && typeof rest[4] === "number") return `пара ${option + 1}, картинка ${rest[4] + 1}`;
     return `пара ${option + 1}`;
@@ -459,6 +512,7 @@ export type StudentTask = (
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: ChoiceOption[] }
   | { type: "gap"; prompt: string; text: string; options?: string[]; choices?: (string[] | null)[]; gapImages?: (string | null)[] }
   | { type: "match"; prompt: string; left: string[]; right: string[]; leftImages?: (string[] | null)[] }
+  | { type: "table"; prompt: string; header: ChoiceOption[]; rows: StudentTableCell[][] }
   | { type: "order"; prompt: string; words: string[] }
   | { type: "order"; prompt: string; sentences: string[][] }
   | { type: "written" | "voice"; prompt: string; hint?: string }
@@ -472,6 +526,9 @@ export type StudentTask = (
   /** The address of the task's recording (#127), served the same way. */
   audio?: string;
 };
+
+/** A body cell as the student gets it (#186): its text, or a blank to fill, without the key. */
+export type StudentTableCell = string | { blank: "text" | "mark" };
 
 export function studentView(task: Task, seed: string): StudentTask {
   const parts = { ...(task.passage ? { passage: task.passage } : {}), ...(task.example ? { example: task.example } : {}) };
@@ -491,6 +548,13 @@ function studentBody(task: Task, seed: string): StudentTask {
         ...(task.options ? { options: task.options } : {}),
         ...(task.choices ? { choices: task.choices } : {}),
         ...(task.gapImages ? { gapImages: task.gapImages } : {}),
+      };
+    case "table":
+      return {
+        type: "table",
+        prompt: task.prompt,
+        header: task.header,
+        rows: task.rows.map((cells) => cells.map((cell) => (typeof cell === "string" ? cell : { blank: "gap" in cell ? "text" : "mark" }))),
       };
     case "match":
       return {
@@ -534,7 +598,7 @@ function studentBody(task: Task, seed: string): StudentTask {
 }
 
 /** The task types the student answers on the platform and the platform checks (#34). */
-export const AUTO_CHECKED_TYPES = ["single_choice", "multiple_choice", "gap", "match", "order"] as const;
+export const AUTO_CHECKED_TYPES = ["single_choice", "multiple_choice", "gap", "match", "order", "table"] as const;
 
 const answerText = z.string().max(500);
 
@@ -561,6 +625,8 @@ const pageAnswers = [
     })
     .strict()
     .refine((a) => (a.words === undefined) !== (a.sentences === undefined), { message: "words или sentences" }),
+  // A table (#186): one value per blank in reading order; a mark is "yes", "no" or "" when not set.
+  z.object({ type: z.literal("table"), cells: z.array(answerText).max(MAX_TABLE_COLUMNS * MAX_TABLE_ROWS) }).strict(),
   z.object({ type: z.literal("written"), text: z.string().max(MAX_WRITTEN_CHARS) }).strict(),
 ] as const;
 
@@ -616,6 +682,12 @@ export function isAnswered(task: StudentTask, answer: StudentAnswer | null | und
           task.sentences.every((words, i) => answer.sentences![i]!.length === words.length)
         );
       return answer.words?.length === task.words.length;
+    case "table":
+      return (
+        task.type === "table" &&
+        answer.cells.length === task.rows.flat().filter((cell) => typeof cell !== "string").length &&
+        answer.cells.every((value) => value.trim() !== "")
+      );
     case "written":
       return answer.text.trim() !== "";
     case "voice":
