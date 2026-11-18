@@ -360,7 +360,7 @@ erDiagram
 | `price_terms` | `crm` | Permanent | The payment format (prepaid, postpaid, free), the lesson price and its currency (₽, $, €, ฿; one per student), in force from a date; a new row starts new terms and earlier lessons keep theirs. The card shows the balance for prepaid students, only a debt for postpaid ones, nothing for free ones (#83) |
 | `price_history`, `level_history` | `crm` | Permanent | History of the lesson price and the level: past charges are never recomputed |
 | `note` | `crm` | Permanent; the teacher may delete one | Attached to a student (#42); a lesson's note is kept on the `lesson` row instead (#82), so it never joins the notes the assistant reads. A composite key to `student (id, teacher_id)` keeps it inside one teacher. Teacher only |
-| `textbook`, `textbook_file`, `textbook_page` | `library` | Permanent | A set with a title and a level; its files — the student's book and the workbook (PDF, at most 300 MB each) and the tracks (MP3, M4A, WAV or OGG, at most 500 MB together) — uploaded with `PUT` to `/api/files/textbooks` and written to the store as they arrive; each book's pages rendered in the background with poppler's `pdftoppm` to JPEG and kept one blob per page. A book's status is queued, rendering, done or failed, with the server process that took it: one left by a process that stopped reads as failed and is tried again with «Повторить». A book or a track is served at `/api/files/textbooks/<file>` in byte ranges and a page at `/api/files/textbooks/<file>/pages/<n>`, to the teacher only; anyone else gets the same 404 as for a missing one (#156) |
+| `textbook`, `textbook_file`, `textbook_page` | `library` | Permanent | A set with a title and a level, and its units and lessons as two JSON documents in `textbook` (#150, `domain/textbook-structure.ts`): the confirmed `structure` lessons use, and a `structure_draft` — the assistant's, which it may replace, or the teacher's own edits, which it may not — that confirming replaces it with; the teacher's save is refused when the draft changed since her form loaded it. Each lesson has an id that stays across edits, its page ranges in each book, its tracks by name and its words; a structure is checked against the set's rendered pages and tracks; its files — the student's book and the workbook (PDF, at most 300 MB each) and the tracks (MP3, M4A, WAV or OGG, at most 500 MB together) — uploaded with `PUT` to `/api/files/textbooks` and written to the store as they arrive; each book's pages rendered in the background with poppler's `pdftoppm` to JPEG and kept one blob per page. A book's status is queued, rendering, done or failed, with the server process that took it: one left by a process that stopped reads as failed and is tried again with «Повторить». A book or a track is served at `/api/files/textbooks/<file>` in byte ranges and a page at `/api/files/textbooks/<file>/pages/<n>`, to the teacher only; anyone else gets the same 404 as for a missing one (#156) |
 | `unit`, `unit_page`, `vocabulary_item`, `answer_key` | `library` | Permanent | Parsing result; a parse has a status: "in review" or "confirmed". The parse also fills each unit's task bank: workbook exercises as tasks in the homework format with their keys (#6); its tables are designed with that slice |
 | `library_item` | `library` | Permanent, soft delete | Game or trainer (self-contained HTML), warm-up, video, test template, the teacher's method note. Author's content: included in backups and export |
 | `homework`, `task` | `homework` | Permanent | The document in the homework format (`docs/homework-format.md`), stored as imported. Statuses: draft, published, submitted ("сдана", #34), missed ("не сдана"). Tasks do not change after publishing; a deadline is a calendar date; at most one published homework per student, kept by a partial unique index |
@@ -471,9 +471,9 @@ sequenceDiagram
     A->>F: 2. Stores the files
     A->>F: 3. Renders pages to images
     T->>G: 4. Asks to parse the textbook
-    G->>M: 5. get_textbook_text: text layer with word coordinates
-    G->>M: 6. get_textbook_pages: page images, for pictures and layout
-    G->>M: 7. save_textbook_structure: units, lessons, pages, vocabulary, keys
+    G->>M: 5. read_textbook_text: text layer, page by page
+    G->>M: 6. get_textbook_page: page images, for pictures and layout
+    G->>M: 7. save_textbook_structure: units, lessons, pages, tracks, vocabulary
     G->>M: 8. save_task_bank: workbook exercises as tasks with keys
     M->>A: 9. Parse and bank with status "in review"
     T->>A: 10. Checks the structure; picks tasks for a homework
@@ -485,7 +485,7 @@ The spike on one real set (#6) confirmed an agent can do it: all 391 pages in on
 - **Units are lessons.** A unit is its numbered lessons; review, culture and exam sections between units are lessons of their own, so lesson setup can propose the next one and the teacher can skip one.
 - **The result is a task bank, not a structure to correct.** Each workbook exercise becomes a task in the homework format with its key, its instruction, its example and its pictures cut out one by one; the layout (tables, letters, numbering) is drawn by the task's interface. The teacher picks tasks from a unit's bank for a homework rather than checking every item, and sees each one as the student will. What the format still lacks for that is filed as #127–#131.
 
-Step 3 is deterministic and needs no agent; it runs in the background and its status is recorded in the database. The bank, its tables and the selection screen get their own slice.
+Step 3 is deterministic and needs no agent; it runs in the background and its status is recorded in the database (#156). Steps 5–7 and the teacher's check of the structure are #150: the structure is a draft «от ассистента» until the teacher corrects and confirms it, and she can enter one by hand. The text layer comes from poppler's `pdftotext` with the layout kept, without word coordinates yet. The bank, its tables and the selection screen get their own slice.
 
 #### Scenario: a task from an issue to staging
 

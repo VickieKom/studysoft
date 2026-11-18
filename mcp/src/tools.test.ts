@@ -101,3 +101,18 @@ describe("assistant tools", () => {
     expect(result.content[0]!.text).toMatch(/^game refused, nothing was saved/);
   });
 });
+
+describe("textbook tools (#150)", () => {
+  it("return a page as an image and a refused structure as words to fix", async () => {
+    const page = createTools(platformAnswering(200, { result: { data: { contentType: "image/jpeg", base64: "AAAA" } } }));
+    expect(await page.getTextbookPage({ bookId: "00000000-0000-4000-8000-000000000001", page: 1 })).toEqual({
+      content: [{ type: "image", data: "AAAA", mimeType: "image/jpeg" }],
+    });
+    const refused = createTools(
+      platformAnswering(400, { error: { message: "юнит 1, урок 2: трека «9-99» нет в учебнике", code: -32600, data: { code: "BAD_REQUEST", httpStatus: 400 } } }),
+    );
+    const result = await refused.saveTextbookStructure({ textbookId: "00000000-0000-4000-8000-000000000001", structure: {} });
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toMatch(/^invalid textbook structure, nothing was saved/);
+  });
+});

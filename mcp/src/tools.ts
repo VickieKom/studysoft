@@ -4,11 +4,17 @@ import { z } from "zod";
 import type { Platform } from "./platform";
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
+/** A page of a textbook comes back as an image (#150). */
+type ImageResult = { content: { type: "image"; data: string; mimeType: string }[] };
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 
-/** Errors reach the assistant as plain words, never as a stack. `refused` names what a BAD_REQUEST refused. */
-function failure(error: unknown, refused = "invalid homework"): ToolResult {
+/**
+ * Errors reach the assistant as plain words, never as a stack. `subject.refused` names what a BAD_REQUEST refused,
+ * `subject.missing` what a NOT_FOUND looked for.
+ */
+function failure(error: unknown, subject: { refused?: string; missing?: string } = {}): ToolResult {
+  const { refused = "invalid homework", missing = "student" } = subject;
   const code = (error as { data?: { code?: string } })?.data?.code;
   const message = (error as { message?: string })?.message ?? "";
   const text =
@@ -17,10 +23,14 @@ function failure(error: unknown, refused = "invalid homework"): ToolResult {
       : code === "UNAUTHORIZED"
       ? "unauthorized: the token is missing, wrong or revoked — create a new one in «Ассистент»"
       : code === "NOT_FOUND"
-        ? "not found: there is no such student"
-        : "the platform did not answer; try again later";
+        ? `not found: there is no such ${missing}`
+        : code === "CONFLICT"
+          ? `not saved: ${message}`
+          : "the platform did not answer; try again later";
   return { content: [{ type: "text", text }], isError: true };
 }
+
+const TEXTBOOK = { refused: "invalid textbook structure", missing: "textbook or page" };
 
 export const studentIdInput = { studentId: z.string().uuid().describe("The student's id from list_students") };
 
@@ -66,8 +76,67 @@ type LibraryTags = { id?: string; title: string; level: "A1" | "A2" | "B1" | "B2
 const savedToLibrary = (id: string) =>
   json({ id, status: "draft", note: "Saved as a draft in «Библиотека» under «От ассистента»; the teacher adds it to the library." });
 
+export const textbookIdInput = { textbookId: z.string().uuid().describe("The textbook's id from list_textbooks") };
+
+export const textInput = {
+  bookId: z.string().uuid().describe("A book's id from list_textbooks"),
+  from: z.number().int().min(1).describe("The first page, from 1"),
+  to: z.number().int().min(1).describe("The last page; at most 20 pages at a time"),
+};
+
+export const pageInput = {
+  bookId: z.string().uuid().describe("A book's id from list_textbooks"),
+  page: z.number().int().min(1).describe("The page, from 1"),
+};
+
+export const structureInput = {
+  ...textbookIdInput,
+  structure: z
+    .record(z.string(), z.unknown())
+    .describe(
+      "{ units: [{ title, lessons: [{ title, pages: { students_book?: { from, to }, workbook?: { from, to } }, tracks: [track names], words: [words] }] }] }",
+    ),
+};
+
 export function createTools(platform: Platform) {
   return {
+    async listTextbooks(): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.listTextbooks.query());
+      } catch (error) {
+        return failure(error, TEXTBOOK);
+      }
+    },
+    async readTextbookText(input: { bookId: string; from: number; to: number }): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.textbookText.query(input));
+      } catch (error) {
+        return failure(error, TEXTBOOK);
+      }
+    },
+    async getTextbookPage(input: { bookId: string; page: number }): Promise<ImageResult | ToolResult> {
+      try {
+        const { contentType, base64 } = await platform.agent.textbookPage.query(input);
+        return { content: [{ type: "image", data: base64, mimeType: contentType }] };
+      } catch (error) {
+        return failure(error, TEXTBOOK);
+      }
+    },
+    async readTextbookStructure({ textbookId }: { textbookId: string }): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.textbookStructure.query({ textbookId }));
+      } catch (error) {
+        return failure(error, TEXTBOOK);
+      }
+    },
+    async saveTextbookStructure({ textbookId, structure }: { textbookId: string; structure: unknown }): Promise<ToolResult> {
+      try {
+        await platform.agent.saveTextbookStructure.mutate({ textbookId, structure });
+        return json({ status: "draft", note: "Saved as a draft on the textbook's page; the teacher corrects and confirms it." });
+      } catch (error) {
+        return failure(error, TEXTBOOK);
+      }
+    },
     async listStudents(): Promise<ToolResult> {
       try {
         return json(await platform.agent.listStudents.query());
@@ -114,7 +183,7 @@ export function createTools(platform: Platform) {
       try {
         return savedToLibrary((await platform.agent.saveGameDraft.mutate(input)).id);
       } catch (error) {
-        return failure(error, "game refused");
+        return failure(error, { refused: "game refused" });
       }
     },
     async saveWarmupDraft({
@@ -130,7 +199,7 @@ export function createTools(platform: Platform) {
             : await platform.agent.saveWarmupDraft.mutate({ ...tags, format, picture: picture ?? "" });
         return savedToLibrary(saved.id);
       } catch (error) {
-        return failure(error, "warm-up refused");
+        return failure(error, { refused: "warm-up refused" });
       }
     },
   };
