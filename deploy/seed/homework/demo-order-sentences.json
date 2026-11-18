@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "title": "Demo: word order, several sentences",
+  "tasks": [
+    {
+      "type": "order",
+      "prompt": "Put the words in order.",
+      "sentences": [
+        { "words": ["I", "like", "green", "apples"] },
+        { "words": ["We", "go", "to", "school", "by", "bus"] },
+        { "words": ["She", "is", "my", "best", "friend"] }
+      ],
+      "topic": "word order",
+      "skill": "grammar"
+    }
+  ]
+}
