@@ -4,7 +4,7 @@ import choices from "../../../deploy/seed/homework/demo-gap-choices.json";
 import layout from "../../../deploy/seed/homework/demo-layout.json";
 import orderSentences from "../../../deploy/seed/homework/demo-order-sentences.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
-import { isAnswered, parseHomework, type StudentTask, studentView, taskPoints } from "./homework-format";
+import { audioDataUrl, isAnswered, parseHomework, type StudentTask, studentView, taskPoints } from "./homework-format";
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -214,5 +214,27 @@ describe("an order task of several sentences (#161)", () => {
     expect(isAnswered(task, { type: "order", sentences: [["b", "a"], ["d", "c"]] })).toBe(true);
     expect(isAnswered(task, { type: "order", sentences: [["b", "a"], ["d"]] })).toBe(false);
     expect(isAnswered(task, { type: "order", words: ["a", "b"] })).toBe(false);
+  });
+});
+
+describe("a task's recording (#127)", () => {
+  it("takes MP3, M4A, WAV and OGG under the names tools give them, and stores each under one type", () => {
+    const of = (type: string) => audioDataUrl(`data:${type};base64,AAAA`)?.type ?? null;
+    expect([of("audio/mp3"), of("audio/mpeg"), of("audio/x-m4a"), of("audio/x-wav"), of("audio/ogg")]).toEqual([
+      "audio/mpeg",
+      "audio/mpeg",
+      "audio/mp4",
+      "audio/wav",
+      "audio/ogg",
+    ]);
+    expect([of("audio/flac"), of("video/mp4"), of("image/png")]).toEqual([null, null, null]);
+  });
+
+  it("is refused by the format when it is not a recording or over 10 MB", () => {
+    const task = (audio: string) => JSON.stringify({ version: 1, title: "t", tasks: [{ type: "written", prompt: "Listen.", audio }] });
+    expect(parseHomework(task("data:audio/wav;base64,UklGRg==")).ok).toBe(true);
+    expect(parseHomework(task("https://example.test/track.mp3")).ok).toBe(false);
+    const big = Buffer.alloc(10 * 1024 * 1024 + 1).toString("base64");
+    expect(parseHomework(task(`data:audio/wav;base64,${big}`))).toMatchObject({ ok: false, errors: [expect.stringContaining("больше 10 МБ")] });
   });
 });

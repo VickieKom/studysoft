@@ -1,4 +1,4 @@
-import { answerKey, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
+import { answerKey, homeworkAudioUrl, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
 import type { Task } from "@/domain/homework-format";
 import { GapChoices } from "./gap-choices";
 import { TaskExampleLine, TaskPassage } from "./task-parts";
@@ -25,6 +25,9 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
           alt="Картинка к заданию"
           className="mt-2 max-h-64 rounded-control border border-border"
         />
+      )}
+      {task.audio && (
+        <audio controls preload="metadata" src={homeworkAudioUrl(homeworkId, number - 1)} className="mt-2 w-full" />
       )}
       {"text" in task && <p className="mt-2 whitespace-pre-line">{task.text}</p>}
       {task.type === "gap" && task.choices && <GapChoices choices={task.choices} className="mt-2 text-small" />}

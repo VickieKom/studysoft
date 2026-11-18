@@ -70,6 +70,7 @@ export default async function SubmissionPage({ params }: Props) {
             )}
             {task.example && <TaskExampleLine example={task.example} className="mt-2 text-small" />}
             {task.choices && <GapChoices choices={task.choices} className="mt-1 text-small" />}
+            {task.audioUrl && <audio controls preload="metadata" src={task.audioUrl} aria-label="Запись к заданию" className="mt-2 w-full" />}
             {task.sentences ? (
               <ol className="mt-2 flex flex-col gap-2">
                 {task.sentences.map((sentence, i) => (

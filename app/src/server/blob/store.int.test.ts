@@ -7,7 +7,8 @@ import { seedTeachers, signedInHeaders } from "../testing/requests";
 import { blobStore, removeUnreferencedBlobs, saveBlob } from "./store";
 
 // Cleaning up stored files nothing refers to (#73). The picture is a
-// synthetic 1×1 PNG made here; every data URL becomes a new stored file. Integration files run one after another, so the
+// synthetic 1×1 PNG made here; every data URL becomes a new stored file,
+// except that the same data twice in one homework is stored once (#127). Integration files run one after another, so the
 // files this test ages are the only old ones in the database.
 
 const [teacherA] = seedTeachers as [(typeof seedTeachers)[number]];
@@ -16,6 +17,8 @@ const PNG = `data:image/png;base64,${Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
   "base64",
 ).toString("base64")}`;
+// The same picture with one more byte at the end: another file, so two tasks of one homework keep two.
+const OTHER_PNG = `data:image/png;base64,${Buffer.concat([Buffer.from(PNG.slice(PNG.indexOf(",") + 1), "base64"), Buffer.from([0])]).toString("base64")}`;
 
 let teacher: ReturnType<typeof createServerCaller>;
 let teacherId: string;
@@ -54,7 +57,7 @@ describe("removeUnreferencedBlobs", () => {
       level: "A2",
       timeZone: "Europe/Moscow",
     });
-    const { id } = await teacher.teacher.homework.import({ studentId, json: JSON.stringify(withImages([PNG, PNG])) });
+    const { id } = await teacher.teacher.homework.import({ studentId, json: JSON.stringify(withImages([PNG, OTHER_PNG])) });
     const before = await teacher.teacher.homework.get({ id });
     const [kept, replaced] = before.tasks.map((t) => idOf(t.image));
     // The second picture is replaced in the editor.

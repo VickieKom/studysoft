@@ -26,8 +26,10 @@ const parts = {
   passage: text.optional(),
   example: z.object({ text, answer: text.optional() }).strict().optional(),
 };
+// A recording to listen to (#127), by its address as a picture is.
+const audio = z.string().startsWith("/api/files/homework/").optional();
 const otherTask = z.discriminatedUnion("type", [
-  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image, ...parts }).strict(),
+  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image, audio, ...parts }).strict(),
   z
     .object({
       type: z.literal("gap"),
@@ -37,11 +39,12 @@ const otherTask = z.discriminatedUnion("type", [
       // A gap's own options (#128): what the student picks from, never which is right.
       choices: z.array(z.array(text).nullable()).optional(),
       image,
+      audio,
       ...parts,
     })
     .strict(),
-  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image, ...parts }).strict(),
-  z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image, ...parts }).strict(),
+  z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image, audio, ...parts }).strict(),
+  z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image, audio, ...parts }).strict(),
   z
     .object({
       type: z.literal("file"),
@@ -49,6 +52,7 @@ const otherTask = z.discriminatedUnion("type", [
       accept: z.array(z.enum(["image", "audio"])),
       hint: text.optional(),
       image,
+      audio,
       ...parts,
     })
     .strict(),
@@ -56,8 +60,8 @@ const otherTask = z.discriminatedUnion("type", [
 // An order task: one sentence in `words`, or several in `sentences`, each shuffled (#161).
 const studentTask = z.union([
   otherTask,
-  z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image, ...parts }).strict(),
-  z.object({ type: z.literal("order"), prompt: text, sentences: z.array(z.array(text)), image, ...parts }).strict(),
+  z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image, audio, ...parts }).strict(),
+  z.object({ type: z.literal("order"), prompt: text, sentences: z.array(z.array(text)), image, audio, ...parts }).strict(),
 ]);
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });

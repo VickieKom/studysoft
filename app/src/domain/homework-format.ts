@@ -28,6 +28,36 @@ export type ImageType = (typeof IMAGE_TYPES)[number];
 const IMAGE_DATA_URL = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]*={0,2})$/;
 const IMAGE_REF = /^blob:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/** The largest recording a task may carry (#127, product owner 2026-11-18): a workbook track of a few minutes. */
+export const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+/** The recordings a task takes, as they are stored: MP3, M4A, WAV, OGG (#127). */
+export const AUDIO_TYPES = ["audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg"] as const;
+export type AudioType = (typeof AUDIO_TYPES)[number];
+// The names browsers and tools give these types, and the one each is stored as.
+const AUDIO_ALIASES: Record<string, AudioType> = {
+  "audio/mpeg": "audio/mpeg",
+  "audio/mp3": "audio/mpeg",
+  "audio/mp4": "audio/mp4",
+  "audio/m4a": "audio/mp4",
+  "audio/x-m4a": "audio/mp4",
+  "audio/aac": "audio/mp4",
+  "audio/wav": "audio/wav",
+  "audio/x-wav": "audio/wav",
+  "audio/wave": "audio/wav",
+  "audio/ogg": "audio/ogg",
+};
+const AUDIO_DATA_URL = /^data:(audio\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]*={0,2})$/;
+
+/** The type and the bytes of a recording's data URL, or null when it is not one the format accepts (#127). */
+export function audioDataUrl(value: string): { type: AudioType; base64: string; bytes: number } | null {
+  const match = AUDIO_DATA_URL.exec(value);
+  const type = match ? AUDIO_ALIASES[match[1]!] : undefined;
+  if (!match || !type) return null;
+  const base64 = match[2]!;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return { type, base64, bytes: Math.floor((base64.length * 3) / 4) - padding };
+}
+
 /** The type and the bytes of a picture's data URL, or null when it is not one the format accepts. */
 export function imageDataUrl(value: string): { type: ImageType; base64: string; bytes: number } | null {
   const match = IMAGE_DATA_URL.exec(value);
@@ -60,11 +90,20 @@ export const MAX_PASSAGE_CHARS = 5000;
 const example = z.object({ text, answer: z.string().trim().min(1).optional() }).strict();
 export type TaskExample = z.infer<typeof example>;
 
+const audio = z
+  .string()
+  .refine((value) => imageRef(value) !== null || audioDataUrl(value) !== null, {
+    error: "запись — MP3, M4A, WAV или OGG в виде data:audio/…;base64,…",
+  })
+  .refine((value) => (audioDataUrl(value)?.bytes ?? 0) <= MAX_AUDIO_BYTES, { error: "запись больше 10 МБ" });
+
 const common = {
   prompt: text,
   // A reading text of its own (#131): a passage, a blog post, a dialogue, notes; shown in regular type with its lines.
   passage: z.string().trim().min(1).max(MAX_PASSAGE_CHARS).optional(),
   example: example.optional(),
+  // A recording for the student to listen to (#127), stored and referred to as a picture is.
+  audio: audio.optional(),
   topic: z.string().optional(),
   skill: z.enum(SKILLS).optional(),
   source: source.optional(),
@@ -325,6 +364,8 @@ export type StudentTask = (
   /** The reading text and the example (#131): part of the exercise, not keys. */
   passage?: string;
   example?: TaskExample;
+  /** The address of the task's recording (#127), served the same way. */
+  audio?: string;
 };
 
 export function studentView(task: Task, seed: string): StudentTask {

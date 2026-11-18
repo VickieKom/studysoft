@@ -57,6 +57,7 @@ const submission = z
           choices: z.array(z.array(z.string()).nullable()).nullable(),
           passage: z.string().nullable(),
           example: z.object({ text: z.string(), answer: z.string().optional() }).strict().nullable(),
+          audioUrl: z.string().startsWith("/api/files/homework/").nullable(),
           topic: z.string().nullable(),
           answer: z.string().nullable(),
           autoChecked: z.boolean(),

@@ -4,7 +4,7 @@ import { HOMEWORK_FORMAT_VERSION, homeworkSchema, validateHomework } from "../..
 import { buildStudentContext } from "../../crm/context";
 import { readAssistantDraft, replaceableDraft, saveAssistantDraft } from "../../homework/drafts";
 import { HOMEWORK_FORMAT_DESCRIPTION } from "../../homework/format-description";
-import { imageRefs, storeImages } from "../../homework/images";
+import { taskFileRefs, storeTaskFiles } from "../../homework/images";
 import { agentProcedure, router } from "../core/trpc";
 
 // The assistant's homework tools (#43). Drafts only: there is no agent
@@ -34,7 +34,7 @@ export const agentHomeworkRouter = router({
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
       // A picture already stored may stay only in the draft being replaced.
       const replaced = await replaceableDraft(ctx.db, ctx.teacherId, input.studentId);
-      const stored = await storeImages(ctx.db, ctx.teacherId, checked.homework, replaced ? imageRefs(replaced.document) : new Set());
+      const stored = await storeTaskFiles(ctx.db, ctx.teacherId, checked.homework, replaced ? taskFileRefs(replaced.document) : new Set());
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
       // The draft found above is checked again under a lock before it is replaced.
       return { id: await saveAssistantDraft(ctx.db, ctx.teacherId, input.studentId, replaced, stored.homework, context) };
