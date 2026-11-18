@@ -629,3 +629,26 @@ export const payment = pgTable(
     index("payment_teacher_id_idx").on(t.teacherId),
   ],
 );
+
+// A payment's values before an edit or a delete (#101). Not shown anywhere:
+// kept for about a month in case a correction was itself a mistake, then
+// removed by `npm run payments:cleanup -w app`. The payment it was may be
+// gone, so there is no reference to it.
+export const paymentRevision = pgTable(
+  "payment_revision",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    paymentId: uuid("payment_id").notNull(),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    paidOn: date("paid_on").notNull(),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    comment: text("comment"),
+    // "edited" or "deleted".
+    change: text("change").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("payment_revision_teacher_id_idx").on(t.teacherId), index("payment_revision_created_at_idx").on(t.createdAt)],
+);

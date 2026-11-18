@@ -10,7 +10,7 @@ import {
 } from "../../../domain/payments";
 import { dateIn } from "../../../domain/schedule";
 import { withStudentLocked } from "../../access/links";
-import { addPayment, listPayments, listTerms, saveTerms } from "../../crm/payments";
+import { addPayment, deletePayment, editPayment, listPayments, listTerms, paymentStudent, saveTerms } from "../../crm/payments";
 import { findStudent } from "../../crm/students";
 import type { Database } from "../../db/client";
 import { chargedLessonDates } from "../../schedule/schedule";
@@ -20,6 +20,11 @@ import { router, teacherProcedure } from "../core/trpc";
 // a student, a parent or the assistant.
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
+const comment = z
+  .string()
+  .max(1000)
+  .transform((value) => (value.trim() === "" ? null : value));
 /** «1500», «30.5», «30,50»: an amount in major units, at most two decimals. */
 const amount = z
   .string()
@@ -124,10 +129,7 @@ export const paymentsRouter = router({
         studentId: z.uuid(),
         amount,
         paidOn: z.iso.date(),
-        comment: z
-          .string()
-          .max(1000)
-          .transform((value) => (value.trim() === "" ? null : value)),
+        comment,
       }),
     )
     .output(z.object({ id: z.uuid() }))
@@ -143,5 +145,48 @@ export const paymentsRouter = router({
         }),
       );
       return { id };
+    }),
+
+  /**
+   * «Изменить» on a payment (#101): its amount, date and comment. The old
+   * values are kept inside for about a month; nothing shows them.
+   */
+  updatePayment: teacherProcedure
+    .input(z.object({ id: z.uuid(), amount, paidOn: z.iso.date(), comment }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      // Whose it is first: another teacher's payment is NOT_FOUND whatever the amount, as a missing one.
+      const studentId = await paymentStudent(ctx.db, ctx.teacherId, input.id);
+      if (!studentId) throw notFound();
+      if (input.amount <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Сумма должна быть больше нуля" });
+      // Under the student's lock, as adding one; the payment's row is locked inside. Read again under
+      // the lock, so a student deleted in between is not edited.
+      const edited = await withStudentLocked(ctx.db, ctx.teacherId, studentId, async (tx) =>
+        (await paymentStudent(tx, ctx.teacherId, input.id)) === studentId &&
+        editPayment(tx, ctx.teacherId, studentId, input.id, {
+          paidOn: input.paidOn,
+          amountMinor: input.amount,
+          comment: input.comment,
+        }),
+      );
+      if (!edited) throw notFound();
+      return { id: input.id };
+    }),
+
+  /** «Удалить» on a payment after «Удалить оплату?» (#101); its values are kept inside for about a month. */
+  deletePayment: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const studentId = await paymentStudent(ctx.db, ctx.teacherId, input.id);
+      if (!studentId) throw notFound();
+      const deleted = await withStudentLocked(
+        ctx.db,
+        ctx.teacherId,
+        studentId,
+        async (tx) => (await paymentStudent(tx, ctx.teacherId, input.id)) === studentId && deletePayment(tx, ctx.teacherId, studentId, input.id),
+      );
+      if (!deleted) throw notFound();
+      return { id: input.id };
     }),
 });
