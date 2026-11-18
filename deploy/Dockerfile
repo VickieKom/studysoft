@@ -28,6 +28,11 @@ COPY --from=build /srv/package.json /srv/package.json
 COPY --from=build /srv/node_modules /srv/node_modules
 COPY --from=build /srv/app /srv/app
 
+# poppler's pdftoppm renders textbook pages to images (#156; architecture, section 5).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends poppler-utils \
+  && rm -rf /var/lib/apt/lists/*
+
 # The file adapter's directory. Created here so that a volume mounted over it
 # starts out writable by the unprivileged user.
 RUN mkdir -p /data/files && chown node:node /data/files
