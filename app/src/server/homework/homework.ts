@@ -13,12 +13,13 @@ import {
   type StudentTask,
   storedAnswerSchema,
   studentView,
+  withPartPictures,
   type Task,
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
-import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, todayIn } from "../../domain/homework";
+import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, todayIn } from "../../domain/homework";
 import { checkAnswer, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
@@ -338,7 +339,8 @@ export async function openHomework(
   }
   return {
     tasks: tasks.map((task, index) => ({
-      ...studentView(task, shuffleSeed(id, index)),
+      // The pictures of options go out as their addresses, never as the stored references (#129).
+      ...withPartPictures(studentView(task, shuffleSeed(id, index)), (_, n) => homeworkPictureUrl(id, index, n)),
       ...(task.image ? { image: homeworkImageUrl(id, index) } : {}),
       ...(task.audio ? { audio: homeworkAudioUrl(id, index) } : {}),
     })),

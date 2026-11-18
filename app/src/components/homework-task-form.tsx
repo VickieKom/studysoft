@@ -1,8 +1,19 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useId, useState } from "react";
-import { gapCount, IMAGE_TYPES, MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, SKILLS, type Task, type TaskType } from "@/domain/homework-format";
+import { optionLabel } from "@/domain/homework";
+import {
+  type ChoiceOption,
+  gapCount,
+  IMAGE_TYPES,
+  MAX_AUDIO_BYTES,
+  MAX_IMAGE_BYTES,
+  SKILLS,
+  type Task,
+  type TaskType,
+} from "@/domain/homework-format";
 import { Button } from "./button";
+import { hasPictureOptions } from "./choice-option";
 
 const SKILL_LABELS: Record<(typeof SKILLS)[number], string> = {
   grammar: "Грамматика",
@@ -43,7 +54,12 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
   const [prompt, setPrompt] = useState(task?.prompt ?? "");
   const [topic, setTopic] = useState(task?.topic ?? "");
   const [skill, setSkill] = useState<string>(task?.skill ?? "");
-  const [optionsText, setOptionsText] = useState(task && "options" in task && task.options ? task.options.join("\n") : "");
+  // shortcut: options with pictures (#129) are kept as imported and not edited here; edit them field by field when the later slices of #129 bring pictures to the editor (#129)
+  const pictureOptions =
+    task && (task.type === "single_choice" || task.type === "multiple_choice") && hasPictureOptions(task.options) ? task.options : null;
+  const [optionsText, setOptionsText] = useState(
+    task && "options" in task && task.options && !pictureOptions ? task.options.map((o) => (typeof o === "string" ? o : "")).join("\n") : "",
+  );
   const [correct, setCorrect] = useState<number[]>(
     task?.type === "single_choice" ? [task.answer] : task?.type === "multiple_choice" ? task.answers : [],
   );
@@ -91,7 +107,7 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
     reader.readAsDataURL(file);
   }
 
-  const options = lines(optionsText);
+  const choiceOptions: ChoiceOption[] = pictureOptions ?? lines(optionsText);
   const gaps = gapCount(gapText);
 
   function build(): Task | string {
@@ -108,6 +124,7 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
     switch (type) {
       case "single_choice":
       case "multiple_choice": {
+        const options = choiceOptions;
         if (options.length < 2) return "Нужно хотя бы два варианта, по одному на строку";
         const chosen = correct.filter((i) => i < options.length);
         if (chosen.length === 0) return "Отметьте правильный ответ";
@@ -219,21 +236,25 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
 
       {(type === "single_choice" || type === "multiple_choice") && (
         <>
-          <Labelled id={`${id}-options`} label="Варианты" note="по одному на строку">
-            <textarea
-              id={`${id}-options`}
-              rows={4}
-              value={optionsText}
-              onChange={(e) => setOptionsText(e.target.value)}
-              className={field}
-            />
-          </Labelled>
-          {options.length > 0 && (
+          {pictureOptions ? (
+            <p className="text-small text-text-secondary">Варианты с картинками меняются импортом JSON</p>
+          ) : (
+            <Labelled id={`${id}-options`} label="Варианты" note="по одному на строку">
+              <textarea
+                id={`${id}-options`}
+                rows={4}
+                value={optionsText}
+                onChange={(e) => setOptionsText(e.target.value)}
+                className={field}
+              />
+            </Labelled>
+          )}
+          {choiceOptions.length > 0 && (
             <fieldset className="flex flex-col gap-1">
               <legend className="text-small text-text-secondary">
                 {type === "single_choice" ? "Правильный ответ" : "Правильные ответы"}
               </legend>
-              {options.map((option, i) => (
+              {choiceOptions.map((_, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <input
                     id={`${id}-correct-${i}`}
@@ -250,7 +271,7 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
                       )
                     }
                   />
-                  <label htmlFor={`${id}-correct-${i}`}>{option}</label>
+                  <label htmlFor={`${id}-correct-${i}`}>{optionLabel(choiceOptions, i)}</label>
                 </div>
               ))}
             </fieldset>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { answerFileUrl } from "@/domain/homework";
 import {
   type Answer,
+  type ChoiceOption,
   gapCount,
   isAnswered,
   MAX_ANSWER_FILE_BYTES,
@@ -12,6 +13,7 @@ import {
   type StudentAnswer,
   type StudentTask,
 } from "@/domain/homework-format";
+import { ChoiceOptionContent, hasPictureOptions } from "./choice-option";
 import { HomeworkResult } from "./homework-result";
 import { routerClient } from "./router-client";
 
@@ -333,7 +335,8 @@ function TaskBody({
   }
 }
 
-function Choice({ task, answer, onChange }: BodyProps & { task: { type: "single_choice" | "multiple_choice"; options: string[] } }) {
+function Choice({ task, answer, onChange }: BodyProps & { task: { type: "single_choice" | "multiple_choice"; options: ChoiceOption[] } }) {
+  const lettered = hasPictureOptions(task.options);
   const chosen =
     answer?.type === "single_choice" ? [answer.choice] : answer?.type === "multiple_choice" ? answer.choices : [];
   function toggle(i: number) {
@@ -353,7 +356,8 @@ function Choice({ task, answer, onChange }: BodyProps & { task: { type: "single_
             onClick={() => toggle(i)}
             className={`${tile} ${tileState(chosen.includes(i))}`}
           >
-            {option}
+            {/* The student's task carries each picture's address already (#129). */}
+            <ChoiceOptionContent option={option} index={i} lettered={lettered} src={(address) => address} />
           </button>
         ))}
       </div>

@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import type { StoredAnswer, Task } from "./homework-format";
+import type { ChoiceOption, StoredAnswer, Task } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -38,6 +38,21 @@ export function formatDueDate(isoDate: string): string {
   return `${WEEKDAY_AFTER_K[date.getUTCDay()]}, ${dayMonth}`;
 }
 
+/** The letters the interface draws before answer options (#129): a, b, c… */
+export const OPTION_LETTERS = "abcdefgh";
+
+/**
+ * An answer option as the teacher reads it in words: its text, or for a
+ * picture its caption and letter, «картинка b» without one (#129).
+ */
+export function optionLabel(options: ChoiceOption[], index: number): string | null {
+  const option = options[index];
+  if (option === undefined) return null;
+  if (typeof option === "string") return option;
+  const picture = `картинка ${OPTION_LETTERS[index]}`;
+  return option.text ? `${option.text} (${picture})` : picture;
+}
+
 /**
  * The key of a task as the teacher reads it in the preview, or null for a task
  * the teacher checks. Never shown to a student (AGENTS.md, rule 4).
@@ -45,9 +60,9 @@ export function formatDueDate(isoDate: string): string {
 export function answerKey(task: Task): string | null {
   switch (task.type) {
     case "single_choice":
-      return task.options[task.answer] ?? null;
+      return optionLabel(task.options, task.answer);
     case "multiple_choice":
-      return task.answers.map((i) => task.options[i]).join(", ");
+      return task.answers.map((i) => optionLabel(task.options, i)).join(", ");
     case "gap":
       return task.answers.map((variants) => variants.join(" / ")).join("; ");
     case "match":
@@ -65,6 +80,11 @@ export function answerKey(task: Task): string | null {
 /** Where a task's recording is served (#127). */
 export function homeworkAudioUrl(homeworkId: string, taskIndex: number): string {
   return `/api/files/homework/${homeworkId}/${taskIndex}/audio`;
+}
+
+/** Where a picture of a task's part, such as an answer option, is served (#129): its position in partPictures(). */
+export function homeworkPictureUrl(homeworkId: string, taskIndex: number, picture: number): string {
+  return `/api/files/homework/${homeworkId}/${taskIndex}/pictures/${picture}`;
 }
 
 export function homeworkImageUrl(homeworkId: string, taskIndex: number): string {
@@ -100,9 +120,9 @@ export function answerText(task: Task, answer: StoredAnswer | null): string | nu
   if (!answer || answer.type !== task.type) return null;
   switch (answer.type) {
     case "single_choice":
-      return task.type === "single_choice" ? (task.options[answer.choice] ?? null) : null;
+      return task.type === "single_choice" ? optionLabel(task.options, answer.choice) : null;
     case "multiple_choice":
-      return task.type === "multiple_choice" ? answer.choices.map((i) => task.options[i]).join(", ") : null;
+      return task.type === "multiple_choice" ? answer.choices.map((i) => optionLabel(task.options, i)).join(", ") : null;
     case "gap":
       return answer.gaps.map((gap) => gap.trim() || "…").join("; ");
     case "match":

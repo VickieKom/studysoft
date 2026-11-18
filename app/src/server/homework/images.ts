@@ -12,7 +12,9 @@ import {
   type ImageType,
   imageDataUrl,
   imageRef,
+  partPictures,
   type Task,
+  withPartPictures,
 } from "../../domain/homework-format";
 import { teacherIdFromHeaders } from "../access/auth";
 import { linkSessionFromHeaders } from "../access/links";
@@ -99,23 +101,48 @@ export async function storeTaskFiles(
         decoded.set(value, { type: data.type, bytes });
       }
     }
+    // The pictures of the task's parts (#129): its answer options.
+    for (const { value, place } of partPictures(task)) {
+      const ref = imageRef(value);
+      if (ref !== null) {
+        if (!keep.has(ref)) errors.push(`Задание ${index + 1}, ${place}: вставьте картинку как data:image/…;base64,…`);
+        continue;
+      }
+      if (decoded.has(value)) continue;
+      const data = imageDataUrl(value);
+      const bytes = data ? new Uint8Array(Buffer.from(data.base64, "base64")) : null;
+      if (!data || !bytes || !looksLike(data.type, bytes)) {
+        errors.push(`Задание ${index + 1}, ${place}: это не картинка ${data?.type.slice(6).toUpperCase() ?? ""}`.trim());
+        continue;
+      }
+      decoded.set(value, { type: data.type, bytes });
+    }
   }
   if (errors.length > 0) return { ok: false, errors };
 
   const stored = new Map<string, string>();
   for (const [value, file] of decoded) stored.set(value, `blob:${await saveBlob(database, teacherId, file.bytes, file.type)}`);
-  const tasks: Task[] = document.tasks.map((task) => ({
-    ...task,
-    ...(task.image && stored.has(task.image) ? { image: stored.get(task.image)! } : {}),
-    ...(task.audio && stored.has(task.audio) ? { audio: stored.get(task.audio)! } : {}),
-  }));
+  const tasks: Task[] = document.tasks.map((task) =>
+    withPartPictures(
+      {
+        ...task,
+        ...(task.image && stored.has(task.image) ? { image: stored.get(task.image)! } : {}),
+        ...(task.audio && stored.has(task.audio) ? { audio: stored.get(task.audio)! } : {}),
+      },
+      (value) => stored.get(value) ?? value,
+    ),
+  );
   return { ok: true, homework: { ...document, tasks } };
 }
 
 /** The references to stored pictures and recordings in a homework. */
 export function taskFileRefs(document: HomeworkDocument): Set<string> {
   return new Set(
-    document.tasks.flatMap((task) => [task.image, task.audio].flatMap((value) => (value && imageRef(value) ? [imageRef(value)!] : []))),
+    document.tasks.flatMap((task) =>
+      [task.image, task.audio, ...partPictures(task).map((p) => p.value)].flatMap((value) =>
+        value && imageRef(value) ? [imageRef(value)!] : [],
+      ),
+    ),
   );
 }
 
@@ -123,7 +150,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
 /**
- * Serves a task's picture, or its recording (#127). The teacher who owns the homework sees it in any
+ * Serves a task's picture, its recording (#127), or the picture of one of its
+ * parts by its position in partPictures() (#129). The teacher who owns the homework sees it in any
  * status; a student only in their own published homework. A missing task, a
  * foreign homework, a draft and no session all answer the same 404.
  */
@@ -131,9 +159,10 @@ export async function handleHomeworkImageRequest(
   request: Request,
   homeworkId: string,
   taskIndex: string,
-  part: "image" | "audio" = "image",
+  part: "image" | "audio" | { picture: string } = "image",
 ): Promise<Response> {
   if (!UUID.test(homeworkId) || !/^(0|[1-9]\d{0,2})$/.test(taskIndex)) return notFound();
+  if (typeof part === "object" && !/^(0|[1-9]\d{0,2})$/.test(part.picture)) return notFound();
   const database = db();
 
   let owner: { teacherId: string; studentId?: string } | null = null;
@@ -155,7 +184,8 @@ export async function handleHomeworkImageRequest(
         ...(owner.studentId ? [eq(homework.studentId, owner.studentId), eq(homework.status, "published")] : []),
       ),
     );
-  const value = (row?.document as HomeworkDocument | undefined)?.tasks[Number(taskIndex)]?.[part];
+  const task = (row?.document as HomeworkDocument | undefined)?.tasks[Number(taskIndex)];
+  const value = !task ? undefined : typeof part === "object" ? partPictures(task)[Number(part.picture)]?.value : task[part];
   const ref = value ? imageRef(value) : null;
   const file = ref ? await readBlob(database, owner.teacherId, ref) : null;
   if (!file || !ref) return notFound();

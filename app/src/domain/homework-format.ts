@@ -96,8 +96,19 @@ const common = {
   image: image.optional(),
 };
 
+/** The most pictures one answer option holds (#129). */
+export const MAX_OPTION_PICTURES = 4;
+
+// An answer option (#129): text, or one picture or more with an optional caption.
+const pictureOption = z
+  .object({ images: z.array(image).min(1).max(MAX_OPTION_PICTURES), text: text.optional() })
+  .strict();
+const option = z.union([text, pictureOption]);
+export type PictureOption = z.infer<typeof pictureOption>;
+export type ChoiceOption = z.infer<typeof option>;
+
 const singleChoice = z
-  .object({ ...common, type: z.literal("single_choice"), options: z.array(text).min(2).max(8), answer: z.number().int().min(0) })
+  .object({ ...common, type: z.literal("single_choice"), options: z.array(option).min(2).max(8), answer: z.number().int().min(0) })
   .strict()
   .refine((t) => t.answer < t.options.length, { path: ["answer"], message: "нет варианта с таким номером" });
 
@@ -105,7 +116,7 @@ const multipleChoice = z
   .object({
     ...common,
     type: z.literal("multiple_choice"),
-    options: z.array(text).min(2).max(8),
+    options: z.array(option).min(2).max(8),
     answers: z.array(z.number().int().min(0)).min(1),
   })
   .strict()
@@ -194,18 +205,64 @@ export type HomeworkDocument = z.infer<typeof homeworkSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type TaskType = (typeof TASK_TYPES)[number];
 
+/**
+ * The pictures of a task's parts (#129), in a fixed order: the pictures of
+ * the answer options, option by option. Each is served at its position in
+ * this list; the task's own `image` is apart. `place` names it for the
+ * teacher: «вариант 2, картинка 1».
+ */
+export function partPictures(task: Task): { value: string; place: string }[] {
+  if (task.type !== "single_choice" && task.type !== "multiple_choice") return [];
+  return task.options.flatMap((option, i) =>
+    typeof option === "string" ? [] : option.images.map((value, n) => ({ value, place: `вариант ${i + 1}, картинка ${n + 1}` })),
+  );
+}
+
+/** The task with each picture of its parts replaced, by its position in partPictures(). */
+export function withPartPictures<T extends { type: string; options?: unknown }>(task: T, replace: (value: string, n: number) => string): T {
+  if ((task.type !== "single_choice" && task.type !== "multiple_choice") || !Array.isArray(task.options)) return task;
+  let n = 0;
+  const options = (task.options as ChoiceOption[]).map((option) =>
+    typeof option === "string" ? option : { ...option, images: option.images.map((value) => replace(value, n++)) },
+  );
+  return { ...task, options };
+}
+
+/**
+ * An option that is neither text nor pictures fails as a union: the problem
+ * worth saying is the one inside the branch the value was meant for (#129).
+ */
+function innermost(issue: z.core.$ZodIssue): z.core.$ZodIssue {
+  if (issue.code !== "invalid_union" || issue.errors.length === 0) return issue;
+  const meant = issue.errors.find((branch) => !branch.every((i) => i.code === "invalid_type" && i.path.length === 0));
+  const inner = meant?.[0];
+  return inner ? innermost({ ...inner, path: [...issue.path, ...inner.path] }) : issue;
+}
+
+/** The place a field names, as the teacher reads it: «вариант 2, картинка 1» for options.1.images.0. */
+function place(rest: PropertyKey[]): string {
+  const [field, option, part, picture] = rest;
+  if (field === "options" && typeof option === "number") {
+    if (part === "images" && typeof picture === "number") return `вариант ${option + 1}, картинка ${picture + 1}`;
+    return `вариант ${option + 1}`;
+  }
+  return `поле ${rest.length > 0 ? rest.join(".") : "type"}`;
+}
+
 /** One readable line per problem: which task, which field, what is wrong. */
-function describe(issue: z.core.$ZodIssue, input: unknown): string {
+function describe(found: z.core.$ZodIssue, input: unknown): string {
+  const [, , ...inner] = found.path;
+  const issue = inner.length > 0 ? innermost(found) : found;
   const [first, index, ...rest] = issue.path;
   if (first === "tasks" && typeof index === "number") {
-    const field = rest.length > 0 ? rest.join(".") : "type";
+    const field = place(rest);
     // The teacher reads these messages; zod's own are in English.
     let message = issue.message;
     if (issue.code === "invalid_union" && (rest.length === 0 || rest.join(".") === "type")) {
       const tasks = (input as { tasks?: { type?: unknown }[] })?.tasks;
       message = `неизвестный тип «${String(tasks?.[index]?.type)}»; возможные: ${TASK_TYPES.join(", ")}`;
     }
-    return `Задание ${index + 1}, поле ${field}: ${message}`;
+    return `Задание ${index + 1}, ${field}: ${message}`;
   }
   const field = issue.path.length > 0 ? issue.path.join(".") : "документ";
   if (first === "version") return `Поле version: поддерживается версия ${HOMEWORK_FORMAT_VERSION}`;
@@ -273,7 +330,7 @@ function shuffled<T>(items: readonly T[], seed: string, solved: readonly (readon
  * in the solved order.
  */
 export type StudentTask = (
-  | { type: "single_choice" | "multiple_choice"; prompt: string; options: string[] }
+  | { type: "single_choice" | "multiple_choice"; prompt: string; options: ChoiceOption[] }
   | { type: "gap"; prompt: string; text: string; options?: string[] }
   | { type: "match"; prompt: string; left: string[]; right: string[] }
   | { type: "order"; prompt: string; words: string[] }

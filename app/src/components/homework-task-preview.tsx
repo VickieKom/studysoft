@@ -1,5 +1,6 @@
-import { answerKey, homeworkAudioUrl, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
-import type { Task } from "@/domain/homework-format";
+import { answerKey, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, TASK_TYPE_LABELS } from "@/domain/homework";
+import { type ChoiceOption, type Task, withPartPictures } from "@/domain/homework-format";
+import { ChoiceOptionContent, hasPictureOptions } from "./choice-option";
 
 /**
  * One task as the teacher previews it, key included (#32). Used by the
@@ -27,13 +28,7 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
       )}
       {"text" in task && <p className="mt-2 whitespace-pre-line">{task.text}</p>}
       {"options" in task && task.options && (
-        <p className="mt-2 flex flex-wrap gap-2">
-          {task.options.map((option, i) => (
-            <span key={i} className="rounded-control border border-border px-2 py-1 text-small">
-              {option}
-            </span>
-          ))}
-        </p>
+        <PreviewOptions options={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n)).options ?? []} />
       )}
       {"hint" in task && task.hint && <p className="mt-2 text-small text-text-secondary">{task.hint}</p>}
       {key !== null && (
@@ -42,5 +37,19 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
         </p>
       )}
     </>
+  );
+}
+
+/** The options as the student sees them, letters and pictures included (#129); `options` carry the pictures' addresses. */
+function PreviewOptions({ options }: { options: ChoiceOption[] }) {
+  const lettered = hasPictureOptions(options);
+  return (
+    <div className="mt-2 flex flex-wrap items-start gap-2">
+      {options.map((option, i) => (
+        <span key={i} className="rounded-control border border-border px-2 py-1 text-small">
+          <ChoiceOptionContent option={option} index={i} lettered={lettered} src={(address) => address} />
+        </span>
+      ))}
+    </div>
   );
 }

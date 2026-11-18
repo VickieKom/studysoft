@@ -60,6 +60,14 @@ const submission = z
           verdict: z.boolean().nullable(),
           marked: z.boolean().nullable(),
           key: z.string().nullable(),
+          // Options with pictures, by their addresses (#129).
+          pictureOptions: z
+            .array(
+              z
+                .object({ images: z.array(z.string()), text: z.string().nullable(), chosen: z.boolean(), right: z.boolean() })
+                .strict(),
+            )
+            .nullable(),
           file: z.object({ kind: z.enum(["audio", "image"]), url: z.string() }).strict().nullable(),
         })
         .strict(),

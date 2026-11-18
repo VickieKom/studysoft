@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import allTypes from "../../../deploy/seed/homework/demo-all-types.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
-import { audioDataUrl, isAnswered, parseHomework, type StudentTask, studentView } from "./homework-format";
+import { optionLabel } from "./homework";
+import { audioDataUrl, isAnswered, parseHomework, partPictures, type StudentTask, studentView, withPartPictures } from "./homework-format";
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -134,5 +135,34 @@ describe("a task's recording (#127)", () => {
     expect(parseHomework(task("https://example.test/track.mp3")).ok).toBe(false);
     const big = Buffer.alloc(10 * 1024 * 1024 + 1).toString("base64");
     expect(parseHomework(task(`data:audio/wav;base64,${big}`))).toMatchObject({ ok: false, errors: [expect.stringContaining("больше 10 МБ")] });
+  });
+});
+
+describe("pictures as answer options (#129)", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const choice = (options: unknown[]) =>
+    parseHomework(JSON.stringify({ version: 1, title: "t", tasks: [{ type: "single_choice", prompt: "p", options, answer: 0 }] }));
+
+  it("mixes text, a picture and a captioned picture, and lists the pictures in order", () => {
+    const parsed = choice([{ images: [PNG] }, { images: [PNG, PNG], text: "two" }, "text"]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [task] = parsed.homework.tasks;
+    expect(partPictures(task!).map((p) => p.place)).toEqual(["вариант 1, картинка 1", "вариант 2, картинка 1", "вариант 2, картинка 2"]);
+    const addressed = withPartPictures(task!, (_, n) => `/picture/${n}`);
+    expect(addressed).toMatchObject({ options: [{ images: ["/picture/0"] }, { images: ["/picture/1", "/picture/2"], text: "two" }, "text"] });
+    expect(optionLabel(task!.type === "single_choice" ? task!.options : [], 1)).toBe("two (картинка b)");
+    expect(optionLabel(task!.type === "single_choice" ? task!.options : [], 0)).toBe("картинка a");
+    expect(optionLabel(task!.type === "single_choice" ? task!.options : [], 2)).toBe("text");
+  });
+
+  it("refuses a GIF, no pictures, five pictures and an empty caption, naming the option", () => {
+    const gif = choice(["text", { images: ["data:image/gif;base64,R0lGODlh"] }]);
+    expect(gif).toMatchObject({ ok: false, errors: [expect.stringMatching(/^Задание 1, вариант 2, картинка 1: картинка — PNG, JPEG или WebP/)] });
+    for (const bad of [{ images: [] }, { images: [PNG, PNG, PNG, PNG, PNG] }, { images: [PNG], text: " " }, { images: [PNG], size: 1 }]) {
+      const result = choice(["text", bad]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors[0]).toMatch(/^Задание 1, вариант 2/);
+    }
   });
 });

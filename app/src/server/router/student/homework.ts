@@ -21,10 +21,20 @@ const current = z
 const text = z.string();
 // A picture goes out as the address it is served at, never as the stored reference.
 const image = z.string().startsWith("/api/files/homework/").optional();
+const picture = z.string().startsWith("/api/files/homework/");
 // A recording to listen to (#127), by its address as a picture is.
 const audio = z.string().startsWith("/api/files/homework/").optional();
 const studentTask = z.discriminatedUnion("type", [
-  z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image, audio }).strict(),
+  z
+    .object({
+      type: z.enum(["single_choice", "multiple_choice"]),
+      prompt: text,
+      // An option is text, or pictures by their addresses with an optional caption (#129).
+      options: z.array(z.union([text, z.object({ images: z.array(picture).min(1), text: text.optional() }).strict()])),
+      image,
+      audio,
+    })
+    .strict(),
   z.object({ type: z.literal("gap"), prompt: text, text, options: z.array(text).optional(), image, audio }).strict(),
   z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image, audio }).strict(),
   z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image, audio }).strict(),
