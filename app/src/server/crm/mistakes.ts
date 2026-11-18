@@ -45,15 +45,15 @@ function gameMistakes(results: CountedGameResult[]) {
   );
 }
 
-/** The student's mistakes by topic over the last 30 days, with the game results they came from. */
+/** The student's mistakes by topic over the last 30 days. */
 export async function studentMistakes(
   db: Database,
   teacherId: string,
   studentId: string,
   now: Date = new Date(),
-): Promise<{ byTopic: MistakesByTopic; games: CountedGameResult[] }> {
+): Promise<MistakesByTopic> {
   const since = mistakesSince(now);
   const homework = (await homeworkMistakes(db, teacherId, studentId, since)).map((m) => ({ from: "homework" as const, ...m }));
-  const games = await countedGameResults(db, teacherId, studentId, since);
-  return { byTopic: groupByTopic([...homework, ...gameMistakes(games)]), games };
+  const games = await countedGameResults(db, teacherId, studentId, { since });
+  return groupByTopic([...homework, ...gameMistakes(games)]);
 }

@@ -8,6 +8,7 @@
 import type { Database } from "../db/client";
 import type { GameAnswer } from "../../domain/game-result-format";
 import { type RecentHomework, recentResults } from "../homework/review";
+import { countedGameResults } from "../library/game-results";
 import { studentMistakes } from "./mistakes";
 import { listNotes } from "./notes";
 import { findStudent } from "./students";
@@ -60,7 +61,8 @@ export async function buildStudentContext(
     gaps: card.gaps,
     notes,
     recentHomework: await recentResults(db, teacherId, studentId),
-    recentGames: mistakes.games.slice(0, CONTEXT_GAMES),
-    mistakesByTopic: mistakes.byTopic.map(({ topic, count }) => ({ topic, count })),
+    // The latest results whenever they were played; only the summary keeps to the last 30 days.
+    recentGames: await countedGameResults(db, teacherId, studentId, { limit: CONTEXT_GAMES }),
+    mistakesByTopic: mistakes.map(({ topic, count }) => ({ topic, count })),
   };
 }

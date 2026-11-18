@@ -14,11 +14,14 @@ import { routerClient } from "./router-client";
  */
 export function StudentGameFrame({ id, title, fileUrl }: { id: string; title: string; fileUrl: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  // Results go one after another, so a later round is never kept before an earlier one: the latest kept is the one that counts.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow || !looksLikeGameResult(event.data)) return;
+      const result: unknown = event.data;
       // A result that is not kept (not in the format, or the access has ended) changes nothing for the game.
-      routerClient.student.games.saveResult.mutate({ id, result: event.data }).catch(() => undefined);
+      queue.current = queue.current.then(() => routerClient.student.games.saveResult.mutate({ id, result }).catch(() => undefined));
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

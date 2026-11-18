@@ -36,12 +36,15 @@ export async function saveGameResult(
 
 export type CountedGameResult = { title: string; playedAt: Date; answers: GameAnswer[] };
 
-/** The results that count since `since`, newest first: the latest of each game and lesson. */
+/**
+ * The results that count, newest first: the latest of each game and lesson;
+ * only those since `since`, and at most `limit`, when given.
+ */
 export async function countedGameResults(
   db: Database,
   teacherId: string,
   studentId: string,
-  since: Date,
+  { since, limit }: { since?: Date; limit?: number },
 ): Promise<CountedGameResult[]> {
   const rows = await db.execute<{ title: string; created_at: string | Date; answers: GameAnswer[] }>(sql`
     SELECT * FROM (
@@ -50,8 +53,9 @@ export async function countedGameResults(
       WHERE teacher_id = ${teacherId} AND student_id = ${studentId}
       ORDER BY material_id, lesson_id, created_at DESC, id DESC
     ) AS latest
-    WHERE created_at >= ${since.toISOString()}
+    WHERE ${since ? sql`created_at >= ${since.toISOString()}` : sql`true`}
     ORDER BY created_at DESC
+    ${limit ? sql`LIMIT ${limit}` : sql``}
   `);
   return [...rows].map((r) => ({ title: r.title, playedAt: new Date(r.created_at), answers: r.answers }));
 }
