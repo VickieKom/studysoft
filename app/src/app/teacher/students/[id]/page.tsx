@@ -6,6 +6,7 @@ import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentSlots } from "@/components/schedule-controls";
+import { StudentTextbook } from "@/components/student-textbook";
 import { dateIn, dayMonthIn, LESSON_STATUS_LABELS } from "@/domain/schedule";
 import { StudentNotes } from "@/components/student-notes";
 import { StudentPayments } from "@/components/student-payments";
@@ -28,6 +29,8 @@ export default async function StudentCardPage({ params }: Props) {
   const homework = await caller.teacher.homework.list({ studentId: student.id });
   const past = await caller.teacher.history.list({ studentId: student.id });
   const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
+  const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
+  const [nextLesson] = await caller.teacher.prep.list({ studentId: student.id });
 
   return (
     <main>
@@ -72,6 +75,16 @@ export default async function StudentCardPage({ params }: Props) {
             </Fragment>
           ))}
         </dl>
+        <section aria-label="Учебник ученика" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
+          <h2 className="text-small font-semibold text-text-secondary">Учебник ученика</h2>
+          <StudentTextbook studentId={student.id} textbookId={book.textbookId} passedLessonId={book.passedLessonId} textbooks={book.textbooks} />
+          {nextLesson && (
+            <Link href={`/teacher/prep/${nextLesson.id}`} className="self-start text-small text-green-600 hover:text-green-700">
+              Подготовка к уроку {dayMonthIn(new Date(nextLesson.startsAt), timeZone)}
+              {nextLesson.prepared ? " · подготовлен" : ""}
+            </Link>
+          )}
+        </section>
         <StudentSlots studentId={student.id} slots={slots} today={dateIn(new Date(), student.timeZone)} />
         <section aria-label="История уроков" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
           <h2 className="text-small font-semibold text-text-secondary">История уроков</h2>

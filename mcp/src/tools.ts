@@ -31,6 +31,7 @@ function failure(error: unknown, subject: { refused?: string; missing?: string }
 }
 
 const TEXTBOOK = { refused: "invalid textbook structure", missing: "textbook or page" };
+const PLAN = { refused: "invalid lesson plan", missing: "lesson still to hold" };
 
 export const studentIdInput = { studentId: z.string().uuid().describe("The student's id from list_students") };
 
@@ -98,8 +99,50 @@ export const structureInput = {
     ),
 };
 
+export const lessonIdInput = { lessonId: z.string().uuid().describe("The lesson's id from list_upcoming_lessons") };
+
+export const upcomingInput = { studentId: z.string().uuid().optional().describe("Only this student's lessons") };
+
+export const planInput = {
+  ...lessonIdInput,
+  plan: z
+    .record(z.string(), z.unknown())
+    .describe(
+      '{ stages: [ { type: "book", lessonId: <a lesson id from read_lesson_plan>, skip: "exercises to skip, e.g. 3, 5", minutes }, { type: "material", materialId: <from list_lesson_materials>, minutes } ] }, in order',
+    ),
+};
+
 export function createTools(platform: Platform) {
   return {
+    async listUpcomingLessons(input: { studentId?: string }): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.upcomingLessons.query(input));
+      } catch (error) {
+        return failure(error, PLAN);
+      }
+    },
+    async readLessonPlan({ lessonId }: { lessonId: string }): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.lessonPlan.query({ lessonId }));
+      } catch (error) {
+        return failure(error, PLAN);
+      }
+    },
+    async listLessonMaterials({ lessonId }: { lessonId: string }): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.lessonMaterials.query({ lessonId }));
+      } catch (error) {
+        return failure(error, PLAN);
+      }
+    },
+    async saveLessonPlan({ lessonId, plan }: { lessonId: string; plan: unknown }): Promise<ToolResult> {
+      try {
+        await platform.agent.saveLessonPlan.mutate({ lessonId, plan });
+        return json({ status: "draft", note: "Saved as a plan «от ассистента» in «Подготовка»; the teacher approves or changes it." });
+      } catch (error) {
+        return failure(error, PLAN);
+      }
+    },
     async listTextbooks(): Promise<ToolResult> {
       try {
         return json(await platform.agent.listTextbooks.query());

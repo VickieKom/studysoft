@@ -18,6 +18,9 @@ export default async function TeacherLayout({ children }: { children: ReactNode 
         <Link href="/teacher/schedule" className={item}>
           Расписание
         </Link>
+        <Link href="/teacher/prep" className={item}>
+          Подготовка
+        </Link>
         <Link href="/teacher/library" className={item}>
           Библиотека
         </Link>

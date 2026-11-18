@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import { dateIn, dayMonthIn, LESSON_STATUS_LABELS, timeIn } from "@/domain/schedule";
@@ -196,6 +197,12 @@ export function LessonCard({
           {lesson.studentName}, {timeIn(moment, timeZone)}
         </h2>
         <div className="flex flex-col gap-4">
+          {changeable && (
+            // A lesson still to hold is prepared in «Подготовка» (#151).
+            <Link href={`/teacher/prep/${lesson.id}`} className="self-start text-small text-green-600 hover:text-green-700">
+              Подготовка к уроку
+            </Link>
+          )}
           {cancelled && (
             <form onSubmit={onCancel} className="flex flex-col gap-3">
               <p className="text-text-secondary">Урок отменён.</p>

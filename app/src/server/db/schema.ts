@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { bigint, boolean, date, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, bigint, boolean, date, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -101,6 +101,12 @@ export const student = pgTable(
     gaps: text("gaps"),
     textbook: text("textbook"),
     currentUnit: text("current_unit"),
+    // The student's textbook among the uploaded ones (#151), and the lesson of
+    // it the teacher marked as passed, with when: the plan of a later held
+    // lesson moves it on.
+    textbookId: uuid("textbook_id").references((): AnyPgColumn => textbook.id),
+    passedLessonId: text("passed_lesson_id"),
+    passedLessonSetAt: timestamp("passed_lesson_set_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -796,3 +802,21 @@ export const gameResult = pgTable(
     index("game_result_student_created_idx").on(t.studentId, t.createdAt),
   ],
 );
+
+// The preparation of a lesson (#151, domain/lesson-plan.ts): the approved
+// plan by stages — the lesson is «подготовлен» once it has one — and a draft
+// the assistant saved for the teacher to approve; the homework draft prepared
+// for it, published later by «Завершить урок».
+export const lessonPlan = pgTable("lesson_plan", {
+  lessonId: uuid("lesson_id")
+    .primaryKey()
+    .references(() => lesson.id),
+  teacherId: uuid("teacher_id")
+    .notNull()
+    .references(() => teacher.id),
+  plan: jsonb("plan"),
+  draft: jsonb("draft"),
+  homeworkId: uuid("homework_id").references(() => homework.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
