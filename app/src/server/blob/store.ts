@@ -231,6 +231,8 @@ export async function removeUnreferencedBlobs(
         WHERE task ->> 'image' = 'blob:' || b.id::text OR task ->> 'audio' = 'blob:' || b.id::text
           -- The pictures of answer options (#129).
           OR jsonb_path_exists(task, '$.options[*].images[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))
+          -- And of the gaps (#181).
+          OR jsonb_path_exists(task, '$.gapImages[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))
       )
       AND NOT EXISTS (
         SELECT 1 FROM homework_answer AS a

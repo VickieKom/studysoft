@@ -30,7 +30,9 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
       {task.audio && (
         <audio controls preload="metadata" src={homeworkAudioUrl(homeworkId, number - 1)} className="mt-2 w-full" />
       )}
-      {"text" in task && <p className="mt-2 whitespace-pre-line">{task.text}</p>}
+      {task.type === "gap" && (
+        <PreviewGapText task={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n))} />
+      )}
       {task.type === "gap" && task.choices && <GapChoices choices={task.choices} className="mt-2 text-small" />}
       {"options" in task && task.options && (
         <PreviewOptions options={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n)).options ?? []} />
@@ -56,5 +58,28 @@ function PreviewOptions({ options }: { options: ChoiceOption[] }) {
         </span>
       ))}
     </div>
+  );
+}
+
+/** A gap task's text with the picture by each gap in place (#181); `task` carries the pictures' addresses. */
+function PreviewGapText({ task }: { task: Extract<Task, { type: "gap" }> }) {
+  const parts = task.text.split("___");
+  return (
+    <p className="mt-2 whitespace-pre-line leading-8">
+      {parts.map((part, i) => (
+        <span key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <>
+              {task.gapImages?.[i] && (
+                // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
+                <img src={task.gapImages[i]} alt={`Картинка к пропуску ${i + 1}`} className="mx-1 inline-block h-16 rounded-control align-middle" />
+              )}
+              ___
+            </>
+          )}
+        </span>
+      ))}
+    </p>
   );
 }

@@ -268,3 +268,30 @@ describe("pictures as answer options (#129)", () => {
     }
   });
 });
+
+describe("a picture by each gap (#181)", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const gapTask = (gapImages: unknown[]) =>
+    parseHomework(
+      JSON.stringify({ version: 1, title: "t", tasks: [{ type: "gap", prompt: "p", text: "1 ___\n2 ___\n3 ___", answers: [["a"], ["b"], ["c"]], gapImages }] }),
+    );
+
+  it("takes a picture or null per gap, listed and addressed in order, and the student gets them", () => {
+    const parsed = gapTask([PNG, null, PNG]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const [task] = parsed.homework.tasks;
+    expect(partPictures(task!).map((p) => p.place)).toEqual(["пропуск 1", "пропуск 3"]);
+    expect(withPartPictures(task!, (_, n) => `/picture/${n}`)).toMatchObject({ gapImages: ["/picture/0", null, "/picture/1"] });
+    expect(studentView(task!, "seed")).toMatchObject({ type: "gap", gapImages: [PNG, null, PNG] });
+    expect(JSON.stringify(studentView(task!, "seed"))).not.toContain('"answers"');
+  });
+
+  it("refuses a picture count unlike the gaps and a GIF, naming the gap", () => {
+    expect(gapTask([PNG, PNG])).toMatchObject({ ok: false, errors: [expect.stringMatching(/^Задание 1, поле gapImages: по картинке или null/)] });
+    expect(gapTask([PNG, "data:image/gif;base64,R0lGODlh", null])).toMatchObject({
+      ok: false,
+      errors: [expect.stringMatching(/^Задание 1, пропуск 2: картинка — PNG, JPEG или WebP/)],
+    });
+  });
+});

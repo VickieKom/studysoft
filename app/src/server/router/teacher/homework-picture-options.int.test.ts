@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import gapPictures from "../../../../../deploy/seed/homework/demo-gap-pictures.json";
 import pictures from "../../../../../deploy/seed/homework/demo-picture-options.json";
 import type { HomeworkDocument } from "../../../domain/homework-format";
 import { LINK_SESSION_COOKIES } from "../../access/links";
@@ -10,7 +11,7 @@ import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleHomeworkImageRequest, handleRouterRequest } from "../index";
 
-// Pictures as answer options (#129): checked at import, kept once, served by
+// Pictures as answer options (#129) and by gaps (#181): checked at import, kept once, served by
 // their position to the teacher and to the student of the published homework,
 // the same 404 to anyone else; the student gets addresses, never the stored
 // files or the key. The homework and its pictures are synthetic
@@ -132,5 +133,50 @@ describe("pictures as answer options", () => {
       });
     }
     expect(await teacher.teacher.homework.list({ studentId })).toEqual([]);
+  });
+});
+
+describe("pictures by the gaps", () => {
+  it("are stored, served by position, reach the student as addresses, show in the review and stay through an edit", async () => {
+    const { studentId, headers } = await newStudent("Картинки у пропусков");
+    const { id } = await teacher.teacher.homework.import({ studentId, json: json(gapPictures) });
+    const [stored] = (await teacher.teacher.homework.get({ id })).tasks as unknown as [{ gapImages: string[] }];
+    expect(stored.gapImages.every((value) => value.startsWith("blob:"))).toBe(true);
+    const source = gapPictures.tasks[0]!.gapImages;
+    expect((await fetchPicture(teacherHeaders, id, "0", "2")).body).toEqual(bytesOf(source[2]!));
+
+    // The draft editor sends the stored references back: they stay; a count unlike the gaps is refused.
+    const [task] = (await teacher.teacher.homework.get({ id })).tasks;
+    const revision = (await teacher.teacher.homework.get({ id })).revision;
+    const { tasks } = await teacher.teacher.homework.updateTasks({ id, revision, tasks: [{ ...task!, prompt: "Label the squares." }] });
+    expect((tasks[0] as unknown as { gapImages: string[] }).gapImages).toEqual(stored.gapImages);
+    await expect(
+      teacher.teacher.homework.updateTasks({
+        id,
+        revision: (await teacher.teacher.homework.get({ id })).revision,
+        tasks: [{ ...task!, gapImages: stored.gapImages.slice(1) } as typeof task],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/^Задание 1, поле gapImages/) });
+
+    const { revision: current } = await teacher.teacher.homework.get({ id });
+    await teacher.teacher.homework.publish({ id, revision: current, dueDate: inDays(3) });
+    const student = createServerCaller(headers);
+    const opened = await student.student.homework.open({ id });
+    expect(opened.tasks[0]).toMatchObject({ gapImages: [0, 1, 2].map((n) => `/api/files/homework/${id}/0/pictures/${n}`) });
+    expect(json(opened)).not.toMatch(/blob:|data:image|"answers":\[\["/);
+    expect((await fetchPicture(headers, id, "0", "1")).body).toEqual(bytesOf(source[1]!));
+
+    await student.student.homework.saveAnswer({ id, taskIndex: 0, answer: { type: "gap", gaps: ["red", "green", "blue"] } });
+    expect(await student.student.homework.submit({ id, idempotencyKey: crypto.randomUUID() })).toEqual({ correct: 1, wrong: 0, pending: 0 });
+    const submissionId = (await teacher.teacher.review.list({ studentId }))[0]!.submissionId!;
+    expect((await teacher.teacher.review.get({ id: submissionId })).tasks[0]!.gapImages).toEqual(
+      [0, 1, 2].map((n) => `/api/files/homework/${id}/0/pictures/${n}`),
+    );
+
+    // The cleanup keeps a picture a gap refers to, however old.
+    const kept = stored.gapImages[0]!.slice(5);
+    await db().update(blob).set({ createdAt: new Date(Date.now() - 48 * 3_600_000) }).where(eq(blob.id, kept));
+    await removeUnreferencedBlobs(db());
+    expect(await db().select().from(blob).where(eq(blob.id, kept))).toHaveLength(1);
   });
 });

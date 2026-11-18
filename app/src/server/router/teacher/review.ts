@@ -72,6 +72,8 @@ const submission = z
                 .strict(),
             )
             .nullable(),
+          // The picture by each gap, by its address (#181).
+          gapImages: z.array(z.string().nullable()).nullable(),
           // Options with pictures, by their addresses (#129).
           pictureOptions: z
             .array(
