@@ -152,7 +152,8 @@ test("a file that is not a PDF is refused with a message, and nothing is saved",
     .getByLabel("Student's Book (PDF)")
     .setInputFiles({ name: "students-book.pdf", mimeType: "application/pdf", buffer: Buffer.from("this is not a PDF") });
   await page.getByRole("button", { name: "Загрузить", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("PDF");
+  // Next announces the page in an alert of its own: the form's message is the one that names the file.
+  await expect(page.getByRole("alert").filter({ hasText: "students-book.pdf" })).toContainText("PDF");
 
   await page.goto("/teacher/library");
   await control(page, "Учебники").click();
