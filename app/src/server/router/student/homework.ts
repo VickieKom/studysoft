@@ -23,7 +23,17 @@ const text = z.string();
 const image = z.string().startsWith("/api/files/homework/").optional();
 const studentTask = z.discriminatedUnion("type", [
   z.object({ type: z.enum(["single_choice", "multiple_choice"]), prompt: text, options: z.array(text), image }).strict(),
-  z.object({ type: z.literal("gap"), prompt: text, text, options: z.array(text).optional(), image }).strict(),
+  z
+    .object({
+      type: z.literal("gap"),
+      prompt: text,
+      text,
+      options: z.array(text).optional(),
+      // A gap's own options (#128): what the student picks from, never which is right.
+      choices: z.array(z.array(text).nullable()).optional(),
+      image,
+    })
+    .strict(),
   z.object({ type: z.literal("match"), prompt: text, left: z.array(text), right: z.array(text), image }).strict(),
   z.object({ type: z.literal("order"), prompt: text, words: z.array(text), image }).strict(),
   z.object({ type: z.enum(["written", "voice"]), prompt: text, hint: text.optional(), image }).strict(),

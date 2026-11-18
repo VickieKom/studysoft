@@ -53,6 +53,7 @@ const submission = z
           index: count,
           type: z.string(),
           prompt: z.string(),
+          choices: z.array(z.array(z.string()).nullable()).nullable(),
           topic: z.string().nullable(),
           answer: z.string().nullable(),
           autoChecked: z.boolean(),

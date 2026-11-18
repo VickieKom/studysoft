@@ -46,6 +46,10 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
     task?.type === "single_choice" ? [task.answer] : task?.type === "multiple_choice" ? task.answers : [],
   );
   const [gapText, setGapText] = useState(task?.type === "gap" ? task.text : "");
+  // A gap's own options (#128), typed as «on / at»; empty for a gap the student types.
+  const [gapChoices, setGapChoices] = useState<string[]>(
+    task?.type === "gap" && task.choices ? task.choices.map((own) => (own ? own.join(" / ") : "")) : [],
+  );
   const [gapAnswers, setGapAnswers] = useState<string[]>(
     task?.type === "gap" ? task.answers.map((variants) => variants.join("\n")) : [],
   );
@@ -105,7 +109,16 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
         const empty = answers.findIndex((variants) => variants.length === 0);
         if (empty >= 0) return `Укажите правильный ответ для пропуска ${empty + 1}`;
         const choices = lines(optionsText);
-        return { ...common, type, text: gapText, answers, ...(choices.length > 0 ? { options: choices } : {}) };
+        const own = Array.from({ length: gaps }, (_, i) =>
+          (gapChoices[i] ?? "")
+            .split("/")
+            .map((option) => option.trim())
+            .filter((option) => option !== ""),
+        );
+        if (own.some((list) => list.length === 1)) return "У пропуска с вариантами их должно быть хотя бы два, через /";
+        const perGap = own.some((list) => list.length > 0) ? { choices: own.map((list) => (list.length > 0 ? list : null)) } : {};
+        if (perGap.choices && choices.length > 0) return "Либо общие слова на выбор, либо варианты у пропусков";
+        return { ...common, type, text: gapText, answers, ...(choices.length > 0 ? { options: choices } : {}), ...perGap };
       }
       case "match": {
         const pairs = lines(pairsText).map((line) => {
@@ -237,6 +250,13 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
                 value={gapAnswers[i] ?? ""}
                 onChange={(e) => setGapAnswers(Array.from({ length: gaps }, (_, j) => (j === i ? e.target.value : (gapAnswers[j] ?? ""))))}
                 className={field}
+              />
+              <input
+                aria-label={`Варианты для пропуска ${i + 1}`}
+                placeholder="варианты через /, если ученик выбирает"
+                value={gapChoices[i] ?? ""}
+                onChange={(e) => setGapChoices(Array.from({ length: gaps }, (_, j) => (j === i ? e.target.value : (gapChoices[j] ?? ""))))}
+                className={`${field} mt-1`}
               />
             </Labelled>
           ))}

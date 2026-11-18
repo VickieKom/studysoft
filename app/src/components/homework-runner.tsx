@@ -359,7 +359,11 @@ function Choice({ task, answer, onChange }: BodyProps & { task: { type: "single_
   );
 }
 
-function Gap({ task, answer, onChange }: BodyProps & { task: { type: "gap"; text: string; options?: string[] } }) {
+function Gap({
+  task,
+  answer,
+  onChange,
+}: BodyProps & { task: { type: "gap"; text: string; options?: string[]; choices?: (string[] | null)[] } }) {
   const count = gapCount(task.text);
   const gaps = answer?.type === "gap" ? answer.gaps : Array.from({ length: count }, () => "");
   const parts = task.text.split("___");
@@ -373,7 +377,25 @@ function Gap({ task, answer, onChange }: BodyProps & { task: { type: "gap"; text
         <span key={i}>
           {part}
           {i < count &&
-            (task.options ? (
+            (task.choices?.[i] ? (
+              // A gap's own options, as "circle the correct word" in a workbook (#128).
+              <span role="group" aria-label={`Пропуск ${i + 1}`} className="mx-1 inline-flex gap-1 align-middle">
+                {task.choices[i]!.map((option) => {
+                  const picked = gaps[i] === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      aria-pressed={picked}
+                      onClick={() => set(i, picked ? "" : option, false)}
+                      className={`h-11 rounded-control border-2 px-3 leading-none ${picked ? "border-accent-500 bg-accent-50 font-semibold" : "border-border bg-bg"}`}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </span>
+            ) : task.options ? (
               <select
                 aria-label={`Пропуск ${i + 1}`}
                 value={gaps[i] ?? ""}

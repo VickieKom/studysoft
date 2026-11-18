@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import allTypes from "../../../deploy/seed/homework/demo-all-types.json";
+import choices from "../../../deploy/seed/homework/demo-gap-choices.json";
 import short from "../../../deploy/seed/homework/demo-short.json";
 import { isAnswered, parseHomework, type StudentTask, studentView } from "./homework-format";
 
@@ -112,5 +113,38 @@ describe("isAnswered", () => {
     expect(isAnswered({ type: "multiple_choice", prompt: "p", options: ["a", "b"] }, { type: "multiple_choice", choices: [] })).toBe(
       false,
     );
+  });
+});
+
+describe("a gap's own options (#128)", () => {
+  const task = choices.tasks[0]!;
+  const withTask = (changes: object) => JSON.stringify({ ...choices, tasks: [{ ...task, ...changes }] });
+
+  it("are accepted and reach the student, the keys do not", () => {
+    const parsed = parseHomework(JSON.stringify(choices));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const view = studentView(parsed.homework.tasks[0]!, "seed");
+    expect(view).toMatchObject({ type: "gap", choices: [["on", "at"], ["plays", "does"], null] });
+    expect(JSON.stringify(view)).not.toContain("Mila");
+  });
+
+  it("name the task and the gap whose key is not among its options", () => {
+    const result = parseHomework(withTask({ answers: [["on"], ["play"], ["Mila"]] }));
+    expect(result).toEqual({ ok: false, errors: [expect.stringMatching(/^Задание 1, .*пропуск 2: ответа «play» нет среди его вариантов/)] });
+  });
+
+  it("refuse a list for the wrong number of gaps, a single option and both kinds of options together", () => {
+    for (const changes of [
+      { choices: [["on", "at"], null] },
+      { choices: [["on"], ["plays", "does"], null] },
+      { options: ["on", "at"] },
+    ]) {
+      expect(parseHomework(withTask(changes)).ok).toBe(false);
+    }
+  });
+
+  it("accept a key that differs from its option only by case and spaces", () => {
+    expect(parseHomework(withTask({ answers: [[" On "], ["plays"], ["Mila"]] })).ok).toBe(true);
   });
 });

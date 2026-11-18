@@ -83,6 +83,8 @@ export type ReviewTask = {
   index: number;
   type: string;
   prompt: string;
+  /** A gap task's own options per gap (#128); null for any other task. */
+  choices: (string[] | null)[] | null;
   topic: string | null;
   answer: string | null;
   autoChecked: boolean;
@@ -134,6 +136,7 @@ function reviewTasks(
       index,
       type: task.type,
       prompt: task.prompt,
+      choices: task.type === "gap" ? (task.choices ?? null) : null,
       topic: task.topic ?? null,
       answer: parsed.success ? answerText(task, parsed.data) : null,
       autoChecked,

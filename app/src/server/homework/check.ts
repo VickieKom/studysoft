@@ -61,7 +61,15 @@ export function fitsTask(task: Task, answer: Answer): boolean {
         answer.choices.every((c) => c < task.options.length)
       );
     case "gap":
-      return task.type === "gap" && answer.gaps.length === gapCount(task.text);
+      // A gap with its own options takes one of them, or nothing yet (#128).
+      return (
+        task.type === "gap" &&
+        answer.gaps.length === gapCount(task.text) &&
+        answer.gaps.every((value, i) => {
+          const own = task.choices?.[i];
+          return !own || value === "" || own.includes(value);
+        })
+      );
     case "match": {
       if (task.type !== "match") return false;
       const lefts = new Set(task.pairs.map((p) => p.left));

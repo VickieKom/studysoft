@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "title": "Demo: a choice in each gap",
+  "tasks": [
+    {
+      "type": "gap",
+      "prompt": "Choose the correct word or write the name.",
+      "text": "1 We meet ___ Monday.\n2 My brother ___ chess after school.\n3 My best friend's name is ___.",
+      "choices": [["on", "at"], ["plays", "does"], null],
+      "answers": [["on"], ["plays"], ["Mila"]],
+      "topic": "prepositions and verbs",
+      "skill": "grammar"
+    }
+  ]
+}
