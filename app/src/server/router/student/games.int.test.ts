@@ -182,10 +182,12 @@ describe("games opened to a student", () => {
     const now = Date.now();
     await addLesson(teacherId, studentId, new Date(now - 30 * MINUTE), 60);
     const first = await openGameToStudent(db(), teacherId, game, studentId, new Date(now));
-    // A later lesson that ends sooner does not shorten the access.
-    await addLesson(teacherId, studentId, new Date(now + 10 * MINUTE), 15);
+    // A later lesson that ends sooner does not shorten the access, and removing it does not take the access away.
+    const shorter = await addLesson(teacherId, studentId, new Date(now + 10 * MINUTE), 15);
     const second = await openGameToStudent(db(), teacherId, game, studentId, new Date(now + 15 * MINUTE));
     expect(second).toEqual(first);
+    await db().delete(lesson).where(eq(lesson.id, shorter));
+    expect(await db().select({ id: gameAccess.id }).from(gameAccess).where(eq(gameAccess.materialId, game))).toHaveLength(1);
     // One that ends later moves it on.
     await addLesson(teacherId, studentId, new Date(now + 2 * 60 * MINUTE), 60);
     const third = await openGameToStudent(db(), teacherId, game, studentId, new Date(now + 2 * 60 * MINUTE + MINUTE));
