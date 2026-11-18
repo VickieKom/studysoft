@@ -67,7 +67,7 @@ export default async function MaterialPage({ params }: Props) {
       {isGame && (
         <div className="flex flex-col gap-2">
           {opened?.students.map((s) => (
-            <p key={s.name} className="text-small text-text-secondary">
+            <p key={s.studentId} className="text-small text-text-secondary">
               Открыта ученику: {s.name} до {timeIn(new Date(s.until), opened.timeZone)}
             </p>
           ))}

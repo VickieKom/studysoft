@@ -63,7 +63,9 @@ export async function openGameToStudent(
     ORDER BY l.starts_at DESC
     LIMIT 1
     ON CONFLICT (material_id, student_id) DO UPDATE
-      SET lesson_id = EXCLUDED.lesson_id,
+      -- The lesson that gives the latest end stays the access's lesson, so
+      -- removing a shorter later lesson does not take a longer access with it.
+      SET lesson_id = CASE WHEN EXCLUDED.until > game_access.until THEN EXCLUDED.lesson_id ELSE game_access.lesson_id END,
           until = GREATEST(game_access.until, EXCLUDED.until),
           updated_at = now()
     RETURNING until
@@ -78,14 +80,14 @@ export async function gameOpenedTo(
   teacherId: string,
   materialId: string,
   now: Date = new Date(),
-): Promise<{ name: string; until: Date }[]> {
+): Promise<{ studentId: string; name: string; until: Date }[]> {
   const rows = await db
-    .select({ firstName: student.firstName, lastName: student.lastName, until: gameAccess.until })
+    .select({ studentId: student.id, firstName: student.firstName, lastName: student.lastName, until: gameAccess.until })
     .from(gameAccess)
     .innerJoin(student, and(eq(student.id, gameAccess.studentId), isNull(student.deletedAt)))
     .where(and(eq(gameAccess.teacherId, teacherId), eq(gameAccess.materialId, materialId), gt(gameAccess.until, now)))
     .orderBy(asc(student.firstName));
-  return rows.map((r) => ({ name: nameOf(r.firstName, r.lastName), until: r.until }));
+  return rows.map((r) => ({ studentId: r.studentId, name: nameOf(r.firstName, r.lastName), until: r.until }));
 }
 
 /** The games open to this student at `now`, by title. */

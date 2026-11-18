@@ -167,7 +167,7 @@ export const libraryRouter = router({
       z
         .object({
           timeZone: z.string(),
-          students: z.array(z.object({ name: z.string(), until: z.iso.datetime() }).strict()),
+          students: z.array(z.object({ studentId: z.uuid(), name: z.string(), until: z.iso.datetime() }).strict()),
         })
         .strict(),
     )
