@@ -81,10 +81,14 @@ async function answerOnlyTheGap(browser: Browser, link: string, answer: string) 
     }
     await student.getByRole("button", { name: "Дальше", exact: true }).click();
   }
-  // Confirming a submission with unanswered tasks, if the page asks.
+  // Confirming a submission with unanswered tasks, if the page asks. The
+  // question comes after the answers are saved, so wait for either it or the
+  // result before deciding (#167).
+  const result = student.getByText(/1\s+верно/);
   const confirm = student.getByRole("button", { name: "Всё равно сдать", exact: true });
-  if (await confirm.isVisible().catch(() => false)) await confirm.click();
-  await expect(student.getByText(/1\s+верно/)).toBeVisible();
+  await expect(result.or(confirm)).toBeVisible();
+  if (await confirm.isVisible()) await confirm.click();
+  await expect(result).toBeVisible();
   await student.context().close();
 }
 
