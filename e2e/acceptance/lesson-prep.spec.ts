@@ -235,6 +235,8 @@ test("the assistant's plan is a draft «от ассистента»; the teacher
   await studentWithTextbook(page, "План ассистента", "Demo Prep Book");
   const item = await openPreparation(page, "План ассистента");
   await item.getByRole("link").first().click();
+  // The lesson's own page, before its address is read.
+  await expect(page).toHaveURL(/\/teacher\/prep\/[0-9a-f-]{36}$/);
   const lessonId = page.url().split("/").at(-1)!;
 
   const books = await agentCall(assistant, token, "agent.listTextbooks", undefined, true);
