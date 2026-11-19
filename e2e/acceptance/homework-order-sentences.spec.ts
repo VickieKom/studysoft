@@ -88,6 +88,8 @@ test("three sentences on one screen, each its own point; the review marks the wr
   // «Проверка домашек»: the wrong sentence is marked, with its right order.
   await page.goto("/teacher/students");
   await page.getByRole("link", { name: /Проверка домашек/ }).click();
+  // The student list has a row with the same name: wait for the review list before picking the row.
+  await expect(page.getByRole("heading", { level: 1, name: "Проверка домашек" })).toBeVisible();
   await page.getByRole("listitem").filter({ hasText: firstName }).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(firstName);
   await expect(page.getByText("2 верно, 1 неверно")).toBeVisible();
