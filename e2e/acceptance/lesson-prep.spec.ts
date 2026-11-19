@@ -181,7 +181,8 @@ test("the next book lesson is proposed; the teacher adds library stages, skips e
     JSON.stringify({ version: 1, title: "Prep homework", tasks: [{ type: "single_choice", prompt: "Pick one.", options: ["a", "b"], answer: 0 }] }),
   );
   await page.getByRole("button", { name: "Импортировать", exact: true }).click();
-  await expect(page.getByText("Prep homework").first()).toBeVisible();
+  // Saved before the scenario moves on: the import opens the new draft's page (#210).
+  await expect(page).toHaveURL(/\/teacher\/students\/[0-9a-f-]{36}\/homework\/[0-9a-f-]{36}$/);
 
   const item = await openPreparation(page, "Готовимся");
   await expect(item).toContainText("не подготовлен");
