@@ -228,7 +228,7 @@ export async function removeUnreferencedBlobs(
     WHERE b.created_at < ${before.toISOString()}
       AND NOT EXISTS (
         SELECT 1 FROM homework AS h, jsonb_array_elements(h.document -> 'tasks') AS task
-        WHERE task ->> 'image' = 'blob:' || b.id::text
+        WHERE task ->> 'image' = 'blob:' || b.id::text OR task ->> 'audio' = 'blob:' || b.id::text
       )
       AND NOT EXISTS (
         SELECT 1 FROM homework_answer AS a
