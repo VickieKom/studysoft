@@ -29,6 +29,7 @@ import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 import { textbooksRouter } from "./teacher/textbooks";
 import { prepRouter } from "./teacher/prep";
+import { lessonModeRouter } from "./teacher/lesson-mode";
 
 export const appRouter = router({
   health: healthRouter,
@@ -47,6 +48,7 @@ export const appRouter = router({
     library: libraryRouter,
     textbooks: textbooksRouter,
     prep: prepRouter,
+    lessonMode: lessonModeRouter,
     history: historyRouter,
     schedule: scheduleRouter,
     payments: paymentsRouter,

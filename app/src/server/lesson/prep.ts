@@ -20,7 +20,7 @@ export function orderedLessons(structure: TextbookStructure | null): { id: strin
 }
 
 /** A student of this teacher with their textbook's confirmed structure, or null. */
-async function studentWithTextbook(db: Database, teacherId: string, studentId: string) {
+export async function studentWithTextbook(db: Database, teacherId: string, studentId: string) {
   const [row] = await db
     .select({
       id: student.id,
@@ -149,7 +149,7 @@ export async function upcomingLessons(db: Database, teacherId: string, studentId
 }
 
 /** A lesson of this teacher still to hold, with its student. */
-async function ownLesson(db: Database, teacherId: string, lessonId: string) {
+export async function ownLesson(db: Database, teacherId: string, lessonId: string) {
   const [row] = await db
     .select({ id: lesson.id, studentId: lesson.studentId, startsAt: lesson.startsAt, durationMinutes: lesson.durationMinutes })
     .from(lesson)
