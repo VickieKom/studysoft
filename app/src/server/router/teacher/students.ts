@@ -12,6 +12,7 @@ import {
   TIME_ZONE_IDS,
 } from "../../../domain/student";
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
+import { studentMistakes } from "../../crm/mistakes";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
@@ -95,6 +96,38 @@ export const studentsRouter = router({
       const card = await findStudent(ctx.db, ctx.teacherId, input.id);
       if (!card) throw notFound();
       return { ...card, contacts: await findContacts(ctx.db, ctx.teacherId, input.id) };
+    }),
+
+  /** «Ошибки по темам» (#119): wrong answers of homework and games over the last 30 days, by topic. */
+  mistakes: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(
+      z.array(
+        z
+          .object({
+            topic: z.string(),
+            count: z.number().int().min(1),
+            mistakes: z.array(
+              z
+                .object({
+                  from: z.enum(["homework", "game"]),
+                  title: z.string(),
+                  at: z.iso.datetime(),
+                  task: z.string(),
+                  answer: z.string().nullable(),
+                })
+                .strict(),
+            ),
+          })
+          .strict(),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      return (await studentMistakes(ctx.db, ctx.teacherId, input.studentId)).map((topic) => ({
+        ...topic,
+        mistakes: topic.mistakes.map((m) => ({ ...m, at: m.at.toISOString() })),
+      }));
     }),
 
   create: teacherProcedure

@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { TASK_TYPES, taskSourceSchema } from "../../../domain/homework-format";
+import { SKILLS, TASK_TYPES, taskSourceSchema } from "../../../domain/homework-format";
 import { LEVELS, STATUSES } from "../../../domain/student";
 import { buildStudentContext } from "../../crm/context";
 import { listStudents } from "../../crm/students";
@@ -48,6 +48,26 @@ const studentContext = z
         })
         .strict(),
     ),
+    // Games the student played by their link (#119): the answers as the game reported them.
+    recentGames: z.array(
+      z
+        .object({
+          title: z.string(),
+          playedAt: z.iso.datetime(),
+          answers: z.array(
+            z
+              .object({
+                task: z.string(),
+                answer: z.string(),
+                correct: z.boolean(),
+                topic: z.string().optional(),
+                skill: z.enum(SKILLS).optional(),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    ),
     mistakesByTopic: z.array(z.object({ topic: z.string(), count: z.number().int() }).strict()),
   })
   .strict();
@@ -73,6 +93,7 @@ export const agentStudentsRouter = router({
         level: context.level as (typeof LEVELS)[number],
         notes: context.notes.map((note) => ({ body: note.body, createdAt: note.createdAt.toISOString() })),
         recentHomework: context.recentHomework.map((h) => ({ ...h, submittedAt: h.submittedAt.toISOString() })),
+        recentGames: context.recentGames.map((g) => ({ ...g, playedAt: g.playedAt.toISOString() })),
       };
     }),
 });
