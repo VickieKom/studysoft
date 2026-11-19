@@ -7,6 +7,7 @@ import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, mergeRouters, router } from "./core/trpc";
 import { agentHomeworkRouter } from "./agent/homework";
 import { agentLibraryRouter } from "./agent/library";
+import { agentPrepRouter } from "./agent/prep";
 import { agentTextbooksRouter } from "./agent/textbooks";
 import { agentStudentsRouter } from "./agent/students";
 import { healthRouter } from "./public/health";
@@ -27,13 +28,14 @@ import { notesRouter } from "./teacher/notes";
 import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 import { textbooksRouter } from "./teacher/textbooks";
+import { prepRouter } from "./teacher/prep";
 
 export const appRouter = router({
   health: healthRouter,
   links: linksRouter,
   student: mergeRouters(studentMeRouter, router({ homework: studentHomeworkRouter, games: studentGamesRouter })),
   parent: parentMeRouter,
-  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter, agentTextbooksRouter),
+  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
   teacher: router({
     session: sessionRouter,
     students: studentsRouter,
@@ -44,6 +46,7 @@ export const appRouter = router({
     review: reviewRouter,
     library: libraryRouter,
     textbooks: textbooksRouter,
+    prep: prepRouter,
     history: historyRouter,
     schedule: scheduleRouter,
     payments: paymentsRouter,

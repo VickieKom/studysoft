@@ -11,11 +11,14 @@ import {
   createTools,
   draftInput,
   gameDraftInput,
+  lessonIdInput,
   pageInput,
+  planInput,
   structureInput,
   studentIdInput,
   textbookIdInput,
   textInput,
+  upcomingInput,
   warmupDraftInput,
 } from "./tools";
 
@@ -170,6 +173,51 @@ server.registerTool(
     inputSchema: structureInput,
   },
   (input) => tools.saveTextbookStructure(input),
+);
+
+server.registerTool(
+  "list_upcoming_lessons",
+  {
+    title: "Upcoming lessons",
+    description: "The teacher's lessons in the next two weeks: id, student, start, minutes, and whether the lesson is prepared.",
+    inputSchema: upcomingInput,
+  },
+  (input) => tools.listUpcomingLessons(input),
+);
+
+server.registerTool(
+  "read_lesson_plan",
+  {
+    title: "Read a lesson's plan",
+    description:
+      "A lesson's approved plan, your draft if any, the plan the platform proposes (the student's next book lesson, " +
+      "after the one passed) and the lessons of the student's textbook with their ids.",
+    inputSchema: lessonIdInput,
+  },
+  (input) => tools.readLessonPlan(input),
+);
+
+server.registerTool(
+  "list_lesson_materials",
+  {
+    title: "Library materials for a lesson",
+    description: "The teacher's warm-ups, games and videos with their level and topic, to add as stages of a plan.",
+    inputSchema: lessonIdInput,
+  },
+  (input) => tools.listLessonMaterials(input),
+);
+
+server.registerTool(
+  "save_lesson_plan",
+  {
+    title: "Save a lesson plan",
+    description:
+      "Saves a lesson's plan as a draft «от ассистента» in «Подготовка»: stages in order with minutes — the book lesson " +
+      "with the exercises to skip, and warm-ups, games or videos from the library. Read get_student_context and " +
+      "read_lesson_plan first. Saving again replaces your draft. Only the teacher approves.",
+    inputSchema: planInput,
+  },
+  (input) => tools.saveLessonPlan(input),
 );
 
 await server.connect(new StdioServerTransport());

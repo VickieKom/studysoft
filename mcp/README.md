@@ -18,6 +18,10 @@ Connects the teacher's AI assistant to the platform (#3). The assistant runs in 
 | `get_textbook_page` | One rendered page of a book, as an image |
 | `read_textbook_structure` | A textbook's confirmed units and lessons and the draft waiting for the teacher |
 | `save_textbook_structure` | Saves units and lessons — page ranges in each book, tracks, words — as a draft «от ассистента», checked against the textbook; refused while the teacher has a draft of her own. Never confirms |
+| `list_upcoming_lessons` | The teacher's lessons in the next two weeks, each prepared or not (#151) |
+| `read_lesson_plan` | A lesson's approved plan, the assistant's draft, the proposed next book lesson and the textbook's lessons |
+| `list_lesson_materials` | Warm-ups, games and videos to add as stages |
+| `save_lesson_plan` | Saves a lesson's plan as a draft «от ассистента»; never approves |
 
 Never returned: last names, contacts, payments, links.
 
