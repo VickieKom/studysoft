@@ -4,7 +4,7 @@
 // marked every task the platform does not check (product owner, 2026-11-12).
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { answerKey, answerText, attemptAnswerFileUrl } from "../../domain/homework";
-import { type HomeworkDocument, storedAnswerSchema, type Task } from "../../domain/homework-format";
+import { type HomeworkDocument, storedAnswerSchema, type Task, type TaskExample } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 
@@ -85,6 +85,9 @@ export type ReviewTask = {
   prompt: string;
   /** A gap task's own options per gap (#128); null for any other task. */
   choices: (string[] | null)[] | null;
+  /** The reading text and the example of a workbook exercise (#131). */
+  passage: string | null;
+  example: TaskExample | null;
   topic: string | null;
   answer: string | null;
   autoChecked: boolean;
@@ -137,6 +140,8 @@ function reviewTasks(
       type: task.type,
       prompt: task.prompt,
       choices: task.type === "gap" ? (task.choices ?? null) : null,
+      passage: task.passage ?? null,
+      example: task.example ?? null,
       topic: task.topic ?? null,
       answer: parsed.success ? answerText(task, parsed.data) : null,
       autoChecked,

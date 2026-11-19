@@ -4,6 +4,8 @@ How a homework is written as JSON for the platform: pasted by the teacher in "И
 
 Content lives in the platform's database, never in this repository. The example below is synthetic.
 
+Keep `prompt` to the instruction itself. A workbook exercise is carried over whole: its instruction in `prompt`, its reading text in `passage`, its example in `example`, its items in the task's own fields.
+
 ## Homework
 
 | Field | Required | Meaning |
@@ -21,6 +23,8 @@ Content lives in the platform's database, never in this repository. The example 
 | `topic` | no | Free text, for grouping mistakes and gaps, for example "Present Simple" |
 | `skill` | no | `grammar`, `vocabulary`, `reading`, `writing`, `speaking` or `listening` |
 | `source` | no | Where the task comes from: `{ "book": "Workbook", "unit": "0", "page": "6", "exercise": "2" }` (every key optional except `book`), or the string `"own"` for the teacher's own task |
+| `passage` | no | A reading text of its own — a passage, a blog post, a dialogue, notes — up to 5000 characters. Shown below the instruction in regular type, with its line breaks. Tasks that share one text each carry it, and the student sees it above each of them (#131) |
+| `example` | no | The exercise's example: `{ "text": "0 She ___ a teacher.", "answer": "is" }`. Shown marked as an example, with `answer` in place of `___` (or after the text when there is no gap); it has no field and is never checked or counted (#131) |
 | `image` | no | A picture next to the task, as a data URL: `data:image/png;base64,…`. PNG, JPEG or WebP, at most 2 MB. One picture per task. The platform keeps the file and serves it only to the teacher and to the student whose published homework it is (#33) |
 
 ## Task types
@@ -117,6 +121,7 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
     {
       "type": "gap",
       "prompt": "Fill in the gaps.",
+      "example": { "text": "0 We ___ friends.", "answer": "are" },
       "text": "I ___ a student. She ___ my friend.",
       "answers": [["am", "'m"], ["is", "'s"]],
       "topic": "to be",
@@ -136,4 +141,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`; an optional field added later, such as `choices` (#128), keeps the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

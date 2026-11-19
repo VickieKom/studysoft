@@ -1,6 +1,7 @@
 import { answerKey, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
 import type { Task } from "@/domain/homework-format";
 import { GapChoices } from "./gap-choices";
+import { TaskExampleLine, TaskPassage } from "./task-parts";
 
 /**
  * One task as the teacher previews it, key included (#32). Used by the
@@ -14,6 +15,8 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
         {number}. {TASK_TYPE_LABELS[task.type]}
       </p>
       <p className="mt-1 whitespace-pre-line font-semibold">{task.prompt}</p>
+      {task.passage && <TaskPassage passage={task.passage} className="mt-2" />}
+      {task.example && <TaskExampleLine example={task.example} className="mt-2" />}
       {task.image && (
         // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
         // eslint-disable-next-line @next/next/no-img-element -- same reason as above

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "title": "Demo: workbook layout",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Read the blog and choose the best title.",
+      "passage": "Hi! I'm Tom.\nI live by the sea and I go to school by boat.\n\nOn Saturdays I help my dad on the farm.",
+      "options": ["A boat to school", "A day in the city", "My new phone"],
+      "answer": 0,
+      "topic": "reading",
+      "skill": "reading"
+    },
+    {
+      "type": "single_choice",
+      "prompt": "Read the blog again. How does Tom go to school?",
+      "passage": "Hi! I'm Tom.\nI live by the sea and I go to school by boat.\n\nOn Saturdays I help my dad on the farm.",
+      "options": ["by bus", "by boat", "on foot"],
+      "answer": 1,
+      "topic": "reading",
+      "skill": "reading"
+    },
+    {
+      "type": "gap",
+      "prompt": "Complete the sentences.",
+      "example": { "text": "0 She ___ a teacher.", "answer": "is" },
+      "text": "1 They ___ my friends.",
+      "answers": [["are", "'re"]],
+      "topic": "to be",
+      "skill": "grammar"
+    }
+  ]
+}
