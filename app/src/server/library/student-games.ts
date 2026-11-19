@@ -37,7 +37,8 @@ export async function studentsInLesson(
  * on, until an hour after that lesson's end; opened again in a later lesson,
  * the access moves on, never back. One statement checks the lesson, the game
  * and the student and writes the access, so a lesson that is not going on, a
- * video or another teacher's game or student never get one. Returns when the
+ * video, the assistant's draft (#120) or another teacher's game or student
+ * never get one. Returns when the
  * access ends, or null when nothing was opened.
  */
 export async function openGameToStudent(
@@ -54,7 +55,7 @@ export async function openGameToStudent(
            l.starts_at + l.duration_minutes * interval '1 minute' + ${after}::interval
     FROM lesson AS l
     JOIN student AS s ON s.id = l.student_id AND s.teacher_id = l.teacher_id AND s.deleted_at IS NULL
-    JOIN library_material AS m ON m.id = ${materialId} AND m.teacher_id = l.teacher_id AND m.kind = 'game'
+    JOIN library_material AS m ON m.id = ${materialId} AND m.teacher_id = l.teacher_id AND m.kind = 'game' AND NOT m.draft
     WHERE l.teacher_id = ${teacherId}
       AND l.student_id = ${studentId}
       AND ${LIVE_LESSON}

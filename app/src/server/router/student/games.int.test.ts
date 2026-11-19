@@ -146,7 +146,7 @@ describe("games opened to a student", () => {
     expect((await fileStatus(headers, game)).status).toBe(404);
   });
 
-  it("is not offered and refused without a lesson going on: before, after, cancelled or missed, and for a video", async () => {
+  it("is not offered and refused without a lesson going on: before, after, cancelled or missed, and for a video or a draft", async () => {
     const game = await addGame("Not now");
     const { studentId } = await newStudent("Безурочный");
     const now = Date.now();
@@ -168,6 +168,11 @@ describe("games opened to a student", () => {
     const { id: video } = await teacher.teacher.library.addGame({ title: "Video stand-in", level: "A1", topic: "", ageGroup: "younger", html: html("v") });
     await db().update(libraryMaterial).set({ kind: "video" }).where(eq(libraryMaterial.id, video));
     await expect(teacher.teacher.library.openToStudent({ id: video, studentId: watcher })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // The assistant's draft (#120) is not in the library yet: it is not opened either.
+    const draft = await addGame("Draft stand-in");
+    await db().update(libraryMaterial).set({ draft: true }).where(eq(libraryMaterial.id, draft));
+    await expect(teacher.teacher.library.openToStudent({ id: draft, studentId: watcher })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await db().select().from(gameAccess).where(eq(gameAccess.materialId, draft))).toEqual([]);
     // Another teacher's student, even one in a lesson now with their own teacher.
     const { studentId: foreign } = await strangerStudent();
     const foreignLesson = await addLesson(otherTeacherId, foreign, new Date(now - 5 * MINUTE));

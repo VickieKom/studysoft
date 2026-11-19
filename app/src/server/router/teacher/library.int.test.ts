@@ -285,6 +285,8 @@ describe("teacher.library", () => {
       // A video is neither a questions warm-up nor a game marked as one (#116).
       questions: null,
       warmup: false,
+      // The teacher's own material, not the assistant's draft (#120).
+      draft: false,
     });
     expect((await teacher.teacher.library.list({ kind: "video", topic })).materials.map((m) => m.id)).toEqual([id]);
     expect((await teacher.teacher.library.list({ kind: "game", topic })).materials).toEqual([]);
