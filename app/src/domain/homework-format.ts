@@ -149,11 +149,17 @@ const gap = z
     options: z.array(text).min(2).optional(),
     // A gap's own options (#128), one entry per gap in order; null for a gap the student types.
     choices: z.array(z.array(text).min(2).max(6).nullable()).optional(),
+    // A picture by each gap, as a workbook prints one beside each line to label (#181); null for a gap without one.
+    gapImages: z.array(image.nullable()).optional(),
   })
   .strict()
   .refine((t) => gapCount(t.text) === t.answers.length, {
     path: ["answers"],
     message: "столько же списков ответов, сколько пропусков ___ в тексте",
+  })
+  .refine((t) => !t.gapImages || t.gapImages.length === gapCount(t.text), {
+    path: ["gapImages"],
+    message: "по картинке или null на каждый пропуск ___ в тексте",
   })
   .superRefine((t, ctx) => {
     if (!t.choices) return;
@@ -290,6 +296,9 @@ export function taskPoints(task: Task): number {
  * teacher: «вариант 2, картинка 1».
  */
 export function partPictures(task: Task): { value: string; place: string }[] {
+  if (task.type === "gap") {
+    return (task.gapImages ?? []).flatMap((value, i) => (value ? [{ value, place: `пропуск ${i + 1}` }] : []));
+  }
   if (task.type !== "single_choice" && task.type !== "multiple_choice") return [];
   return task.options.flatMap((option, i) =>
     typeof option === "string" ? [] : option.images.map((value, n) => ({ value, place: `вариант ${i + 1}, картинка ${n + 1}` })),
@@ -297,9 +306,15 @@ export function partPictures(task: Task): { value: string; place: string }[] {
 }
 
 /** The task with each picture of its parts replaced, by its position in partPictures(). */
-export function withPartPictures<T extends { type: string; options?: unknown }>(task: T, replace: (value: string, n: number) => string): T {
-  if ((task.type !== "single_choice" && task.type !== "multiple_choice") || !Array.isArray(task.options)) return task;
+export function withPartPictures<T extends { type: string; options?: unknown; gapImages?: unknown }>(
+  task: T,
+  replace: (value: string, n: number) => string,
+): T {
   let n = 0;
+  if (task.type === "gap" && Array.isArray(task.gapImages)) {
+    return { ...task, gapImages: (task.gapImages as (string | null)[]).map((value) => (value ? replace(value, n++) : null)) };
+  }
+  if ((task.type !== "single_choice" && task.type !== "multiple_choice") || !Array.isArray(task.options)) return task;
   const options = (task.options as ChoiceOption[]).map((option) =>
     typeof option === "string" ? option : { ...option, images: option.images.map((value) => replace(value, n++)) },
   );
@@ -320,6 +335,7 @@ function innermost(issue: z.core.$ZodIssue): z.core.$ZodIssue {
 /** The place a field names, as the teacher reads it: «вариант 2, картинка 1» for options.1.images.0. */
 function place(rest: PropertyKey[]): string {
   const [field, option, part, picture] = rest;
+  if (field === "gapImages" && typeof option === "number") return `пропуск ${option + 1}`;
   if (field === "options" && typeof option === "number") {
     if (part === "images" && typeof picture === "number") return `вариант ${option + 1}, картинка ${picture + 1}`;
     return `вариант ${option + 1}`;
@@ -409,7 +425,7 @@ function shuffled<T>(items: readonly T[], seed: string, solved: readonly (readon
  */
 export type StudentTask = (
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: ChoiceOption[] }
-  | { type: "gap"; prompt: string; text: string; options?: string[]; choices?: (string[] | null)[] }
+  | { type: "gap"; prompt: string; text: string; options?: string[]; choices?: (string[] | null)[]; gapImages?: (string | null)[] }
   | { type: "match"; prompt: string; left: string[]; right: string[] }
   | { type: "order"; prompt: string; words: string[] }
   | { type: "order"; prompt: string; sentences: string[][] }
@@ -442,6 +458,7 @@ function studentBody(task: Task, seed: string): StudentTask {
         text: task.text,
         ...(task.options ? { options: task.options } : {}),
         ...(task.choices ? { choices: task.choices } : {}),
+        ...(task.gapImages ? { gapImages: task.gapImages } : {}),
       };
     case "match":
       return {

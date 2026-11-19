@@ -49,6 +49,8 @@ const otherTask = z.discriminatedUnion("type", [
       options: z.array(text).optional(),
       // A gap's own options (#128): what the student picks from, never which is right.
       choices: z.array(z.array(text).nullable()).optional(),
+      // A picture by each gap, by its address (#181).
+      gapImages: z.array(picture.nullable()).optional(),
       image,
       audio,
       ...parts,

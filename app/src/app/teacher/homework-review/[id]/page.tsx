@@ -100,6 +100,19 @@ export default async function SubmissionPage({ params }: Props) {
               // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
               <img src={task.file.url} alt={`Фото к заданию ${task.index + 1}`} className="mt-2 max-h-96 rounded-control border border-border" />
             )}
+            {task.gapImages && (
+              <ol aria-label="Картинки к пропускам" className="mt-2 flex flex-wrap gap-3 text-small">
+                {task.gapImages.map((src, i) =>
+                  src ? (
+                    <li key={i} className="flex items-center gap-1">
+                      {i + 1}.
+                      {/* eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer */}
+                      <img src={src} alt={`Картинка к пропуску ${i + 1}`} className="max-h-16 rounded-control" />
+                    </li>
+                  ) : null,
+                )}
+              </ol>
+            )}
             {task.pictureOptions && (
               <ul aria-label="Варианты" className="mt-2 flex flex-wrap gap-2">
                 {task.pictureOptions.map((option, i) => (

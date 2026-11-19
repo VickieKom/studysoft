@@ -71,6 +71,7 @@ A text with one or more gaps, each written as `___` (three underscores).
 | `answers` | One list per gap, in order: the accepted variants for that gap |
 | `options` | Optional: words to choose from. Without it the student types |
 | `choices` | Optional: each gap's own options, as in "circle the correct word" (#128) — one entry per gap, in order: a list of 2 to 6 options, or `null` for a gap the student types. Every accepted answer of a gap with options must be one of them. Not together with `options` |
+| `gapImages` | Optional: a picture by each gap, one per gap in order, or `null` for a gap without one (#181). The same rules as a task's `image`. The picture shows right before its field, as a workbook prints a picture beside each line to label |
 
 ### `match`
 
@@ -168,4 +169,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), or a wider choice, such as a picture option (#129), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), or a wider choice, such as a picture option (#129) or a picture by a gap (#181), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

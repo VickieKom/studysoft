@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "title": "Demo: a picture by each gap",
+  "tasks": [
+    {
+      "type": "gap",
+      "prompt": "Look and write the colour.",
+      "text": "1 This square is ___.\n2 This square is ___.\n3 This square is ___.",
+      "answers": [
+        [
+          "red"
+        ],
+        [
+          "green"
+        ],
+        [
+          "blue"
+        ]
+      ],
+      "gapImages": [
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4o6FBEmIY1TCqYfhqAAAyBCwQhvh37QAAAABJRU5ErkJggg==",
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQWGBDEmIY1TCqYfhqAAAmYgQQV7FoPwAAAABJRU5ErkJggg==",
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQCLhDEmIY1TCqYfhqAAANiFQQvOkcpQAAAABJRU5ErkJggg=="
+      ],
+      "topic": "colours",
+      "skill": "vocabulary"
+    }
+  ]
+}

@@ -161,6 +161,10 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
         const empty = answers.findIndex((variants) => variants.length === 0);
         if (empty >= 0) return `Укажите правильный ответ для пропуска ${empty + 1}`;
         const choices = lines(optionsText);
+        // shortcut: pictures by the gaps (#181) are kept as imported, so the number of gaps stays; change them here when the later slices of #129 bring pictures to the editor (#129)
+        const gapImages = task?.type === "gap" ? task.gapImages : undefined;
+        if (gapImages && gapImages.length !== gaps)
+          return `У пропусков есть картинки: пропусков должно остаться ${gapImages.length}, а картинки меняются импортом JSON`;
         const own = Array.from({ length: gaps }, (_, i) =>
           (gapChoices[i] ?? "")
             .split("/")
@@ -170,7 +174,15 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
         if (own.some((list) => list.length === 1)) return "У пропуска с вариантами их должно быть хотя бы два, через /";
         const perGap = own.some((list) => list.length > 0) ? { choices: own.map((list) => (list.length > 0 ? list : null)) } : {};
         if (perGap.choices && choices.length > 0) return "Либо общие слова на выбор, либо варианты у пропусков";
-        return { ...common, type, text: gapText, answers, ...(choices.length > 0 ? { options: choices } : {}), ...perGap };
+        return {
+          ...common,
+          type,
+          text: gapText,
+          answers,
+          ...(choices.length > 0 ? { options: choices } : {}),
+          ...perGap,
+          ...(gapImages ? { gapImages } : {}),
+        };
       }
       case "match": {
         const pairs = lines(pairsText).map((line) => {

@@ -380,7 +380,7 @@ function Gap({
   task,
   answer,
   onChange,
-}: BodyProps & { task: { type: "gap"; text: string; options?: string[]; choices?: (string[] | null)[] } }) {
+}: BodyProps & { task: { type: "gap"; text: string; options?: string[]; choices?: (string[] | null)[]; gapImages?: (string | null)[] } }) {
   const count = gapCount(task.text);
   const gaps = answer?.type === "gap" ? answer.gaps : Array.from({ length: count }, () => "");
   const parts = task.text.split("___");
@@ -393,6 +393,7 @@ function Gap({
       {parts.map((part, i) => (
         <span key={i}>
           {part}
+          {i < count && task.gapImages?.[i] && <GapPicture src={task.gapImages[i]} gap={i + 1} />}
           {i < count &&
             (task.choices?.[i] ? (
               // A gap's own options, as "circle the correct word" in a workbook (#128).
@@ -441,6 +442,14 @@ function Gap({
         </span>
       ))}
     </p>
+  );
+}
+
+/** The picture by a gap (#181), right before its field; the address comes with the task. */
+export function GapPicture({ src, gap }: { src: string; gap: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
+    <img src={src} alt={`Картинка к пропуску ${gap}`} className="mx-1 inline-block h-24 max-w-40 rounded-control align-middle" />
   );
 }
 
