@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { keptStateSchema } from "../../../domain/lesson-state";
+import { keptStateSchema, lessonWordSchema, MAX_LESSON_WORDS } from "../../../domain/lesson-state";
+import { finishForm, finishLesson } from "../../lesson/finish";
 import { BOOK_KINDS } from "../../../domain/textbook";
 import { lessonStage, MAX_NOTE_LENGTH, openLesson, saveLessonNote, saveLessonState } from "../../lesson/mode";
 import { router, teacherProcedure } from "../core/trpc";
@@ -112,6 +113,53 @@ export const lessonModeRouter = router({
       if (saved === "not_found") throw notFound();
       if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
       return { saved: saved === "saved" };
+    }),
+
+  /** What «Завершить урок» opens with (#154). */
+  finishForm: teacherProcedure
+    .input(z.object({ lessonId: z.uuid() }))
+    .output(
+      z
+        .object({
+          lessonId: z.uuid(),
+          studentId: z.uuid(),
+          lessons: z.array(z.object({ id: z.uuid(), label: z.string(), title: z.string() }).strict()),
+          bookLessonId: z.uuid().nullable(),
+          charged: z.boolean(),
+          intro: z.boolean(),
+          homework: z.object({ id: z.uuid(), title: z.string(), revision: z.string(), dueDate: z.iso.date() }).strict().nullable(),
+          note: z.string(),
+          words: z.array(lessonWordSchema),
+        })
+        .strict(),
+    )
+    .query(async ({ ctx, input }) => {
+      const found = await finishForm(ctx.db, ctx.teacherId, input.lessonId);
+      if (!found) throw notFound();
+      return found;
+    }),
+
+  /** «Завершить урок»: every consequence in one transaction, or none (#154). */
+  finish: teacherProcedure
+    .input(
+      z.object({
+        lessonId: z.uuid(),
+        charged: z.boolean(),
+        note: z.string().max(MAX_NOTE_LENGTH),
+        bookLessonId: z.uuid().nullable(),
+        homework: z.object({ id: z.uuid(), revision: z.string().max(64), dueDate: z.iso.date() }).nullable(),
+        words: z.array(lessonWordSchema).max(MAX_LESSON_WORDS),
+      }),
+    )
+    .output(z.object({ studentId: z.uuid() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const { lessonId, ...form } = input;
+      const result = await finishLesson(ctx.db, ctx.teacherId, lessonId, form);
+      if (result === "not_found") throw notFound();
+      if (result === "homework_changed") throw new TRPCError({ code: "CONFLICT", message: "Домашку к уроку изменили, пока форма была открыта. Откройте форму снова" });
+      if (result === "past") throw new TRPCError({ code: "BAD_REQUEST", message: "Срок домашки уже прошёл" });
+      if ("error" in result) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+      return result.finished;
     }),
 
   /** Keeps the teacher's note to the lesson as she writes it. */

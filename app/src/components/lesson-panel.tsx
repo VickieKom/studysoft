@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addWord,
   type BookStage,
   bookStageLabel,
   goToStage,
@@ -16,6 +18,9 @@ import {
   lessonPage,
   type LessonState,
   lessonStorageKey,
+  type LessonWord,
+  MAX_TRANSLATION_LENGTH,
+  MAX_WORD_LENGTH,
   keptStateSchema,
   newer,
   pageIn,
@@ -178,6 +183,7 @@ export function LessonPanel({
         : (materialOf(stage.materialId)?.title ?? "материал удалён");
   const stageOn = lastHello > 0 && now - lastHello < STAGE_SILENT_MS;
   const [adding, setAdding] = useState(resources.materials[0]?.id ?? "");
+  const [finishing, setFinishing] = useState(false);
 
   return (
     <main className="flex max-w-3xl flex-col gap-6">
@@ -195,9 +201,12 @@ export function LessonPanel({
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Button variant="secondary" onClick={() => openStageWindow(lessonId)}>
-            Открыть сцену
-          </Button>
+          <span className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => openStageWindow(lessonId)}>
+              Открыть сцену
+            </Button>
+            <Button onClick={() => setFinishing(true)}>Завершить урок</Button>
+          </span>
           <span className={`text-small ${stageOn ? "text-green-700" : "text-text-secondary"}`}>{stageOn ? "сцена на связи" : "сцена не открыта"}</span>
         </div>
       </header>
@@ -289,7 +298,25 @@ export function LessonPanel({
         />
       )}
 
+      <LessonWords words={state.words} onChange={(words) => change((s) => ({ ...s, words }))} />
+
       <Note lessonId={lessonId} initial={serverNote} />
+
+      {finishing && (
+        <FinishLesson
+          lessonId={lessonId}
+          words={state.words}
+          onCancel={() => setFinishing(false)}
+          onFinished={() => {
+            send({ type: "finished" });
+            try {
+              window.localStorage.removeItem(lessonStorageKey(lessonId));
+            } catch {
+              // Nothing kept to remove.
+            }
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -468,6 +495,209 @@ function HomeworkControls({
         </ul>
       )}
     </section>
+  );
+}
+
+/** «Слова урока» (#154): the words written on the board, for the student's vocabulary at «Завершить урок». */
+function LessonWords({ words, onChange }: { words: LessonWord[]; onChange: (words: LessonWord[]) => void }) {
+  const [word, setWord] = useState("");
+  const [translation, setTranslation] = useState("");
+  const field = "rounded-control border border-border bg-bg px-3 py-2";
+  return (
+    <section aria-label="Слова урока" className="flex flex-col gap-3 rounded-card border border-border p-4">
+      <h2 className="text-h3 font-semibold">Слова урока</h2>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!word.trim()) return;
+          onChange(addWord(words, { word, translation }));
+          setWord("");
+          setTranslation("");
+        }}
+      >
+        <label className="flex flex-col gap-1">
+          <span className="text-small text-text-secondary">Слово</span>
+          <input value={word} maxLength={MAX_WORD_LENGTH} onChange={(e) => setWord(e.target.value)} className={field} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-small text-text-secondary">Перевод</span>
+          <input value={translation} maxLength={MAX_TRANSLATION_LENGTH} onChange={(e) => setTranslation(e.target.value)} className={field} />
+        </label>
+        <Button type="submit" variant="secondary" disabled={!word.trim()}>
+          Добавить слово
+        </Button>
+      </form>
+      {words.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {words.map((w) => (
+            <li key={w.word} className="flex items-center gap-3 text-small">
+              <span className="flex-1">
+                <span className="font-semibold">{w.word}</span>
+                {w.translation && ` — ${w.translation}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => onChange(words.filter((x) => x.word !== w.word))}
+                className="text-text-secondary hover:text-danger"
+                aria-label={`Убрать слово ${w.word}`}
+              >
+                Убрать
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-caption text-text-muted">Слова попадут в словарь ученика при «Завершить урок»</p>
+    </section>
+  );
+}
+
+type FinishFormData = Awaited<ReturnType<typeof routerClient.teacher.lessonMode.finishForm.query>>;
+
+/**
+ * «Завершить урок» (#154): one form — held and charged as in #82, the note,
+ * the book lesson covered, the lesson's homework with its deadline, and the
+ * words. All of it applies at once or not at all; then the card.
+ */
+function FinishLesson({
+  lessonId,
+  words,
+  onCancel,
+  onFinished,
+}: {
+  lessonId: string;
+  words: LessonWord[];
+  onCancel: () => void;
+  onFinished: () => void;
+}) {
+  const router = useRouter();
+  const [form, setForm] = useState<FinishFormData | null>(null);
+  const [bookLessonId, setBookLessonId] = useState("");
+  const [charged, setCharged] = useState(true);
+  const [note, setNote] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const field = "rounded-control border border-border bg-bg px-3 py-2";
+
+  useEffect(() => {
+    let live = true;
+    routerClient.teacher.lessonMode.finishForm.query({ lessonId }).then(
+      (data) => {
+        if (!live) return;
+        setForm(data);
+        setBookLessonId(data.bookLessonId ?? "");
+        setCharged(data.charged);
+        setNote(data.note);
+        setDueDate(data.homework?.dueDate ?? "");
+      },
+      () => live && setError("Не получилось открыть форму. Попробуйте ещё раз"),
+    );
+    return () => {
+      live = false;
+    };
+  }, [lessonId]);
+
+  async function finish() {
+    if (!form) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { studentId } = await routerClient.teacher.lessonMode.finish.mutate({
+        lessonId,
+        charged,
+        note,
+        bookLessonId: bookLessonId || null,
+        homework: form.homework ? { id: form.homework.id, revision: form.homework.revision, dueDate } : null,
+        words,
+      });
+      onFinished();
+      router.push(`/teacher/students/${studentId}`);
+    } catch (caught) {
+      const code = (caught as { data?: { code?: string } })?.data?.code;
+      const message = (caught as { message?: string })?.message;
+      setError((code === "BAD_REQUEST" || code === "CONFLICT") && message ? message : "Не получилось завершить урок. Ничего не изменилось, попробуйте ещё раз");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-start justify-center overflow-auto bg-black/30 p-6">
+      <div role="dialog" aria-modal="true" aria-labelledby="finish-heading" className="flex w-full max-w-xl flex-col gap-4 rounded-card bg-bg p-6 shadow">
+        <h2 id="finish-heading" className="text-h2 font-semibold">
+          Завершить урок
+        </h2>
+        {!form ? (
+          <p className="text-small text-text-secondary">{error ?? "Загружаем…"}</p>
+        ) : (
+          <>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={charged} disabled={form.intro} onChange={(e) => setCharged(e.target.checked)} />
+              <span>Списать{form.intro && " (вводный урок не списывается)"}</span>
+            </label>
+            {form.lessons.length > 0 && (
+              <label className="flex flex-col gap-1">
+                <span className="text-small text-text-secondary">Пройденный урок учебника</span>
+                <select value={bookLessonId} onChange={(e) => setBookLessonId(e.target.value)} className={`${field} h-10`}>
+                  <option value="">Учебник не проходили</option>
+                  {form.lessons.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="flex flex-col gap-1">
+              <span className="text-small text-text-secondary">Заметка</span>
+              <textarea value={note} maxLength={5000} rows={4} onChange={(e) => setNote(e.target.value)} className={field} />
+            </label>
+            {form.homework ? (
+              <div className="flex flex-col gap-2 rounded-control border border-border p-3">
+                <p className="text-small">
+                  Опубликовать домашку: <span className="font-semibold">{form.homework.title}</span>
+                </p>
+                <label className="flex flex-col gap-1">
+                  <span className="text-small text-text-secondary">Срок</span>
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={`${field} w-48`} />
+                </label>
+              </div>
+            ) : (
+              <p className="text-small text-text-secondary">Домашки к уроку нет: её можно прикрепить в «Подготовке»</p>
+            )}
+            <div className="flex flex-col gap-1">
+              <p className="text-small text-text-secondary">Слова в словарь ученика{bookLessonId && " (и слова урока учебника)"}</p>
+              {words.length === 0 ? (
+                <p className="text-small">Слов урока нет</p>
+              ) : (
+                <ul className="flex flex-wrap gap-2 text-small">
+                  {words.map((w) => (
+                    <li key={w.word} className="rounded-full bg-surface px-3 py-1">
+                      {w.word}
+                      {w.translation && ` — ${w.translation}`}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {error && (
+              <p role="alert" className="whitespace-pre-line rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
+                {error}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <Button disabled={saving || (form.homework !== null && !dueDate)} onClick={finish}>
+                Завершить урок
+              </Button>
+              <Button variant="secondary" disabled={saving} onClick={onCancel}>
+                Отмена
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

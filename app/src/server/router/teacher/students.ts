@@ -14,6 +14,7 @@ import {
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
+import { studentVocabulary } from "../../crm/vocabulary";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -96,6 +97,15 @@ export const studentsRouter = router({
       const card = await findStudent(ctx.db, ctx.teacherId, input.id);
       if (!card) throw notFound();
       return { ...card, contacts: await findContacts(ctx.db, ctx.teacherId, input.id) };
+    }),
+
+  /** «Словарь» on the card (#154): the student's words, newest first, with the date each was added. */
+  vocabulary: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(z.array(z.object({ word: z.string(), translation: z.string().nullable(), addedAt: z.iso.datetime() }).strict()))
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
+      return (await studentVocabulary(ctx.db, ctx.teacherId, input.studentId)).map((w) => ({ ...w, addedAt: w.addedAt.toISOString() }));
     }),
 
   /** «Ошибки по темам» (#119): wrong answers of homework and games over the last 30 days, by topic. */
