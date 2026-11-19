@@ -255,11 +255,13 @@ test("«Завершить урок» holds the lesson, publishes its homework a
   const context = await studentContext(assistant, token, studentId);
   for (const word of ["lantern", "pebble", "orange", "kettle", "апельсин"]) expect(context).toContain(word);
 
-  // The student sees the lesson's homework by the link, and no vocabulary.
+  // The student has the lesson's homework by the link, due on the next lesson's day, and no vocabulary.
+  // The student's page names a homework by its deadline and size, not its title.
   const student = await (await browser.newContext({ storageState: NO_SESSION })).newPage();
   await student.goto(link);
   await expect.poll(() => student.url()).not.toContain("#");
-  await expect(student.getByText(HOMEWORK)).toBeVisible();
+  await expect(student.getByText("1 задание")).toBeVisible();
+  await expect(control(student, "Начать")).toBeVisible();
   const seen = await student.locator("body").innerText();
   for (const hidden of ["Словарь", "lantern", "orange", "kettle", NOTE]) expect(seen).not.toContain(hidden);
   await student.context().close();
