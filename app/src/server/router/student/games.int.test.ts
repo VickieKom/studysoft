@@ -146,7 +146,7 @@ describe("games opened to a student", () => {
     expect((await fileStatus(headers, game)).status).toBe(404);
   });
 
-  it("is not offered and refused without a lesson going on: before, after, cancelled or missed, and for a video or a draft", async () => {
+  it("is not offered and refused without a lesson going on: before, after, cancelled or missed, and for a warm-up or a draft", async () => {
     const game = await addGame("Not now");
     const { studentId } = await newStudent("Безурочный");
     const now = Date.now();
@@ -162,12 +162,18 @@ describe("games opened to a student", () => {
       message: expect.stringContaining("урок"),
     });
 
-    // A lesson going on, but the material is a video: only games are opened.
+    // A lesson going on, but the material is a warm-up: only games and videos (#158) are opened.
     const { studentId: watcher } = await newStudent("Зритель");
     await addLesson(teacherId, watcher, new Date(now - 5 * MINUTE));
-    const { id: video } = await teacher.teacher.library.addGame({ title: "Video stand-in", level: "A1", topic: "", ageGroup: "younger", html: html("v") });
-    await db().update(libraryMaterial).set({ kind: "video" }).where(eq(libraryMaterial.id, video));
-    await expect(teacher.teacher.library.openToStudent({ id: video, studentId: watcher })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const { id: warmup } = await teacher.teacher.library.addWarmup({
+      title: `Warm-up stand-in ${run}`,
+      level: "A1",
+      topic: "",
+      ageGroup: "younger",
+      format: "questions",
+      questions: ["What did you do today?"],
+    });
+    await expect(teacher.teacher.library.openToStudent({ id: warmup, studentId: watcher })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     // The assistant's draft (#120) is not in the library yet: it is not opened either.
     const draft = await addGame("Draft stand-in");
     await db().update(libraryMaterial).set({ draft: true }).where(eq(libraryMaterial.id, draft));

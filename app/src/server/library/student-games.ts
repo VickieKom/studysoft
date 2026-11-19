@@ -1,8 +1,10 @@
-// Games opened to a student (#118; library brief): while one of the
-// student's lessons is going on, the teacher opens a game to them; the
-// student plays it behind their link until an hour after that lesson's end.
+// Games and videos opened to a student (#118, #158; library brief): while
+// one of the student's lessons is going on, the teacher opens a game or a
+// video to them; the student plays it behind their link until an hour after
+// that lesson's end. A video shared from the stage stutters, so it plays on
+// the student's own device instead (#7). Both kinds share `game_access`.
 // Only "is a lesson going on now" is read from the schedule. A student sees
-// only their own open games; anything else is the same as a missing game.
+// only their own open materials; anything else is the same as a missing one.
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { GAME_ACCESS_AFTER_LESSON_MS } from "../../domain/library";
 import type { Database } from "../db/client";
@@ -33,13 +35,13 @@ export async function studentsInLesson(
 }
 
 /**
- * Opens this teacher's game to her student while a lesson of theirs is going
- * on, until an hour after that lesson's end; opened again in a later lesson,
- * the access moves on, never back. One statement checks the lesson, the game
- * and the student and writes the access, so a lesson that is not going on, a
- * video, the assistant's draft (#120) or another teacher's game or student
- * never get one. Returns when the
- * access ends, or null when nothing was opened.
+ * Opens this teacher's game or video (#158) to her student while a lesson of
+ * theirs is going on, until an hour after that lesson's end; opened again in
+ * a later lesson, the access moves on, never back. One statement checks the
+ * lesson, the material and the student and writes the access, so a lesson
+ * that is not going on, a warm-up, the assistant's draft (#120) or another
+ * teacher's material or student never get one. Returns when the access ends,
+ * or null when nothing was opened.
  */
 export async function openGameToStudent(
   db: Database,
@@ -55,7 +57,7 @@ export async function openGameToStudent(
            l.starts_at + l.duration_minutes * interval '1 minute' + ${after}::interval
     FROM lesson AS l
     JOIN student AS s ON s.id = l.student_id AND s.teacher_id = l.teacher_id AND s.deleted_at IS NULL
-    JOIN library_material AS m ON m.id = ${materialId} AND m.teacher_id = l.teacher_id AND m.kind = 'game' AND NOT m.draft
+    JOIN library_material AS m ON m.id = ${materialId} AND m.teacher_id = l.teacher_id AND m.kind IN ('game', 'video') AND NOT m.draft
     WHERE l.teacher_id = ${teacherId}
       AND l.student_id = ${studentId}
       AND ${LIVE_LESSON}
@@ -91,6 +93,16 @@ export async function gameOpenedTo(
   return rows.map((r) => ({ studentId: r.studentId, name: nameOf(r.firstName, r.lastName), until: r.until }));
 }
 
+/** What is open to this student at `now`: the access joined with the material, of one kind or any. */
+function openMaterials(teacherId: string, studentId: string, now: Date, kind?: "game" | "video") {
+  return and(
+    eq(gameAccess.teacherId, teacherId),
+    eq(gameAccess.studentId, studentId),
+    gt(gameAccess.until, now),
+    kind ? eq(libraryMaterial.kind, kind) : undefined,
+  );
+}
+
 /** The games open to this student at `now`, by title. */
 export async function studentGames(
   db: Database,
@@ -102,7 +114,7 @@ export async function studentGames(
     .select({ id: libraryMaterial.id, title: libraryMaterial.title })
     .from(gameAccess)
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
-    .where(and(eq(gameAccess.teacherId, teacherId), eq(gameAccess.studentId, studentId), gt(gameAccess.until, now)))
+    .where(openMaterials(teacherId, studentId, now, "game"))
     .orderBy(asc(libraryMaterial.title));
 }
 
@@ -118,13 +130,51 @@ export async function studentGame(
     .select({ id: libraryMaterial.id, title: libraryMaterial.title })
     .from(gameAccess)
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
-    .where(
-      and(
-        eq(gameAccess.teacherId, teacherId),
-        eq(gameAccess.studentId, studentId),
-        eq(gameAccess.materialId, id),
-        gt(gameAccess.until, now),
-      ),
-    );
+    .where(and(openMaterials(teacherId, studentId, now, "game"), eq(gameAccess.materialId, id)));
   return row ?? null;
+}
+
+export type StudentVideo = { id: string; title: string; link: string | null; hasFile: boolean };
+
+const videoColumns = {
+  id: libraryMaterial.id,
+  title: libraryMaterial.title,
+  link: libraryMaterial.url,
+  hasFile: sql<boolean>`${libraryMaterial.blobId} is not null`,
+};
+
+/** The videos open to this student at `now`, by title (#158): an own file, or a link. */
+export async function studentVideos(db: Database, teacherId: string, studentId: string, now: Date = new Date()): Promise<StudentVideo[]> {
+  return db
+    .select(videoColumns)
+    .from(gameAccess)
+    .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
+    .where(openMaterials(teacherId, studentId, now, "video"))
+    .orderBy(asc(libraryMaterial.title));
+}
+
+/** One video open to this student at `now`, or null: missing, not opened, closed and another's are the same. */
+export async function studentVideo(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  id: string,
+  now: Date = new Date(),
+): Promise<StudentVideo | null> {
+  const [row] = await db
+    .select(videoColumns)
+    .from(gameAccess)
+    .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
+    .where(and(openMaterials(teacherId, studentId, now, "video"), eq(gameAccess.materialId, id)));
+  return row ?? null;
+}
+
+/** Whether this game or video is open to this student at `now`: their file is served to them (files.ts). */
+export async function isOpenToStudent(db: Database, teacherId: string, studentId: string, id: string, now: Date = new Date()) {
+  const [row] = await db
+    .select({ id: gameAccess.materialId })
+    .from(gameAccess)
+    .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
+    .where(and(openMaterials(teacherId, studentId, now), eq(gameAccess.materialId, id)));
+  return row !== undefined;
 }

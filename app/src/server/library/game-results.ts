@@ -27,7 +27,7 @@ export async function saveGameResult(
     INSERT INTO game_result (teacher_id, student_id, material_id, lesson_id, title, answers)
     SELECT a.teacher_id, a.student_id, a.material_id, a.lesson_id, m.title, ${JSON.stringify(answers)}::jsonb
     FROM game_access AS a
-    JOIN library_material AS m ON m.id = a.material_id AND m.teacher_id = a.teacher_id
+    JOIN library_material AS m ON m.id = a.material_id AND m.teacher_id = a.teacher_id AND m.kind = 'game'
     WHERE a.teacher_id = ${teacherId}
       AND a.student_id = ${studentId}
       AND a.material_id = ${materialId}

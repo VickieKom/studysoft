@@ -36,7 +36,9 @@ export default async function MaterialPage({ params }: Props) {
     throw error;
   }
   const isGame = material.kind === "game";
-  const [inLesson, opened] = isGame
+  // A game or a video is opened to a student during a lesson (#118, #158).
+  const opensToStudent = isGame || material.kind === "video";
+  const [inLesson, opened] = opensToStudent
     ? await Promise.all([caller.teacher.library.studentsInLesson(), caller.teacher.library.openedTo({ id })])
     : [[], null];
 
@@ -70,14 +72,14 @@ export default async function MaterialPage({ params }: Props) {
           <LibraryDelete id={material.id} />
         </div>
       </header>
-      {isGame && (
+      {opensToStudent && (
         <div className="flex flex-col gap-2">
           {opened?.students.map((s) => (
             <p key={s.studentId} className="text-small text-text-secondary">
-              Открыта ученику: {s.name} до {timeIn(new Date(s.until), opened.timeZone)}
+              {isGame ? "Открыта" : "Открыто"} ученику: {s.name} до {timeIn(new Date(s.until), opened.timeZone)}
             </p>
           ))}
-          <LibraryOpenToStudent id={material.id} students={inLesson} />
+          <LibraryOpenToStudent id={material.id} students={inLesson} kind={isGame ? "game" : "video"} />
         </div>
       )}
       {material.questions ? (
