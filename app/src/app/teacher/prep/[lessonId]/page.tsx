@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LaunchLesson } from "@/components/launch-lesson";
 import { LessonPlanEditor } from "@/components/lesson-plan-editor";
 import { formatPastDate } from "@/domain/homework";
 import { dateIn, timeIn } from "@/domain/schedule";
@@ -45,6 +46,9 @@ export default async function LessonPrepPage({ params }: Props) {
           {formatPastDate(dateIn(moment, timeZone))}, {timeIn(moment, timeZone)} · {prep.durationMinutes} мин
           {prep.textbookTitle && ` · ${prep.textbookTitle}`}
         </p>
+        <div className="mt-2">
+          <LaunchLesson lessonId={prep.lessonId} />
+        </div>
         <p className="text-small">
           {prep.plan ? <span className="text-green-700">подготовлен</span> : <span className="text-text-secondary">не подготовлен</span>}
         </p>

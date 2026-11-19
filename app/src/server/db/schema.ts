@@ -820,3 +820,23 @@ export const lessonPlan = pgTable("lesson_plan", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+// The lesson mode's state (#152, architecture decision 9): one document of
+// what is on the stage — the stages, the current one, the book's page and
+// layout, the track — saved by the panel every few seconds, so a stage
+// closed or a browser lost mid-lesson comes back where it was. `revision`
+// is the panel's own counter: an older save arriving late never replaces a
+// newer one. The note is the teacher's only and never reaches the stage.
+export const lessonState = pgTable("lesson_state", {
+  lessonId: uuid("lesson_id")
+    .primaryKey()
+    .references(() => lesson.id),
+  teacherId: uuid("teacher_id")
+    .notNull()
+    .references(() => teacher.id),
+  state: jsonb("state").notNull(),
+  revision: bigint("revision", { mode: "number" }).notNull().default(0),
+  note: text("note").notNull().default(""),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});

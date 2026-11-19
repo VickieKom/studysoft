@@ -211,6 +211,13 @@
       "when": 1795089686388,
       "tag": "0029_lesson_prep",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795089708327,
+      "tag": "0030_lesson_state",
+      "breakpoints": true
     }
   ]
 }
