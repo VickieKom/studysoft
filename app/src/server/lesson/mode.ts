@@ -12,11 +12,13 @@ import {
   type LessonBook,
   type LessonState,
   lessonStateSchema,
+  type StageHomework,
 } from "../../domain/lesson-state";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
 import { lessonState, libraryMaterial } from "../db/schema";
 import { findTextbook } from "../library/textbooks";
+import { stageHomework, studentHomeworkIds } from "./homework";
 import { findPreparation, ownLesson, stageMaterials, studentWithTextbook } from "./prep";
 
 /** The longest note: a lesson's worth of jottings. */
@@ -32,6 +34,8 @@ export type LessonResources = {
   lessons: BookLesson[];
   tracks: { name: string; url: string }[];
   materials: StageMaterial[];
+  /** The submitted homework the plan's homework stages review (#153). The stage is the teacher's window: the keys are shown only when she says. */
+  homework: StageHomework[];
 };
 
 /** The student's textbook as the lesson shows it: the rendered books, the confirmed lessons and the tracks. */
@@ -68,11 +72,25 @@ export async function lessonResources(db: Database, teacherId: string, lessonId:
   const prep = await findPreparation(db, teacherId, lessonId);
   if (!prep) return null;
   const book = await textbookResources(db, teacherId, prep.studentId);
-  const resources: LessonResources = { books: book.books, lessons: book.lessons, tracks: book.tracks, materials: await materials(db, teacherId) };
-  // The approved plan; without one, the plan the preparation proposes (product owner, 2026-11-19).
-  const plan: LessonPlan = prep.plan ?? prep.proposed;
+  // The approved plan; without one, the plan the preparation proposes (product owner, 2026-11-19). Either way
+  // with the waiting homework's review first, unless she saved the plan after it was submitted (#153).
+  const plan: LessonPlan = prep.launch;
+  // The kept state may hold a homework stage the plan no longer has: it is shown all the same.
+  const [keptRow] = await db.select({ state: lessonState.state }).from(lessonState).where(eq(lessonState.lessonId, lessonId));
+  const keptStages = lessonStateSchema.safeParse(keptRow?.state);
+  const homeworkIds = [
+    ...new Set([...plan.stages, ...(keptStages.success ? keptStages.data.stages : [])].flatMap((s) => (s.type === "homework" ? [s.homeworkId] : []))),
+  ];
+  const resources: LessonResources = {
+    books: book.books,
+    lessons: book.lessons,
+    tracks: book.tracks,
+    materials: await materials(db, teacherId),
+    homework: await stageHomework(db, teacherId, prep.studentId, homeworkIds),
+  };
   return {
     lessonId,
+    studentId: prep.studentId,
     firstName: prep.firstName,
     startsAt: prep.startsAt,
     durationMinutes: prep.durationMinutes,
@@ -117,6 +135,13 @@ export async function lessonStage(db: Database, teacherId: string, lessonId: str
   return { lessonId, resources: found.resources, kept };
 }
 
+/** The homework a state's stages name that is not the student's own. */
+async function foreignHomework(db: Database, teacherId: string, studentId: string, state: LessonState): Promise<string[]> {
+  const ids = state.stages.flatMap((s) => (s.type === "homework" ? [s.homeworkId] : []));
+  const own = await studentHomeworkIds(db, teacherId, studentId, ids);
+  return state.stages.flatMap((s, i) => (s.type === "homework" && !own.has(s.homeworkId) ? [`этап ${i + 1}: такой домашки у ученика нет`] : []));
+}
+
 /** The state checked against what the lesson can show: the state, or the problems in words. */
 function checkState(input: unknown, resources: LessonResources): { ok: true; state: LessonState } | { ok: false; errors: string[] } {
   const parsed = lessonStateSchema.safeParse(input);
@@ -153,6 +178,8 @@ export async function saveLessonState(
   if (!found) return "not_found";
   const checked = checkState(input, found.resources);
   if (!checked.ok) return { errors: checked.errors };
+  const foreign = await foreignHomework(db, teacherId, found.studentId, checked.state);
+  if (foreign.length > 0) return { errors: foreign };
   const rows = await db
     .insert(lessonState)
     .values({ lessonId, teacherId, state: checked.state, revision })

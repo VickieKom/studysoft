@@ -31,7 +31,6 @@ export default async function LessonPrepPage({ params }: Props) {
   }
   const { timeZone } = await caller.teacher.settings.get();
   const moment = new Date(prep.startsAt);
-  const start = prep.draft ?? prep.plan ?? prep.proposed;
 
   return (
     <main className="flex max-w-3xl flex-col gap-6">
@@ -66,13 +65,15 @@ export default async function LessonPrepPage({ params }: Props) {
         // Kept across the refresh after saving, so «План сохранён» stays; a full reload starts it again from the server.
         key={prep.lessonId}
         lessonId={prep.lessonId}
-        start={start}
+        start={prep.start}
         fromAssistant={prep.draft !== null}
         revision={prep.revision}
         lessons={prep.lessons}
         materials={prep.materials}
         homeworkDrafts={prep.homeworkDrafts}
         homeworkId={prep.homeworkId}
+        waitingHomework={prep.waitingHomework}
+        stageHomework={prep.stageHomework}
       />
     </main>
   );

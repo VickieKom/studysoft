@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   bookStageLabel,
+  type HomeworkStage,
+  homeworkStageLabel,
+  isMistake,
   type KeptState,
   type LessonMessage,
   lessonChannel,
@@ -13,6 +16,9 @@ import {
   pageIn,
   pageLabel,
   shownPages,
+  type StageHomework,
+  stageKey,
+  visibleTasks,
 } from "@/domain/lesson-state";
 import type { LessonResourcesView } from "./lesson-panel";
 
@@ -39,7 +45,8 @@ function Tick() {
 /**
  * The stage of the lesson mode (#152): the window the teacher shows in the
  * video call, so everything here is seen by the student. Only lesson
- * content — the stages as tabs, the warm-up, the book's pages, the track —
+ * content — the stages as tabs, the warm-up, the book's pages, the track,
+ * the homework under review (#153) —
  * never the plan's minutes, the note or the platform's menu. It follows the
  * panel over BroadcastChannel; opened again, it starts from the state this
  * browser kept, or the server's — so it is rendered in the browser alone
@@ -101,6 +108,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
   const current = state.stages[state.current];
   const lessonOf = (id: string) => resources.lessons.find((l) => l.id === id);
   const materialOf = (id: string) => resources.materials.find((m) => m.id === id);
+  const homeworkOf = (id: string) => resources.homework.find((h) => h.id === id);
 
   return (
     <div className="flex h-screen gap-4 bg-surface p-4">
@@ -108,7 +116,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
         <div role="tablist" aria-label="Этапы урока" className="flex flex-wrap gap-2">
           {state.stages.map((stage, i) => (
             <span
-              key={`${i}-${stage.type === "book" ? stage.lessonId : stage.materialId}`}
+              key={`${i}-${stageKey(stage)}`}
               role="tab"
               aria-selected={i === state.current}
               className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-small font-semibold ${
@@ -116,7 +124,11 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
               }`}
             >
               {stage.done && i !== state.current && <Tick />}
-              {stage.type === "book" ? bookStageLabel(lessonOf(stage.lessonId)) : (materialOf(stage.materialId)?.title ?? "")}
+              {stage.type === "book"
+                ? bookStageLabel(lessonOf(stage.lessonId))
+                : stage.type === "homework"
+                  ? homeworkStageLabel(homeworkOf(stage.homeworkId))
+                  : (materialOf(stage.materialId)?.title ?? "")}
             </span>
           ))}
         </div>
@@ -142,6 +154,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
                 </div>
               );
             })()}
+          {current?.type === "homework" && <HomeworkReview stage={current} homework={homeworkOf(current.homeworkId)} />}
           {current?.type === "material" &&
             (() => {
               const material = materialOf(current.materialId);
@@ -181,5 +194,72 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
         </button>
       )}
     </div>
+  );
+}
+
+const verdictText = (verdict: boolean | null) => (verdict === null ? "Ждёт проверки" : verdict ? "Верно" : "Неверно");
+const verdictClass = (verdict: boolean | null) => (verdict === null ? "text-text-secondary" : verdict ? "text-green-700" : "text-danger");
+
+/**
+ * The homework under review (#153): the score and the child's answers,
+ * mistakes highlighted, open answers with the teacher's marks, recordings that
+ * play. A task's right answer appears only once the teacher shows it from the
+ * panel; the filter is hers too.
+ */
+function HomeworkReview({ stage, homework }: { stage: HomeworkStage; homework: StageHomework | undefined }) {
+  if (!homework) return null;
+  const tasks = visibleTasks(stage, homework);
+  return (
+    <section aria-label="Домашка" className="flex flex-col gap-4 p-2">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-h2 font-semibold">{homework.title}</h2>
+        <p className="text-h3 font-semibold">
+          {homework.correct} верно, {homework.wrong} неверно
+        </p>
+      </header>
+      {tasks.length === 0 && <p className="text-h3 text-green-700">Ошибок нет</p>}
+      <ol className="flex flex-col gap-3">
+        {tasks.map((task) => {
+          const shown = stage.shown.includes(task.index);
+          return (
+            <li
+              key={task.index}
+              className={`flex flex-col gap-2 rounded-card border-2 p-4 text-h3 ${isMistake(task) ? "border-danger bg-danger-bg" : "border-border"}`}
+            >
+              <p className="font-semibold">
+                {task.index + 1}. {task.prompt}
+              </p>
+              {task.passage && <p className="whitespace-pre-line text-body text-text-secondary">{task.passage}</p>}
+              {task.sentences ? (
+                <ol className="flex flex-col gap-1">
+                  {task.sentences.map((sentence, i) => (
+                    <li key={i} className="flex flex-wrap gap-x-3">
+                      <span>{sentence.answer ?? "Без ответа"}</span>
+                      <span className={verdictClass(sentence.verdict)}>{verdictText(sentence.verdict)}</span>
+                      {shown && !sentence.verdict && <span className="text-green-700">Правильный ответ: {sentence.key}</span>}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <>
+                  {task.answer !== null && <p>{task.answer}</p>}
+                  {task.answer === null && !task.file && <p className="text-text-secondary">Без ответа</p>}
+                  {task.file?.kind === "audio" && (
+                    // biome-ignore lint/a11y/useMediaCaption: the child's own recording has no captions
+                    <audio controls preload="none" src={task.file.url} className="w-full max-w-md" />
+                  )}
+                  {task.file?.kind === "image" && (
+                    // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
+                    <img src={task.file.url} alt={`Фото ответа к заданию ${task.index + 1}`} className="max-h-80 w-auto rounded-control object-contain" />
+                  )}
+                  <p className={`font-semibold ${verdictClass(task.verdict)}`}>{verdictText(task.verdict)}</p>
+                  {shown && task.key !== null && <p className="text-green-700">Правильный ответ: {task.key}</p>}
+                </>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }

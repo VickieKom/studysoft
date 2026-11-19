@@ -108,7 +108,7 @@ export const planInput = {
   plan: z
     .record(z.string(), z.unknown())
     .describe(
-      '{ stages: [ { type: "book", lessonId: <a lesson id from read_lesson_plan>, skip: "exercises to skip, e.g. 3, 5", minutes }, { type: "material", materialId: <from list_lesson_materials>, minutes } ] }, in order',
+      '{ stages: [ { type: "book", lessonId: <a lesson id from read_lesson_plan>, skip: "exercises to skip, e.g. 3, 5", minutes }, { type: "material", materialId: <from list_lesson_materials>, minutes }, { type: "homework", homeworkId: <as in the proposed plan>, minutes } ] }, in order',
     ),
 };
 
