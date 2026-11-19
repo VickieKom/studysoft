@@ -67,6 +67,8 @@ test("reissuing the student link ends the old link and the sessions opened from 
 
   await page.goto(card);
   await control(page, "Перевыпустить ссылку ученика").click();
+  // Copied only once the reissue is saved: a slow runner would otherwise copy the old link.
+  await expect(page.getByText("Старая ссылка больше не действует")).toBeVisible();
   const newLink = await copyLink(page, "Ссылка ученика");
   expect(newLink).not.toBe(oldLink);
 
@@ -95,6 +97,8 @@ test("the parent link is reissued separately", async ({ page, browser }) => {
 
   await page.goto(card);
   await control(page, "Перевыпустить ссылку родителя").click();
+  // Copied only once the reissue is saved: a slow runner would otherwise copy the old link.
+  await expect(page.getByText("Старая ссылка больше не действует")).toBeVisible();
   const newParentLink = await copyLink(page, "Ссылка родителя");
   expect(newParentLink).not.toBe(oldParentLink);
   expect(await copyLink(page, "Ссылка ученика")).toBe(studentLink);
