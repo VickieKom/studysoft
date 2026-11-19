@@ -14,6 +14,7 @@ import {
 } from "../../../domain/library";
 import { LEVELS } from "../../../domain/student";
 import {
+  addToLibrary,
   createGame,
   createPictureWarmup,
   createQuestionsWarmup,
@@ -21,6 +22,7 @@ import {
   createVideoLink,
   deleteMaterial,
   findMaterial,
+  listDrafts,
   listMaterials,
   type Material,
   materialTopics,
@@ -34,7 +36,7 @@ import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
-const tags = z.object({
+export const tags = z.object({
   title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
   level: z.enum(LEVELS),
   topic: z
@@ -46,10 +48,10 @@ const tags = z.object({
 });
 
 /** The lines of the questions field as sent; checked by `checkQuestions`, so the teacher reads a plain message. */
-const questions = z.array(z.string().max(10 * MAX_QUESTION_LENGTH)).max(10 * MAX_QUESTIONS);
+export const questions = z.array(z.string().max(10 * MAX_QUESTION_LENGTH)).max(10 * MAX_QUESTIONS);
 
 /** A questions warm-up's questions: each trimmed, empty lines dropped; 1 to 30, each at most 300 characters. */
-function checkQuestions(lines: string[]): string[] {
+export function checkQuestions(lines: string[]): string[] {
   const list = lines.map((q) => q.trim()).filter((q) => q !== "");
   const refuse = (message: string) => new TRPCError({ code: "BAD_REQUEST", message });
   if (list.length === 0) throw refuse("Нужен хотя бы один вопрос");
@@ -62,7 +64,7 @@ function checkQuestions(lines: string[]): string[] {
  * The schema lets through twice the limit, so a picture a little over 2 MB
  * gets the size message from the check rather than a schema error.
  */
-const MAX_PICTURE_BASE64 = Math.ceil((2 * MAX_PICTURE_BYTES) / 3) * 4;
+export const MAX_PICTURE_BASE64 = Math.ceil((2 * MAX_PICTURE_BYTES) / 3) * 4;
 
 const material = z
   .object({
@@ -78,6 +80,8 @@ const material = z
     warmup: z.boolean(),
     // A video link's address; null for every other material.
     url: z.string().nullable(),
+    /** Saved by the assistant and not yet in the library (#120). */
+    draft: z.boolean(),
   })
   .strict();
 
@@ -92,6 +96,7 @@ const output = (m: Material) => ({
   questions: m.questions,
   warmup: m.warmup,
   url: m.url,
+  draft: m.draft,
 });
 
 /** «Библиотека» (#115): the teacher's games, warm-ups (#116) and videos (#117). */
@@ -111,6 +116,18 @@ export const libraryRouter = router({
       topics: await materialTopics(ctx.db, ctx.teacherId),
       total: (await listMaterials(ctx.db, ctx.teacherId, {})).length,
     })),
+
+  /** «От ассистента» (#120): the assistant's drafts, not yet in the library. */
+  drafts: teacherProcedure.output(z.array(material)).query(async ({ ctx }) => (await listDrafts(ctx.db, ctx.teacherId)).map(output)),
+
+  /** «Добавить в библиотеку» on a draft's page (#120). Teacher only: no agent procedure adds a draft. */
+  addToLibrary: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!(await addToLibrary(ctx.db, ctx.teacherId, input.id))) throw notFound();
+      return { id: input.id };
+    }),
 
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))

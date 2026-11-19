@@ -1,7 +1,9 @@
 // The teacher's library (#115; product requirements, Library): games and
 // warm-ups (#116) and videos (#117). Every material belongs to one teacher;
-// another teacher's material is the same as a missing one.
-import { and, asc, desc, eq, isNotNull, or } from "drizzle-orm";
+// another teacher's material is the same as a missing one. The assistant saves
+// games and warm-ups as drafts, which stay out of the library until the
+// teacher adds them (#120; AGENTS.md, rule 5).
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { type AgeGroup, MAX_GAME_BYTES, MAX_PICTURE_BYTES, MAX_URL_LENGTH, type MaterialKind } from "../../domain/library";
 import type { Level } from "../../domain/student";
 import { type BlobReader, openBlob, saveBlob } from "../blob/store";
@@ -21,6 +23,8 @@ export type Material = MaterialTags & {
   url: string | null;
   /** Whether a file is served for it: a game's page, a warm-up's picture or an own video. */
   hasFile: boolean;
+  /** Saved by the assistant and not yet added to the library (#120). */
+  draft: boolean;
   createdAt: Date;
 };
 
@@ -34,6 +38,7 @@ const columns = {
   questions: libraryMaterial.questions,
   warmup: libraryMaterial.warmup,
   url: libraryMaterial.url,
+  draft: libraryMaterial.draft,
   blobId: libraryMaterial.blobId,
   createdAt: libraryMaterial.createdAt,
 };
@@ -55,6 +60,13 @@ export function looksLikeHtml(bytes: Uint8Array): boolean {
   return /^\s*(﻿)?\s*(<!--[\s\S]*?-->\s*)*<(!doctype\s+html|html|head|body)\b/i.test(text);
 }
 
+/** Checks a game's HTML and stores it: the file's id, or why it is refused. Used for uploads and the assistant's drafts. */
+export async function storeGame(db: Database, teacherId: string, html: Uint8Array): Promise<string | "too_big" | "not_html"> {
+  if (html.byteLength > MAX_GAME_BYTES) return "too_big";
+  if (!looksLikeHtml(html)) return "not_html";
+  return saveBlob(db, teacherId, html, "text/html; charset=utf-8");
+}
+
 /** Saves a game: the HTML goes to the blob store first, then the row that refers to it. */
 export async function createGame(
   db: Database,
@@ -62,9 +74,8 @@ export async function createGame(
   tags: MaterialTags,
   html: Uint8Array,
 ): Promise<{ id: string } | "too_big" | "not_html"> {
-  if (html.byteLength > MAX_GAME_BYTES) return "too_big";
-  if (!looksLikeHtml(html)) return "not_html";
-  const blobId = await saveBlob(db, teacherId, html, "text/html; charset=utf-8");
+  const blobId = await storeGame(db, teacherId, html);
+  if (blobId === "too_big" || blobId === "not_html") return blobId;
   const [row] = await db
     .insert(libraryMaterial)
     .values({ teacherId, kind: "game", ...tags, blobId })
@@ -82,6 +93,14 @@ export function pictureType(bytes: Uint8Array): "image/png" | "image/jpeg" | "im
   return null;
 }
 
+/** Checks a warm-up's picture and stores it: the file's id, or why it is refused. Used for uploads and the assistant's drafts. */
+export async function storePicture(db: Database, teacherId: string, picture: Uint8Array): Promise<string | "too_big" | "not_picture"> {
+  if (picture.byteLength > MAX_PICTURE_BYTES) return "too_big";
+  const type = pictureType(picture);
+  if (!type) return "not_picture";
+  return saveBlob(db, teacherId, picture, type);
+}
+
 /** Saves a picture warm-up: the picture goes to the blob store first, then the row. */
 export async function createPictureWarmup(
   db: Database,
@@ -89,10 +108,8 @@ export async function createPictureWarmup(
   tags: MaterialTags,
   picture: Uint8Array,
 ): Promise<{ id: string } | "too_big" | "not_picture"> {
-  if (picture.byteLength > MAX_PICTURE_BYTES) return "too_big";
-  const type = pictureType(picture);
-  if (!type) return "not_picture";
-  const blobId = await saveBlob(db, teacherId, picture, type);
+  const blobId = await storePicture(db, teacherId, picture);
+  if (blobId === "too_big" || blobId === "not_picture") return blobId;
   const [row] = await db
     .insert(libraryMaterial)
     .values({ teacherId, kind: "warmup", ...tags, blobId })
@@ -193,7 +210,7 @@ export async function createVideoFile(
 
 export type MaterialFilter = { kind?: MaterialKind; level?: Level; topic?: string; ageGroup?: AgeGroup };
 
-/** This teacher's materials matching the filter, newest first. */
+/** This teacher's materials in the library matching the filter, newest first; drafts are not in it. */
 export async function listMaterials(db: Database, teacherId: string, filter: MaterialFilter): Promise<Material[]> {
   const rows = await db
     .select(columns)
@@ -201,6 +218,7 @@ export async function listMaterials(db: Database, teacherId: string, filter: Mat
     .where(
       and(
         eq(libraryMaterial.teacherId, teacherId),
+        eq(libraryMaterial.draft, false),
         filter.kind === "warmup"
           ? // A game marked as a warm-up is listed under warm-ups too.
             or(eq(libraryMaterial.kind, "warmup"), and(eq(libraryMaterial.kind, "game"), eq(libraryMaterial.warmup, true)))
@@ -221,9 +239,78 @@ export async function materialTopics(db: Database, teacherId: string): Promise<s
   const rows = await db
     .selectDistinct({ topic: libraryMaterial.topic })
     .from(libraryMaterial)
-    .where(and(eq(libraryMaterial.teacherId, teacherId), isNotNull(libraryMaterial.topic)))
+    .where(and(eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.draft, false), isNotNull(libraryMaterial.topic)))
     .orderBy(asc(libraryMaterial.topic));
   return rows.map((r) => r.topic).filter((t): t is string => t !== null);
+}
+
+/** The assistant's drafts of this teacher, newest first: «От ассистента» above the library (#120). */
+export async function listDrafts(db: Database, teacherId: string): Promise<Material[]> {
+  const rows = await db
+    .select(columns)
+    .from(libraryMaterial)
+    .where(and(eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.draft, true)))
+    .orderBy(desc(libraryMaterial.createdAt));
+  return rows.map(toMaterial);
+}
+
+/** What the assistant saves: a game's file, a picture warm-up's picture, or a questions warm-up's questions. */
+export type DraftContent =
+  | { kind: "game"; blobId: string }
+  | { kind: "warmup"; blobId: string }
+  | { kind: "warmup"; questions: string[] };
+
+/**
+ * Saves the assistant's draft (#120). With `replace`, the draft with that id
+ * is replaced if it is this teacher's, still a draft, of the same kind and
+ * not edited by her: the conditions are part of the write, so an edit or
+ * «Добавить в библиотеку» committed meanwhile wins and a new draft is made
+ * instead. Returns the id of the draft written.
+ */
+export async function saveDraft(
+  db: Database,
+  teacherId: string,
+  tags: MaterialTags,
+  content: DraftContent,
+  replace?: string,
+): Promise<string> {
+  const values = {
+    ...tags,
+    blobId: "blobId" in content ? content.blobId : null,
+    questions: "questions" in content ? content.questions : null,
+  };
+  if (replace) {
+    const [replaced] = await db
+      .update(libraryMaterial)
+      .set(values)
+      .where(
+        and(
+          eq(libraryMaterial.id, replace),
+          eq(libraryMaterial.teacherId, teacherId),
+          eq(libraryMaterial.kind, content.kind),
+          eq(libraryMaterial.draft, true),
+          isNull(libraryMaterial.teacherEditedAt),
+        ),
+      )
+      .returning({ id: libraryMaterial.id });
+    if (replaced) return replaced.id;
+  }
+  const [row] = await db
+    .insert(libraryMaterial)
+    .values({ teacherId, kind: content.kind, ...values, draft: true })
+    .returning({ id: libraryMaterial.id });
+  if (!row) throw new Error("saveDraft: insert returned no row");
+  return row.id;
+}
+
+/** «Добавить в библиотеку» (#120): a draft of this teacher becomes a regular material. False when there is no such material. */
+export async function addToLibrary(db: Database, teacherId: string, id: string): Promise<boolean> {
+  const rows = await db
+    .update(libraryMaterial)
+    .set({ draft: false })
+    .where(and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId)))
+    .returning({ id: libraryMaterial.id });
+  return rows.length === 1;
 }
 
 /** One material of this teacher, or null. */
@@ -251,7 +338,9 @@ export async function updateMaterial(db: Database, teacherId: string, id: string
   const { warmup, questions, ...tags } = changes;
   const own = and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId));
   return db.transaction(async (tx) => {
-    const rows = await tx.update(libraryMaterial).set(tags).where(own).returning({ id: libraryMaterial.id });
+    // Her edit of a draft keeps the assistant from replacing it (#120).
+    const edited = { teacherEditedAt: sql`CASE WHEN ${libraryMaterial.draft} THEN now() ELSE ${libraryMaterial.teacherEditedAt} END` };
+    const rows = await tx.update(libraryMaterial).set({ ...tags, ...edited }).where(own).returning({ id: libraryMaterial.id });
     if (rows.length === 0) return false;
     if (warmup !== undefined) {
       await tx.update(libraryMaterial).set({ warmup }).where(and(own, eq(libraryMaterial.kind, "game")));

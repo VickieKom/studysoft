@@ -13,7 +13,11 @@ const pick = <T extends string>(values: readonly T[], value: string | undefined)
 
 const tab = "rounded-control px-3 py-1.5 text-small font-semibold";
 
-/** «Библиотека» (#115): the teacher's materials by type, level, topic and age. */
+/**
+ * «Библиотека» (#115): the teacher's materials by type, level, topic and age.
+ * The assistant's drafts (#120) are listed above it under «От ассистента»,
+ * never in the list or its filters, and the block is gone when there are none.
+ */
 export default async function LibraryPage({ searchParams }: Props) {
   const params = await searchParams;
   const filter = {
@@ -24,6 +28,7 @@ export default async function LibraryPage({ searchParams }: Props) {
   };
   const { caller } = await teacherCaller();
   const { materials, topics, total } = await caller.teacher.library.list(filter);
+  const drafts = await caller.teacher.library.drafts();
   const tabs: { label: string; href: string; current: boolean }[] = [
     { label: "Все", href: "/teacher/library", current: !filter.kind },
     ...MATERIAL_KINDS.map((kind) => ({
@@ -44,6 +49,24 @@ export default async function LibraryPage({ searchParams }: Props) {
           Загрузить
         </Link>
       </header>
+      {drafts.length > 0 && (
+        <section aria-labelledby="drafts-heading" className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">
+          <h2 id="drafts-heading" className="text-h3 font-semibold">
+            От ассистента
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {drafts.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center gap-3">
+                <span className="font-semibold">{d.title}</span>
+                <span className="text-caption text-text-secondary">{MATERIAL_KIND_FILTERS[d.kind]}</span>
+                <Link href={`/teacher/library/${d.id}`} className="text-small text-green-600 hover:text-green-700">
+                  Открыть
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {total === 0 ? (
         <div className="rounded-card border border-border bg-surface px-6 py-12 text-center text-text-secondary">
           В библиотеке пока ничего нет

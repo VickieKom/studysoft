@@ -82,4 +82,22 @@ describe("assistant tools", () => {
     expect(result.content[0]!.text).toMatch(/^invalid homework/);
     expect(result.content[0]!.text).toContain("Задание 2, поле type");
   });
+
+  it("save a game draft to the library and pass a refusal back as a refused game", async () => {
+    const seen: { url?: string; auth?: string | null } = {};
+    const tags = { title: "Zoo quiz", level: "A2" as const, topic: "animals", ageGroup: "younger" as const };
+    const saved = createTools(platformAnswering(200, { result: { data: { id: "00000000-0000-4000-8000-000000000003" } } }, seen));
+    const ok = await saved.saveGameDraft({ ...tags, html: "<!doctype html><html></html>" });
+    expect(seen.url).toContain("/api/trpc/agent.saveGameDraft");
+    expect(JSON.parse(ok.content[0]!.text)).toMatchObject({ id: "00000000-0000-4000-8000-000000000003", status: "draft" });
+
+    const refused = createTools(
+      platformAnswering(400, {
+        error: { message: "Это не HTML-страница", code: -32600, data: { code: "BAD_REQUEST", httpStatus: 400 } },
+      }),
+    );
+    const result = await refused.saveGameDraft({ ...tags, html: "not html" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/^game refused, nothing was saved/);
+  });
 });
