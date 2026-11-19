@@ -1,13 +1,18 @@
+import { readdir } from "node:fs/promises";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closeDb } from "../../db/client";
+import { MAX_VIDEO_BYTES } from "../../../domain/library";
+import { closeDb, db } from "../../db/client";
+import { blob, libraryMaterial } from "../../db/schema";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
-import { createServerCaller, handleLibraryFileRequest } from "../index";
+import { createServerCaller, handleLibraryFileRequest, handleLibraryVideoUpload } from "../index";
 
 // «Библиотека» (#115): games with tags, served sandboxed to their teacher;
-// warm-ups, a picture or a list of questions (#116). The games and pictures
-// are synthetic, written here. Each test filters by a topic of
-// its own, so materials made by the other tests never get in the way.
+// warm-ups, a picture or a list of questions (#116), and videos (#117), a link
+// or an own file uploaded as a stream. The games, pictures and video heads are
+// synthetic, written here. Each test filters by a topic of its own, so
+// materials made by the other tests never get in the way.
 
 const [teacherA, teacherB] = seedTeachers as [(typeof seedTeachers)[number], (typeof seedTeachers)[number]];
 
@@ -31,8 +36,48 @@ async function fetchFile(headers: Headers, id: string, extra: Record<string, str
     type: response.headers.get("Content-Type"),
     csp: response.headers.get("Content-Security-Policy"),
     etag: response.headers.get("ETag"),
+    range: response.headers.get("Content-Range"),
+    length: response.headers.get("Content-Length"),
     body: await response.text(),
   };
+}
+
+// An MP4 head followed by filler: the type is told by the first bytes only.
+const MP4_HEAD = Buffer.from("\0\0\0\x18ftypisom\0\0\0\0isommp41", "latin1");
+const video = (size: number) => {
+  const bytes = Buffer.alloc(size, 0x2e);
+  MP4_HEAD.copy(bytes);
+  for (let i = MP4_HEAD.byteLength; i < size; i++) bytes[i] = i % 251;
+  return bytes;
+};
+
+/** A body that arrives in chunks, as an upload from the browser does; counts how many were pulled. */
+function chunked(chunk: Uint8Array, count: number) {
+  const stats = { pulled: 0 };
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (stats.pulled === count) return controller.close();
+      stats.pulled += 1;
+      controller.enqueue(chunk);
+    },
+    // Nothing is pulled ahead: a chunk is read only when the reader asks for it.
+  }, { highWaterMark: 0 });
+  return { stream, stats };
+}
+
+async function upload(headers: Headers, body: BodyInit | null, extra: Record<string, string> = {}) {
+  const request = new Headers(headers);
+  for (const [k, v] of Object.entries(extra)) request.set(k, v);
+  const response = await handleLibraryVideoUpload(
+    new Request(`${env().APP_URL}/api/files/library`, { method: "PUT", headers: request, body, duplex: "half" } as RequestInit),
+  );
+  const text = await response.text();
+  return { status: response.status, body: (response.headers.get("Content-Type")?.includes("json") ? JSON.parse(text) : { text }) as { file?: string; error?: string } };
+}
+
+/** Files the store holds, finished or being written. */
+async function storedFiles() {
+  return (await readdir(env().FILES_DIR).catch(() => [] as string[])).sort();
 }
 
 beforeAll(async () => {
@@ -56,6 +101,7 @@ describe("teacher.library", () => {
       level: "A2",
       topic,
       ageGroup: "younger",
+      url: null,
       fileUrl: `/api/files/library/${id}`,
       questions: null,
       warmup: false,
@@ -218,5 +264,129 @@ describe("teacher.library", () => {
       otherTeacher.teacher.library.update({ id: talk.id, ...tags, title: "Theirs", questions: ["Theirs?"] }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await teacher.teacher.library.get({ id: talk.id })).toMatchObject({ title: "Talk 2", questions: ["One?", "Two?"] });
+  });
+
+  it("saves a video link with tags; it has no file, and a link that is not http or https is refused", async () => {
+    const topic = `links ${run}`;
+    const url = "https://video.example.test/watch?v=1";
+    const { id } = await teacher.teacher.library.addVideoLink({ title: "Explained", level: "B1", topic, ageGroup: "teens", url: ` ${url} ` });
+
+    expect(await teacher.teacher.library.get({ id })).toEqual({
+      id,
+      kind: "video",
+      title: "Explained",
+      level: "B1",
+      topic,
+      ageGroup: "teens",
+      url,
+      fileUrl: null,
+      // A video is neither a questions warm-up nor a game marked as one (#116).
+      questions: null,
+      warmup: false,
+    });
+    expect((await teacher.teacher.library.list({ kind: "video", topic })).materials.map((m) => m.id)).toEqual([id]);
+    expect((await teacher.teacher.library.list({ kind: "game", topic })).materials).toEqual([]);
+    // A link has no file: the same 404 as a missing one.
+    expect((await fetchFile(teacherHeaders, id)).status).toBe(404);
+
+    for (const bad of ["javascript:alert(1)", "data:text/html,hi", "video.example.test", ""]) {
+      await expect(
+        teacher.teacher.library.addVideoLink({ title: "Bad", level: "A1", topic, ageGroup: "younger", url: bad }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("http") });
+    }
+    expect((await teacher.teacher.library.list({ topic })).materials).toHaveLength(1);
+  });
+
+  it("keeps an uploaded video as it streams in, saves it with tags, and serves it whole and in byte ranges to its teacher only", async () => {
+    const topic = `clips ${run}`;
+    const bytes = video(300_000);
+    const { stream } = chunked(bytes, 1);
+    const uploaded = await upload(teacherHeaders, stream);
+    expect(uploaded.status).toBe(201);
+    const file = uploaded.body.file!;
+    const [row] = await db().select({ contentType: blob.contentType, size: blob.size }).from(blob).where(eq(blob.id, file));
+    expect(row).toEqual({ contentType: "video/mp4", size: bytes.byteLength });
+
+    const { id } = await teacher.teacher.library.addVideoFile({ title: "Mascot", level: "A1", topic, ageGroup: "younger", file });
+    expect(await teacher.teacher.library.get({ id })).toMatchObject({ kind: "video", url: null, fileUrl: `/api/files/library/${id}` });
+
+    const whole = await fetchFile(teacherHeaders, id);
+    expect(whole).toMatchObject({ status: 200, type: "video/mp4", length: String(bytes.byteLength) });
+    const wholeBytes = Buffer.from(await (await handleLibraryFileRequest(new Request(`${env().APP_URL}/x`, { headers: teacherHeaders }), id)).arrayBuffer());
+    expect(Buffer.compare(wholeBytes, bytes)).toBe(0);
+
+    const ranged = async (range: string) => {
+      const headers = new Headers(teacherHeaders);
+      headers.set("Range", range);
+      const response = await handleLibraryFileRequest(new Request(`${env().APP_URL}/x`, { headers }), id);
+      return { status: response.status, range: response.headers.get("Content-Range"), bytes: Buffer.from(await response.arrayBuffer()) };
+    };
+    const middle = await ranged("bytes=1000-1999");
+    expect(middle.status).toBe(206);
+    expect(middle.range).toBe(`bytes 1000-1999/${bytes.byteLength}`);
+    expect(Buffer.compare(middle.bytes, bytes.subarray(1000, 2000))).toBe(0);
+    const tail = await ranged("bytes=-10");
+    expect(tail.range).toBe(`bytes ${bytes.byteLength - 10}-${bytes.byteLength - 1}/${bytes.byteLength}`);
+    expect(Buffer.compare(tail.bytes, bytes.subarray(-10))).toBe(0);
+    expect((await ranged(`bytes=${bytes.byteLength}-`)).status).toBe(416);
+
+    // Another teacher and no session: the same 404 as a missing file, with or without a range.
+    const missing = await fetchFile(teacherHeaders, "00000000-0000-4000-8000-000000000000");
+    for (const headers of [otherHeaders, new Headers()]) {
+      for (const extra of [{}, { Range: "bytes=0-99" }] as Record<string, string>[]) {
+        const foreign = await fetchFile(headers, id, extra);
+        expect({ status: foreign.status, body: foreign.body }).toEqual({ status: 404, body: missing.body });
+      }
+    }
+    // Nor can another teacher upload as this one or save a material on this teacher's file.
+    expect((await upload(new Headers(), chunked(bytes, 1).stream)).status).toBe(404);
+    await expect(
+      otherTeacher.teacher.library.addVideoFile({ title: "Theirs", level: "A1", topic, ageGroup: "younger", file }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("refuses a video over 200 MB as it streams, without reading the rest, and keeps nothing", async () => {
+    const before = await storedFiles();
+    const blobsBefore = (await db().select({ id: blob.id }).from(blob)).length;
+    const chunk = video(1024 * 1024);
+    const count = MAX_VIDEO_BYTES / chunk.byteLength + 5;
+    // No Content-Length, as with a chunked upload: the limit is counted as the bytes arrive.
+    const body = chunked(chunk, count);
+    const refused = await upload(teacherHeaders, body.stream);
+    expect(refused).toEqual({ status: 413, body: { error: "Файл больше 200 МБ" } });
+    expect(body.stats.pulled).toBeLessThan(count);
+    // A declared length over the limit is refused before a byte is read.
+    const declared = chunked(chunk, 1);
+    expect((await upload(teacherHeaders, declared.stream, { "Content-Length": String(MAX_VIDEO_BYTES + 1) })).status).toBe(413);
+    expect(declared.stats.pulled).toBe(0);
+
+    expect(await storedFiles()).toEqual(before);
+    expect((await db().select({ id: blob.id }).from(blob)).length).toBe(blobsBefore);
+  });
+
+  it("refuses FLV and other formats with a message, and a material on a file that is not a video", async () => {
+    const topic = `formats ${run}`;
+    const before = await storedFiles();
+    for (const head of [
+      Buffer.from([0x46, 0x4c, 0x56, 0x01, 0x05, 0, 0, 0, 0x09, ...new Array(64).fill(0)]),
+      Buffer.from("RIFF\0\0\0\0AVI LIST".padEnd(80, "\0"), "latin1"),
+      Buffer.from(""),
+    ]) {
+      const refused = await upload(teacherHeaders, head);
+      expect(refused.status).toBe(415);
+      expect(refused.body.error).toContain("MP4");
+    }
+    expect(await storedFiles()).toEqual(before);
+
+    // A game's file is this teacher's, but not a video.
+    const { id: game } = await teacher.teacher.library.addGame({ title: "Game", level: "A1", topic, ageGroup: "younger", html: html("Game") });
+    const [row] = await db().select({ file: libraryMaterial.blobId }).from(libraryMaterial).where(eq(libraryMaterial.id, game));
+    await expect(
+      teacher.teacher.library.addVideoFile({ title: "Not a video", level: "A1", topic, ageGroup: "younger", file: row!.file! }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      teacher.teacher.library.addVideoFile({ title: "Nothing", level: "A1", topic, ageGroup: "younger", file: crypto.randomUUID() }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect((await teacher.teacher.library.list({ topic })).materials.map((m) => m.id)).toEqual([game]);
   });
 });

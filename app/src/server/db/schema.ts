@@ -439,12 +439,14 @@ export const libraryMaterial = pgTable(
     // Free text, as in the homework format; the filter offers the ones in use.
     topic: text("topic"),
     ageGroup: text("age_group").notNull(),
-    // A game's HTML or a picture warm-up's picture; a questions warm-up has no file (#116).
+    // A game's HTML, a picture warm-up's picture (#116) or an own video (#117); a questions warm-up and a video link have no file.
     blobId: uuid("blob_id").references(() => blob.id),
     // A questions warm-up's conversation questions, in order (#116).
     questions: text("questions").array(),
     // A game the teacher also uses as a warm-up: listed under both (#116).
     warmup: boolean("warmup").notNull().default(false),
+    // A video link, http or https (#117).
+    url: text("url"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

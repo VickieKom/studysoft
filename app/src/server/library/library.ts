@@ -1,12 +1,12 @@
 // The teacher's library (#115; product requirements, Library): games and
-// warm-ups (#116), videos next. Every material belongs to one teacher; another
-// teacher's material is the same as a missing one.
+// warm-ups (#116) and videos (#117). Every material belongs to one teacher;
+// another teacher's material is the same as a missing one.
 import { and, asc, desc, eq, isNotNull, or } from "drizzle-orm";
-import { type AgeGroup, MAX_GAME_BYTES, MAX_PICTURE_BYTES, type MaterialKind } from "../../domain/library";
+import { type AgeGroup, MAX_GAME_BYTES, MAX_PICTURE_BYTES, MAX_URL_LENGTH, type MaterialKind } from "../../domain/library";
 import type { Level } from "../../domain/student";
-import { readBlob, saveBlob } from "../blob/store";
+import { type BlobReader, openBlob, saveBlob } from "../blob/store";
 import type { Database } from "../db/client";
-import { libraryMaterial } from "../db/schema";
+import { blob, libraryMaterial } from "../db/schema";
 
 export type MaterialTags = { title: string; level: Level; topic: string | null; ageGroup: AgeGroup };
 
@@ -17,7 +17,9 @@ export type Material = MaterialTags & {
   questions: string[] | null;
   /** A game the teacher also uses as a warm-up. */
   warmup: boolean;
-  /** Whether a file is served for it: a game's page or a warm-up's picture. */
+  /** A video link's address; null for every other material. */
+  url: string | null;
+  /** Whether a file is served for it: a game's page, a warm-up's picture or an own video. */
   hasFile: boolean;
   createdAt: Date;
 };
@@ -31,6 +33,7 @@ const columns = {
   ageGroup: libraryMaterial.ageGroup,
   questions: libraryMaterial.questions,
   warmup: libraryMaterial.warmup,
+  url: libraryMaterial.url,
   blobId: libraryMaterial.blobId,
   createdAt: libraryMaterial.createdAt,
 };
@@ -110,6 +113,81 @@ export async function createQuestionsWarmup(
     .values({ teacherId, kind: "warmup", ...tags, questions })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createQuestionsWarmup: insert returned no row");
+  return row;
+}
+
+/**
+ * The type of a video file a browser plays, from its first bytes (#117): MP4
+ * and MOV are ISO boxes (MOV may also start with an old QuickTime atom),
+ * WebM is Matroska that names itself "webm". Anything else — FLV, AVI, MKV,
+ * an MP4 that holds only sound or a photo — is refused.
+ */
+export function sniffVideo(head: Uint8Array): string | null {
+  const ascii = (offset: number, length: number) => String.fromCharCode(...head.slice(offset, offset + length));
+  const box = ascii(4, 4);
+  if (box === "ftyp") {
+    const brand = ascii(8, 4);
+    if (brand === "qt  ") return "video/quicktime";
+    // Sound alone (M4A and audiobooks) and HEIF or AVIF pictures are ISO boxes too.
+    if (["M4A ", "M4B ", "M4P ", "heic", "heix", "hevc", "heim", "heis", "mif1", "msf1", "avif", "avis"].includes(brand)) {
+      return null;
+    }
+    return "video/mp4";
+  }
+  if (["moov", "mdat", "wide"].includes(box)) return "video/quicktime";
+  if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
+    // The EBML header names the document type; a browser plays WebM, not every Matroska file.
+    return ascii(0, head.byteLength).includes("webm") ? "video/webm" : null;
+  }
+  return null;
+}
+
+/** Whether a text is a link a video can be: http or https, with a host. */
+export function isVideoLink(text: string): boolean {
+  if (text.length > MAX_URL_LENGTH) return false;
+  try {
+    const url = new URL(text);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
+/** Saves a video link; the address is checked here, since the page renders it as a link. */
+export async function createVideoLink(
+  db: Database,
+  teacherId: string,
+  tags: MaterialTags,
+  url: string,
+): Promise<{ id: string } | "not_a_link"> {
+  if (!isVideoLink(url)) return "not_a_link";
+  const [row] = await db
+    .insert(libraryMaterial)
+    .values({ teacherId, kind: "video", ...tags, url })
+    .returning({ id: libraryMaterial.id });
+  if (!row) throw new Error("createVideoLink: insert returned no row");
+  return row;
+}
+
+/**
+ * Saves an own video whose file was uploaded first (#117). The file must be
+ * this teacher's and a video: a stored file's owner and type never change, so
+ * reading them before the insert is safe, and the foreign key keeps the file
+ * from going while the row refers to it.
+ */
+export async function createVideoFile(
+  db: Database,
+  teacherId: string,
+  tags: MaterialTags,
+  blobId: string,
+): Promise<{ id: string } | "no_file"> {
+  const [file] = await db.select({ teacherId: blob.teacherId, contentType: blob.contentType }).from(blob).where(eq(blob.id, blobId));
+  if (!file || file.teacherId !== teacherId || !file.contentType.startsWith("video/")) return "no_file";
+  const [row] = await db
+    .insert(libraryMaterial)
+    .values({ teacherId, kind: "video", ...tags, blobId })
+    .returning({ id: libraryMaterial.id });
+  if (!row) throw new Error("createVideoFile: insert returned no row");
   return row;
 }
 
@@ -201,17 +279,17 @@ export async function deleteMaterial(db: Database, teacherId: string, id: string
   return rows.length > 0;
 }
 
-/** The file of a material of this teacher, or null. */
+/** The file of a material of this teacher, open for reading in pieces, or null — a video link has none. */
 export async function materialFile(
   db: Database,
   teacherId: string,
   id: string,
-): Promise<{ blobId: string; bytes: Uint8Array; contentType: string } | null> {
+): Promise<{ blobId: string; reader: BlobReader; contentType: string } | null> {
   const [row] = await db
     .select({ blobId: libraryMaterial.blobId })
     .from(libraryMaterial)
     .where(and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId)));
   if (!row?.blobId) return null;
-  const file = await readBlob(db, teacherId, row.blobId);
+  const file = await openBlob(db, teacherId, row.blobId);
   return file ? { blobId: row.blobId, ...file } : null;
 }
