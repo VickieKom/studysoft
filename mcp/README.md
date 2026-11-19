@@ -13,6 +13,11 @@ Connects the teacher's AI assistant to the platform (#3). The assistant runs in 
 | `read_homework_draft` | The assistant's latest draft for a student, as the teacher may have changed it |
 | `save_game_draft` | Saves a game (one HTML file, at most 5 MB) to the library as a draft under «От ассистента»; with the id of its earlier draft, replaces it until the teacher edits or adds it. Never adds to the library or deletes (#120) |
 | `save_warmup_draft` | The same for a warm-up: a list of questions or a picture (#120) |
+| `list_textbooks` | The teacher's textbooks: their books (rendering status, page count) and track names, and whether a structure is confirmed or a draft waits (#150) |
+| `read_textbook_text` | The text layer of a book's pages, at most 20 at a time |
+| `get_textbook_page` | One rendered page of a book, as an image |
+| `read_textbook_structure` | A textbook's confirmed units and lessons and the draft waiting for the teacher |
+| `save_textbook_structure` | Saves units and lessons — page ranges in each book, tracks, words — as a draft «от ассистента», checked against the textbook; refused while the teacher has a draft of her own. Never confirms |
 
 Never returned: last names, contacts, payments, links.
 

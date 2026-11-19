@@ -277,3 +277,41 @@ export async function textbookBlob(db: Database, teacherId: string, fileId: stri
     .where(and(eq(textbookPage.fileId, fileId), eq(textbookPage.number, page), eq(textbook.teacherId, teacherId)));
   return row?.blobId ?? null;
 }
+
+/** The most pages one read of a book's text layer returns (#150): a lesson or two at a time. */
+export const MAX_TEXT_PAGES = 20;
+
+/**
+ * The text layer of a book's pages `from`–`to` (#150), page by page, as
+ * poppler's pdftotext reads it with the layout kept; for the assistant to
+ * mark the book out. Null when it is not this teacher's book.
+ */
+export async function bookText(
+  db: Database,
+  teacherId: string,
+  fileId: string,
+  from: number,
+  to: number,
+): Promise<{ page: number; text: string }[] | null> {
+  const blobId = await textbookBlob(db, teacherId, fileId, null);
+  const source = blobId ? await openBlob(db, teacherId, blobId) : null;
+  if (!source || source.contentType !== "application/pdf") {
+    await source?.reader.close();
+    return null;
+  }
+  const dir = await mkdtemp(join(tmpdir(), "studysoft-text-"));
+  try {
+    const pdf = join(dir, "book.pdf");
+    await pipeline(Readable.fromWeb(source.reader.stream() as never), createWriteStream(pdf));
+    const pages: { page: number; text: string }[] = [];
+    for (let page = from; page <= to; page++) {
+      const { stdout } = await run(process.env.PDFTOTEXT ?? "pdftotext", ["-layout", "-f", String(page), "-l", String(page), pdf, "-"], {
+        maxBuffer: 4 * 1024 * 1024,
+      }).catch(() => ({ stdout: "" }));
+      pages.push({ page, text: stdout.replace(/\f/g, "").trimEnd() });
+    }
+    return pages;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}

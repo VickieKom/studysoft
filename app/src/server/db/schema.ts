@@ -474,6 +474,12 @@ export const textbook = pgTable(
       .references(() => teacher.id),
     title: text("title").notNull(),
     level: text("level").notNull(),
+    // Units and lessons (#150, domain/textbook-structure.ts): the confirmed
+    // structure lessons use, and a draft — the assistant's or the teacher's
+    // own unconfirmed edits — that confirming replaces it with.
+    structure: jsonb("structure"),
+    structureDraft: jsonb("structure_draft"),
+    structureDraftBy: text("structure_draft_by"),
     createdAt: createdAt(),
   },
   (t) => [index("textbook_teacher_id_idx").on(t.teacherId)],

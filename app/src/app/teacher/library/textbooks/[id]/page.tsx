@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TextbookStructureEditor } from "@/components/textbook-structure-editor";
 import { TextbookRetry } from "@/components/textbook-upload-form";
 import { BOOK_LABELS, RENDER_LABELS } from "@/domain/textbook";
 import { isNotFound } from "@/server/router";
@@ -21,8 +22,9 @@ export default async function TextbookPage({ params }: Props) {
   if (!UUID.test(id)) notFound();
   const { caller } = await teacherCaller();
   let textbook;
+  let structure;
   try {
-    textbook = await caller.teacher.textbooks.get({ id });
+    [textbook, structure] = await Promise.all([caller.teacher.textbooks.get({ id }), caller.teacher.textbooks.structure({ id })]);
   } catch (error) {
     if (isNotFound(error)) notFound();
     throw error;
@@ -39,6 +41,50 @@ export default async function TextbookPage({ params }: Props) {
         <h1 className="text-h1 font-bold">{textbook.title}</h1>
         <p className="text-text-secondary">{textbook.level}</p>
       </header>
+
+      <section aria-label="Структура" className="flex flex-col gap-3 rounded-card border border-border p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-h3 font-semibold">Юниты и уроки</h2>
+          <span className="text-small text-text-secondary">
+            {structure.draftBy === "assistant"
+              ? "Черновик от ассистента"
+              : structure.draftBy === "teacher"
+                ? "Черновик, не подтверждён"
+                : structure.structure
+                  ? "Подтверждена"
+                  : "Не размечен"}
+          </span>
+        </div>
+        {structure.structure && (
+          <ol className="flex flex-col gap-2">
+            {structure.structure.units.map((unit) => (
+              <li key={unit.id}>
+                <span className="font-semibold">{unit.title}</span>
+                <ul className="mt-1 flex flex-wrap gap-2">
+                  {unit.lessons.map((lesson) => (
+                    <li key={lesson.id}>
+                      <Link
+                        href={`/teacher/library/textbooks/${textbook.id}/lessons/${lesson.id}`}
+                        className="inline-flex rounded-control border border-border px-3 py-1 text-small hover:bg-surface"
+                      >
+                        {lesson.title}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        )}
+        <TextbookStructureEditor
+          key={`${structure.revision}:${structure.structureRevision}`}
+          textbookId={textbook.id}
+          start={structure.draft ?? structure.structure}
+          open={structure.draft !== null}
+          revision={structure.revision}
+          books={textbook.books.filter((b) => b.status === "done").map((b) => b.kind)}
+        />
+      </section>
 
       {textbook.books.map((book) => (
         <section key={book.id} aria-label={BOOK_LABELS[book.kind]} className="flex flex-col gap-3">
