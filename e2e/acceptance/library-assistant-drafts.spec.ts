@@ -75,44 +75,44 @@ function materials(page: Page) {
 
 test("a game the assistant saves is a draft until the teacher adds it to the library", async ({ page, assistant }) => {
   const token = await createToken(page);
-  const id = await saveGame(assistant, token, "Draft zoo quiz");
+  const id = await saveGame(assistant, token, "Draft pond quiz");
 
   await page.goto("/teacher/library");
-  await expect(drafts(page).getByRole("listitem").filter({ hasText: "Draft zoo quiz" })).toHaveCount(1);
-  await expect(materials(page).getByText("Draft zoo quiz")).toHaveCount(0);
+  await expect(drafts(page).getByRole("listitem").filter({ hasText: "Draft pond quiz" })).toHaveCount(1);
+  await expect(materials(page).getByText("Draft pond quiz")).toHaveCount(0);
   // Not under the type filter either.
   await page.goto("/teacher/library?type=game");
-  await expect(materials(page).getByText("Draft zoo quiz")).toHaveCount(0);
+  await expect(materials(page).getByText("Draft pond quiz")).toHaveCount(0);
 
   // Saved again with its id: the same draft, revised.
-  expect(await saveGame(assistant, token, "Draft zoo quiz, revised", id)).toBe(id);
+  expect(await saveGame(assistant, token, "Draft pond quiz, revised", id)).toBe(id);
   await page.goto("/teacher/library");
   await expect(drafts(page).getByRole("listitem")).toHaveCount(1);
-  await expect(drafts(page)).toContainText("Draft zoo quiz, revised");
+  await expect(drafts(page)).toContainText("Draft pond quiz, revised");
 
-  await drafts(page).getByRole("listitem").filter({ hasText: "Draft zoo quiz, revised" }).getByRole("link", { name: "Открыть" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Draft zoo quiz, revised" })).toBeVisible();
+  await drafts(page).getByRole("listitem").filter({ hasText: "Draft pond quiz, revised" }).getByRole("link", { name: "Открыть" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Draft pond quiz, revised" })).toBeVisible();
   await expect(page.getByText("Черновик от ассистента")).toBeVisible();
-  await expect(page.frameLocator('iframe[title="Draft zoo quiz, revised"]').getByText("Draft zoo quiz, revised is ready")).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Draft pond quiz, revised"]').getByText("Draft pond quiz, revised is ready")).toBeVisible();
 
   // The teacher renames it before adding it.
   await control(page, "Изменить").click();
-  await page.getByLabel("Название").fill("Zoo quiz from the assistant");
+  await page.getByLabel("Название").fill("Pond quiz from the assistant");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Zoo quiz from the assistant" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Pond quiz from the assistant" })).toBeVisible();
   await control(page, "Добавить в библиотеку").click();
   await expect(page.getByText("Черновик от ассистента")).toHaveCount(0);
 
   await page.goto("/teacher/library?type=game");
-  await expect(materials(page).getByText("Zoo quiz from the assistant")).toHaveCount(1);
+  await expect(materials(page).getByText("Pond quiz from the assistant")).toHaveCount(1);
   await expect(drafts(page)).toHaveCount(0);
 
   // The game is in the library now: saved again with its id, the assistant gets a new draft and the game stays.
-  const next = await saveGame(assistant, token, "Zoo quiz, another try", id);
+  const next = await saveGame(assistant, token, "Pond quiz, another try", id);
   expect(next).not.toBe(id);
   await page.goto("/teacher/library");
-  await expect(drafts(page)).toContainText("Zoo quiz, another try");
-  await expect(materials(page).getByText("Zoo quiz from the assistant")).toHaveCount(1);
+  await expect(drafts(page)).toContainText("Pond quiz, another try");
+  await expect(materials(page).getByText("Pond quiz from the assistant")).toHaveCount(1);
 });
 
 test("a warm-up the assistant saves is a draft the teacher can delete", async ({ page, assistant }) => {
