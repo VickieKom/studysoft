@@ -91,6 +91,8 @@ async function markHeld(page: Page, date: Date, firstName: string, charged = tru
   const charge = dialog.getByLabel("Списать");
   if (await charge.count()) await charge.setChecked(charged);
   await dialog.getByRole("button", { name: "Сохранить отметку", exact: true }).click();
+  // The dialog closes once the mark is saved; «проведён» alone may be there from an earlier mark (#189).
+  await expect(dialog).toBeHidden();
   await expect(lessonOf(day, firstName).first()).toContainText("проведён");
 }
 
