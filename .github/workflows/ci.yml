@@ -28,6 +28,17 @@ jobs:
         with:
           node-version: 22
 
+      # poppler renders textbook pages (#156); the integration tests and the
+      # scenarios render a synthetic PDF. Retried: the mirrors fail now and then.
+      - name: Install poppler
+        run: |
+          for attempt in 1 2 3; do
+            sudo apt-get install -y --no-install-recommends poppler-utils && exit 0
+            sudo apt-get update || true
+            sleep 10
+          done
+          exit 1
+
       - name: Run make check
         env:
           # Pull requests compare against their base branch. A push to main

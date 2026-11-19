@@ -462,6 +462,64 @@ export const libraryMaterial = pgTable(
   (t) => [index("library_material_teacher_id_idx").on(t.teacherId)],
 );
 
+// A textbook set (#156): the books (PDF) and the folder of tracks the
+// teacher uploads to «Библиотека». Its files are the teacher's only
+// (architecture, section 3): no student, parent or link ever reaches them.
+export const textbook = pgTable(
+  "textbook",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    title: text("title").notNull(),
+    level: text("level").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("textbook_teacher_id_idx").on(t.teacherId)],
+);
+
+// A file of a textbook set (#156): the student's book or the workbook (a PDF
+// whose pages are rendered to images in the background), or a track. A
+// book's render status is "queued", "rendering", "done" or "failed";
+// `render_boot` is the server process that queued or took it, so one left by
+// a process that has since stopped reads as failed and can be tried again.
+export const textbookFile = pgTable(
+  "textbook_file",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    textbookId: uuid("textbook_id")
+      .notNull()
+      .references(() => textbook.id),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    blobId: uuid("blob_id")
+      .notNull()
+      .references(() => blob.id),
+    position: bigint("position", { mode: "number" }).notNull(),
+    pageCount: bigint("page_count", { mode: "number" }),
+    renderStatus: text("render_status"),
+    renderBoot: text("render_boot"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("textbook_file_textbook_id_idx").on(t.textbookId)],
+);
+
+// A rendered page of a book (#156), numbered from 1, kept as an image.
+export const textbookPage = pgTable(
+  "textbook_page",
+  {
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => textbookFile.id),
+    number: bigint("number", { mode: "number" }).notNull(),
+    blobId: uuid("blob_id")
+      .notNull()
+      .references(() => blob.id),
+  },
+  (t) => [primaryKey({ columns: [t.fileId, t.number] })],
+);
+
 // A student's weekly slot (#80; architecture 8.6): a weekday and a local time
 // in the student's time zone, so a lesson stays "Tuesday at 17:00" for the
 // student when clocks change. Lessons are created from it ahead of time.

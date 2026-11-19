@@ -42,12 +42,17 @@ export default async function LibraryPage({ searchParams }: Props) {
     <main className="flex flex-col gap-6">
       <header className="flex items-center justify-between">
         <h1 className="text-h1 font-bold">Библиотека</h1>
-        <Link
+        <span className="flex items-center gap-3">
+          <Link href="/teacher/library/textbooks" className="text-button font-semibold text-green-600 hover:text-green-700">
+            Учебники
+          </Link>
+          <Link
           href="/teacher/library/new"
           className="inline-flex h-10 items-center rounded-control bg-green-600 px-4 text-button font-semibold text-on-accent hover:bg-green-700"
         >
           Загрузить
-        </Link>
+          </Link>
+        </span>
       </header>
       {drafts.length > 0 && (
         <section aria-labelledby="drafts-heading" className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">

@@ -27,7 +27,7 @@ How the system is put together and why: [docs/architecture.md](docs/architecture
 
 ## Development
 
-You need Git, Bash, Node.js 22 or newer, and Docker.
+You need Git, Bash, Node.js 22 or newer, Docker, and poppler (`pdftoppm` renders textbook pages: `brew install poppler` or `apt install poppler-utils`).
 
 ```bash
 make dev     # start the local stand at http://localhost:3000

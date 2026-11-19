@@ -25,6 +25,7 @@ import { assistantRouter } from "./teacher/assistant";
 import { notesRouter } from "./teacher/notes";
 import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
+import { textbooksRouter } from "./teacher/textbooks";
 
 export const appRouter = router({
   health: healthRouter,
@@ -41,6 +42,7 @@ export const appRouter = router({
     homework: homeworkRouter,
     review: reviewRouter,
     library: libraryRouter,
+    textbooks: textbooksRouter,
     history: historyRouter,
     schedule: scheduleRouter,
     payments: paymentsRouter,
@@ -74,6 +76,7 @@ export { handleHomeworkImageRequest } from "../homework/images";
 /** A student's recordings and files for homework tasks: uploaded by the student, served to them and their teacher (#35). */
 export { handleAnswerFileRequest, handleAnswerFileUpload } from "../homework/answer-files";
 export { handleLibraryFileRequest, handleLibraryVideoUpload } from "../library/files";
+export { handleTextbookFileRequest, handleTextbookUpload } from "../library/textbook-files";
 
 /** True when a procedure refused because there is no valid session. */
 export function isUnauthorized(error: unknown): boolean {
