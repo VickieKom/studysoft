@@ -48,12 +48,13 @@ const studentContext = z
         })
         .strict(),
     ),
-    // Games the student played by their link (#119): the answers as the game reported them.
+    // Games the student played by their link (#119) or with the teacher in a lesson (#147): the answers as the game reported them.
     recentGames: z.array(
       z
         .object({
           title: z.string(),
           playedAt: z.iso.datetime(),
+          playedWithTeacher: z.boolean(),
           answers: z.array(
             z
               .object({

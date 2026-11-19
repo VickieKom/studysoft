@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LibraryDelete } from "@/components/library-delete";
+import { LibraryGameFrame } from "@/components/library-game-frame";
 import { LibraryOpenToStudent } from "@/components/library-open-to-student";
-import { AGE_GROUP_LABELS, GAME_SANDBOX, MATERIAL_KIND_FILTERS } from "@/domain/library";
+import { AGE_GROUP_LABELS, MATERIAL_KIND_FILTERS } from "@/domain/library";
 import { timeIn } from "@/domain/schedule";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
@@ -17,8 +18,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * One material (#115). A game runs in a sandboxed frame — scripts, but an
  * origin of its own — so it cannot reach this page or the platform's cookies.
  * A warm-up (#116) is its picture, full width, or its list of questions. A
- * video plays in the page, or its link opens in a new tab (#117).
- * During a lesson the teacher opens a game to the student (#118).
+ * video plays in the page, or its link opens in a new tab (#117). During a
+ * lesson the teacher opens a game to the student (#118), or plays it with
+ * them on this page: its result goes to that lesson's student (#147).
  */
 export default async function MaterialPage({ params }: Props) {
   const { id } = await params;
@@ -81,13 +83,7 @@ export default async function MaterialPage({ params }: Props) {
           ))}
         </ol>
       ) : material.kind === "game" && material.fileUrl ? (
-        <iframe
-          title={material.title}
-          src={material.fileUrl}
-          sandbox={GAME_SANDBOX}
-          referrerPolicy="no-referrer"
-          className="h-[70vh] w-full rounded-card border border-border bg-bg"
-        />
+        <LibraryGameFrame id={material.id} title={material.title} fileUrl={material.fileUrl} students={inLesson} />
       ) : material.kind === "video" && material.fileUrl ? (
         <video
           src={material.fileUrl}

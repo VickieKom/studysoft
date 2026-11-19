@@ -2,7 +2,10 @@
 
 How a game in the library tells the platform what the student answered (#119). A game runs in a sandboxed frame on the student's page; when the student finishes a round, the game posts one message to the platform's window. The platform checks the message against this format and keeps the answers; their mistakes join the student's mistakes from homework, by topic, on the student card and in the student context the assistant reads.
 
-A game that does not post a result keeps working, with no result. A message not in this format is ignored, and so is a result from a game the teacher has not opened to this student or whose access has ended: a result counts only while the student plays by their own link, during the lesson and the hour after it. When the teacher shows a game herself, nothing is kept.
+A game that does not post a result keeps working, with no result. A message not in this format is ignored. A result is kept in two cases:
+
+- the student plays by their own link a game the teacher opened to them, during the lesson and the hour after it (#119); a result from a game not opened to this student or whose access has ended is ignored;
+- the teacher runs the game herself on her page in «Библиотека» while a lesson is going on: the result goes to the student of that lesson, or to the one she picks when several lessons are going on (#147). Without a lesson going on, nothing is kept.
 
 Content lives in the platform's database, never in this repository. The example below is synthetic.
 
@@ -16,7 +19,7 @@ The game calls `window.parent.postMessage(result, "*")` with an object:
 | `version` | yes | Always `1` for this format |
 | `answers` | yes | 1 to 100 answers, in the order the student gave them |
 
-The target origin is `"*"` because the game's frame has an origin of its own and does not know the platform's address. The platform takes the message only from the frame of the game it opened.
+The target origin is `"*"` because the game's frame has an origin of its own and does not know the platform's address. The platform takes the message only from the frame of the game it shows.
 
 ## Every answer
 

@@ -12,7 +12,7 @@ import {
   TIME_ZONE_IDS,
 } from "../../../domain/student";
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
-import { studentMistakes } from "../../crm/mistakes";
+import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
@@ -110,7 +110,7 @@ export const studentsRouter = router({
             mistakes: z.array(
               z
                 .object({
-                  from: z.enum(["homework", "game"]),
+                  from: z.enum(MISTAKE_SOURCES),
                   title: z.string(),
                   at: z.iso.datetime(),
                   task: z.string(),

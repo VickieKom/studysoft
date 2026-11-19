@@ -31,8 +31,8 @@ export type StudentContext = {
   notes: { body: string; createdAt: Date }[];
   /** The latest submitted homework, newest first (#44). */
   recentHomework: RecentHomework[];
-  /** The latest results of games the student played by their link, newest first (#119). */
-  recentGames: { title: string; playedAt: Date; answers: GameAnswer[] }[];
+  /** The latest results of games the student played by their link or with the teacher in a lesson, newest first (#119, #147). */
+  recentGames: { title: string; playedAt: Date; playedWithTeacher: boolean; answers: GameAnswer[] }[];
   /** Mistakes of homework and games over the last 30 days, by topic, the most frequent first (#44, #119). */
   mistakesByTopic: { topic: string; count: number }[];
 };
