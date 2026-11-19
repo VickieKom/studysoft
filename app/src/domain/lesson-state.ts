@@ -194,6 +194,8 @@ export const lessonMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("sound"), status: z.enum(["blocked", "on"]) }).strict(),
   // «Завершить урок» went through: the stage says the lesson is over (#154).
   z.object({ type: z.literal("finished") }).strict(),
+  // The game on the stage reported a result (#199): kept for the lesson's student, or not.
+  z.object({ type: z.literal("game-result"), kept: z.boolean() }).strict(),
 ]);
 export type LessonMessage = z.infer<typeof lessonMessageSchema>;
 

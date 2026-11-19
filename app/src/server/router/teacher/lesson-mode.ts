@@ -1,7 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { gameResultSchema } from "../../../domain/game-result-format";
 import { keptStateSchema, lessonWordSchema, MAX_LESSON_WORDS } from "../../../domain/lesson-state";
 import { finishForm, finishLesson } from "../../lesson/finish";
+import { saveStageGameResult } from "../../library/game-results";
 import { BOOK_KINDS } from "../../../domain/textbook";
 import { lessonStage, MAX_NOTE_LENGTH, openLesson, saveLessonNote, saveLessonState } from "../../lesson/mode";
 import { router, teacherProcedure } from "../core/trpc";
@@ -160,6 +162,17 @@ export const lessonModeRouter = router({
       if (result === "past") throw new TRPCError({ code: "BAD_REQUEST", message: "Срок домашки уже прошёл" });
       if ("error" in result) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
       return result.finished;
+    }),
+
+  /** A result the game on the stage posted (#199): kept for the lesson's student, as a game played with the teacher. */
+  saveGameResult: teacherProcedure
+    .input(z.object({ lessonId: z.uuid(), materialId: z.uuid(), result: z.unknown() }))
+    .output(z.object({ kept: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const parsed = gameResultSchema.safeParse(input.result);
+      if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: "Not a game result" });
+      if (!(await saveStageGameResult(ctx.db, ctx.teacherId, input.lessonId, input.materialId, parsed.data.answers))) throw notFound();
+      return { kept: true as const };
     }),
 
   /** Keeps the teacher's note to the lesson as she writes it. */

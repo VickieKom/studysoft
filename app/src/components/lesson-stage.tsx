@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { looksLikeGameResult } from "@/domain/game-result-format";
+import { GAME_SANDBOX } from "@/domain/library";
 import {
   bookStageLabel,
   type HomeworkStage,
@@ -21,6 +23,7 @@ import {
   visibleTasks,
 } from "@/domain/lesson-state";
 import type { LessonResourcesView } from "./lesson-panel";
+import { routerClient } from "./router-client";
 
 /** The stage says it is there this often, and asks for the state when it opens. */
 const HELLO_MS = 2000;
@@ -45,7 +48,7 @@ function Tick() {
 /**
  * The stage of the lesson mode (#152): the window the teacher shows in the
  * video call, so everything here is seen by the student. Only lesson
- * content — the stages as tabs, the warm-up, the book's pages, the track,
+ * content — the stages as tabs, the warm-up, the game (#199), the book's pages, the track,
  * the homework under review (#153) —
  * never the plan's minutes, the note or the platform's menu. It follows the
  * panel over BroadcastChannel; opened again, it starts from the state this
@@ -169,6 +172,17 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
             (() => {
               const material = materialOf(current.materialId);
               if (!material) return null;
+              if (material.kind === "game") {
+                return (
+                  <StageGame
+                    key={material.id}
+                    lessonId={lessonId}
+                    materialId={material.id}
+                    title={material.title}
+                    onResult={(kept) => channel.current?.postMessage({ type: "game-result", kept } satisfies LessonMessage)}
+                  />
+                );
+              }
               if (material.kind !== "warmup") return <p className="p-6 text-h2 font-semibold">{material.title}</p>;
               return (
                 <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
@@ -271,5 +285,52 @@ function HomeworkReview({ stage, homework }: { stage: HomeworkStage; homework: S
         })}
       </ol>
     </section>
+  );
+}
+
+/**
+ * A game of the plan on the stage (#199), in the same sandboxed frame as on
+ * the teacher's page: scripts run in an origin of their own, without the
+ * platform's cookies or storage. The teacher plays it here; a result it posts
+ * in the game result format goes to the lesson's student, one after another,
+ * and the panel is told whether it was kept — the stage shows nothing of it.
+ */
+function StageGame({
+  lessonId,
+  materialId,
+  title,
+  onResult,
+}: {
+  lessonId: string;
+  materialId: string;
+  title: string;
+  onResult: (kept: boolean) => void;
+}) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== frame.current?.contentWindow || !looksLikeGameResult(event.data)) return;
+      const result: unknown = event.data;
+      queue.current = queue.current.then(() =>
+        routerClient.teacher.lessonMode.saveGameResult.mutate({ lessonId, materialId, result }).then(
+          () => onResult(true),
+          () => onResult(false),
+        ),
+      );
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [lessonId, materialId, onResult]);
+
+  return (
+    <iframe
+      ref={frame}
+      title={title}
+      src={`/api/files/library/${materialId}`}
+      sandbox={GAME_SANDBOX}
+      referrerPolicy="no-referrer"
+      className="h-full min-h-[60vh] w-full rounded-card border border-border bg-bg"
+    />
   );
 }

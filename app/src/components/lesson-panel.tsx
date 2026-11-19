@@ -103,6 +103,7 @@ export function LessonPanel({
   const [kept, setKept] = useState<KeptState>(() => newer(serverKept, readLocal(lessonId))!);
   const [lastHello, setLastHello] = useState(0);
   const [soundBlocked, setSoundBlocked] = useState(false);
+  const [gameResult, setGameResult] = useState<boolean | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [saveError, setSaveError] = useState(false);
   const channel = useRef<BroadcastChannel | null>(null);
@@ -122,6 +123,7 @@ export function LessonPanel({
         setLastHello(Date.now());
         ch.postMessage({ type: "state", kept: keptRef.current } satisfies LessonMessage);
       } else if (message.data.type === "sound") setSoundBlocked(message.data.status === "blocked");
+      else if (message.data.type === "game-result") setGameResult(message.data.kept);
     };
     return () => {
       ch.close();
@@ -289,7 +291,7 @@ export function LessonPanel({
           onStop={() => change((s) => (s.track ? { ...s, track: { ...s.track, playing: false } } : s))}
         />
       )}
-      {current?.type === "material" && <MaterialNote material={materialOf(current.materialId)} />}
+      {current?.type === "material" && <MaterialNote material={materialOf(current.materialId)} gameResult={gameResult} />}
       {current?.type === "homework" && (
         <HomeworkControls
           stage={current}
@@ -701,15 +703,25 @@ function FinishLesson({
   );
 }
 
-function MaterialNote({ material }: { material: Material | undefined }) {
+function MaterialNote({ material, gameResult }: { material: Material | undefined; gameResult: boolean | null }) {
   if (!material) return <p className="text-small text-text-secondary">Этого материала больше нет в библиотеке</p>;
   const text =
     material.kind === "warmup"
       ? `На сцене разминка «${material.title}»`
       : material.kind === "video"
         ? `Видео «${material.title}» на сцене не показывается: при демонстрации оно тормозит. Открыть его ученику по ссылке можно будет отсюда`
-        : `Игра «${material.title}» на сцене появится позже`;
-  return <p className="rounded-card border border-border p-4 text-small">{text}</p>;
+        : `На сцене игра «${material.title}»: играйте в окне сцены, итог сохранится ученику этого урока`;
+  return (
+    <div className="flex flex-col gap-1 rounded-card border border-border p-4 text-small">
+      <p>{text}</p>
+      {material.kind === "game" && gameResult === true && <p className="text-green-700">Итог игры сохранён</p>}
+      {material.kind === "game" && gameResult === false && (
+        <p role="alert" className="text-danger">
+          Итог игры не сохранился: игра прислала его не по формату
+        </p>
+      )}
+    </div>
+  );
 }
 
 function Note({ lessonId, initial }: { lessonId: string; initial: string }) {
