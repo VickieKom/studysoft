@@ -160,7 +160,8 @@ async function preparedStudent(page: Page, firstName: string) {
     JSON.stringify({ version: 1, title: HOMEWORK, tasks: [{ type: "single_choice", prompt: "Pick the first.", options: ["a", "b"], answer: 0 }] }),
   );
   await page.getByRole("button", { name: "Импортировать", exact: true }).click();
-  await expect(page.getByText(HOMEWORK).first()).toBeVisible();
+  // Saved before the scenario moves on: the import opens the new draft's page.
+  await expect(page).toHaveURL(/\/teacher\/students\/[0-9a-f-]{36}\/homework\/[0-9a-f-]{36}$/);
 
   await addLesson(page, firstName, 1, "10:00");
   await addLesson(page, firstName, 8, "10:00");
