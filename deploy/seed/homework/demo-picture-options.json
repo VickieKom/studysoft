@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "title": "Demo: pictures as answer options",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Which one is red?",
+      "options": [
+        {
+          "images": [
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4o6FBEmIY1TCqYfhqAAAyBCwQhvh37QAAAABJRU5ErkJggg=="
+          ]
+        },
+        {
+          "images": [
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQWGBDEmIY1TCqYfhqAAAmYgQQV7FoPwAAAABJRU5ErkJggg=="
+          ],
+          "text": "green square"
+        },
+        "no colour"
+      ],
+      "answer": 0,
+      "topic": "colours",
+      "skill": "vocabulary"
+    },
+    {
+      "type": "single_choice",
+      "prompt": "Where are two squares?",
+      "options": [
+        "one square",
+        {
+          "images": [
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQCLhDEmIY1TCqYfhqAAANiFQQvOkcpQAAAABJRU5ErkJggg==",
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4o6FBEmIY1TCqYfhqAAAyBCwQhvh37QAAAABJRU5ErkJggg=="
+          ],
+          "text": "two squares"
+        }
+      ],
+      "answer": 1,
+      "topic": "numbers",
+      "skill": "vocabulary"
+    }
+  ]
+}
