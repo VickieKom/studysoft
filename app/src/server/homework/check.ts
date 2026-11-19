@@ -1,6 +1,6 @@
 // Checking answers on the server (#34; architecture 6.1). The keys stay here:
 // the student's page gets only studentView() and sends answers back.
-import { type Answer, gapCount, type Task } from "../../domain/homework-format";
+import { type Answer, gapCount, type OrderSentence, type OrderTask, orderSentences, type Task } from "../../domain/homework-format";
 
 // Every apostrophe a keyboard or a phone may produce counts as the plain one.
 const APOSTROPHES = /[‘’ʼʹ`´′]/g;
@@ -31,16 +31,40 @@ export function checkAnswer(task: Task, answer: Answer): boolean {
       const given = new Set(answer.pairs.map((p) => `${p.left}\u0000${p.right}`));
       return given.size === key.size && [...given].every((pair) => key.has(pair));
     }
-    case "order": {
-      if (answer.type !== "order") return false;
-      const sentence = normalize(answer.words.join(" "));
-      return [task.words, ...(task.alternatives ?? [])].some((words) => normalize(words.join(" ")) === sentence);
-    }
+    case "order":
+      return answer.type === "order" && checkSentences(task, answer).every(Boolean);
     case "written":
     case "voice":
     case "file":
       return false;
   }
+}
+
+const rightOrder = (sentence: OrderSentence, words: string[] | undefined) => {
+  const given = normalize((words ?? []).join(" "));
+  return [sentence.words, ...(sentence.alternatives ?? [])].some((order) => normalize(order.join(" ")) === given);
+};
+
+/**
+ * Each sentence of an order task right or wrong (#161), in the task's order:
+ * one for a task with `words`, one per sentence for a task of several. An
+ * answer of the other shape, or a sentence left out, is wrong.
+ */
+export function checkSentences(task: OrderTask, answer: Extract<Answer, { type: "order" }> | null): boolean[] {
+  const sentences = orderSentences(task);
+  if (task.sentences) return sentences.map((sentence, i) => rightOrder(sentence, answer?.sentences?.[i]));
+  return [answer?.words !== undefined && rightOrder(sentences[0]!, answer.words)];
+}
+
+/** Whether every word placed is one of the given words, each used at most as often as it is there. */
+function takenFrom(words: string[], placed: string[]): boolean {
+  const left = [...words];
+  return placed.every((word) => {
+    const at = left.indexOf(word);
+    if (at < 0) return false;
+    left.splice(at, 1);
+    return true;
+  });
 }
 
 /**
@@ -83,13 +107,12 @@ export function fitsTask(task: Task, answer: Answer): boolean {
       return task.type === "written";
     case "order": {
       if (task.type !== "order") return false;
-      const left = [...task.words];
-      return answer.words.every((word) => {
-        const at = left.indexOf(word);
-        if (at < 0) return false;
-        left.splice(at, 1);
-        return true;
-      });
+      if (task.sentences)
+        return (
+          answer.sentences?.length === task.sentences.length &&
+          task.sentences.every((sentence, i) => takenFrom(sentence.words, answer.sentences![i]!))
+        );
+      return answer.words !== undefined && takenFrom(task.words ?? [], answer.words);
     }
   }
 }

@@ -14,12 +14,13 @@ import {
   storedAnswerSchema,
   studentView,
   type Task,
+  taskPoints,
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
 import { answerFileUrl, homeworkImageUrl, todayIn } from "../../domain/homework";
-import { checkAnswer, fitsTask } from "./check";
+import { checkAnswer, checkSentences, fitsTask } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
 export type HomeworkStatus = (typeof HOMEWORK_STATUSES)[number];
@@ -231,7 +232,11 @@ export async function unpublishHomework(db: Database, teacherId: string, id: str
   });
 }
 
-/** The score: right and wrong auto-checked tasks, and the tasks the teacher checks (#35). */
+/**
+ * The score: right and wrong auto-checked points, and the points the teacher
+ * checks (#35). A task is one point; an order task of several sentences is
+ * one per sentence (#161).
+ */
 export type HomeworkResult = { correct: number; wrong: number; pending: number };
 
 /**
@@ -277,12 +282,13 @@ export async function currentHomeworkForStudent(
 }
 
 /**
- * Every task is either checked by the platform or by the teacher, so the
- * tasks the teacher checks are the rest. Counted from the document rather
+ * Every point is either checked by the platform or by the teacher, so the
+ * points the teacher checks are the rest. Counted from the document rather
  * than the submission's pending count, which falls as the teacher marks.
  */
 function score(document: unknown, correct: number, wrong: number): HomeworkResult {
-  return { correct, wrong, pending: taskCount(document) - correct - wrong };
+  const points = (document as HomeworkDocument).tasks.reduce((sum, task) => sum + taskPoints(task), 0);
+  return { correct, wrong, pending: points - correct - wrong };
 }
 
 const ownPublished = (teacherId: string, studentId: string, id: string) =>
@@ -486,10 +492,18 @@ export async function submitHomework(
       const answer = parsed?.success ? parsed.data : null;
       // Written, voice and file answers are kept as they are, for the teacher to mark (#36).
       const isCorrect = isAutoChecked(task) ? answer !== null && answer.type !== "voice" && answer.type !== "file" && checkAnswer(task, answer) : null;
-      if (isCorrect === true) correct++;
+      // An order task of several sentences: each sentence is its own point (#161).
+      const sentences =
+        task.type === "order" && task.sentences
+          ? checkSentences(task, answer?.type === "order" ? answer : null).map((right) => ({ correct: right, mark: null }))
+          : null;
+      if (sentences) {
+        correct += sentences.filter((s) => s.correct).length;
+        wrong += sentences.filter((s) => !s.correct).length;
+      } else if (isCorrect === true) correct++;
       else if (isCorrect === false) wrong++;
       else pending++;
-      const fields = { correct: isCorrect, topic: task.topic ?? null, skill: task.skill ?? null };
+      const fields = { correct: isCorrect, sentenceVerdicts: sentences, topic: task.topic ?? null, skill: task.skill ?? null };
       await tx
         .insert(homeworkAnswer)
         .values({ homeworkId: id, attempt: row.attempt, taskIndex, answer, ...fields })

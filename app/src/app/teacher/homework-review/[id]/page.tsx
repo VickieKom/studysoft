@@ -70,18 +70,39 @@ export default async function SubmissionPage({ params }: Props) {
             )}
             {task.example && <TaskExampleLine example={task.example} className="mt-2 text-small" />}
             {task.choices && <GapChoices choices={task.choices} className="mt-1 text-small" />}
-            <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
-              {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
-            </p>
+            {task.sentences ? (
+              <ol className="mt-2 flex flex-col gap-2">
+                {task.sentences.map((sentence, i) => (
+                  <li
+                    key={i}
+                    role="group"
+                    aria-label={`Предложение ${i + 1}`}
+                    className={`rounded-control border p-3 ${sentence.verdict ? "border-border" : "border-danger"}`}
+                  >
+                    <p className={sentence.verdict ? "" : "text-danger"}>
+                      {i + 1}. {sentence.answer === null ? "Без ответа" : `Ответ: ${sentence.answer}`}
+                    </p>
+                    {!sentence.verdict && <p className="mt-1 text-small text-green-700">Правильный ответ: {sentence.key}</p>}
+                    {submission.isCurrent && (
+                      <ReviewMark submissionId={submission.id} taskIndex={task.index} sentence={i} verdict={sentence.verdict} />
+                    )}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className={`mt-2 ${task.verdict === false ? "text-danger" : ""}`}>
+                {task.answer === null ? "Без ответа" : `Ответ: ${task.answer}`}
+              </p>
+            )}
             {task.file?.kind === "audio" && <audio controls preload="metadata" src={task.file.url} className="mt-2 w-full" />}
             {task.file?.kind === "image" && (
               // eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer
               <img src={task.file.url} alt={`Фото к заданию ${task.index + 1}`} className="mt-2 max-h-96 rounded-control border border-border" />
             )}
-            {task.verdict === false && task.key && (
+            {!task.sentences && task.verdict === false && task.key && (
               <p className="mt-1 text-small text-green-700">Правильный ответ: {task.key}</p>
             )}
-            {submission.isCurrent && (
+            {!task.sentences && submission.isCurrent && (
               <ReviewMark submissionId={submission.id} taskIndex={task.index} verdict={task.verdict} />
             )}
           </li>

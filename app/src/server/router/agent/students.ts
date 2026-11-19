@@ -38,6 +38,10 @@ const studentContext = z
                 answer: z.string().nullable(),
                 correct: z.boolean().nullable(),
                 markedByTeacher: z.boolean(),
+                // Each sentence of an order task of several, its own point (#161).
+                sentences: z
+                  .array(z.object({ answer: z.string().nullable(), correct: z.boolean(), markedByTeacher: z.boolean() }).strict())
+                  .optional(),
               })
               .strict(),
           ),

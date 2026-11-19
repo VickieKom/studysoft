@@ -324,7 +324,15 @@ function TaskBody({
     case "match":
       return <Match task={task} answer={answer} onChange={onChange} />;
     case "order":
-      return <Order task={task} answer={answer} onChange={onChange} />;
+      return "sentences" in task ? (
+        <OrderSentences sentences={task.sentences} answer={answer} onChange={onChange} />
+      ) : (
+        <WordTiles
+          words={task.words}
+          placedWords={answer?.type === "order" ? (answer.words ?? []) : []}
+          onPlace={(words) => onChange(words.length > 0 ? { type: "order", words } : null)}
+        />
+      );
     case "written":
       return <Written task={task} answer={answer} onChange={onChange} />;
     case "voice":
@@ -493,15 +501,42 @@ function Match({ task, answer, onChange }: BodyProps & { task: { type: "match"; 
   );
 }
 
-function Order({ task, answer, onChange }: BodyProps & { task: { type: "order"; words: string[] } }) {
+/** Several sentences under one instruction (#161): each ordered on its own, on the same screen. */
+function OrderSentences({
+  sentences,
+  answer,
+  onChange,
+}: Omit<BodyProps, "task"> & { sentences: string[][] }) {
+  const placed = sentences.map((_, i) => (answer?.type === "order" ? (answer.sentences?.[i] ?? []) : []));
+  const place = (index: number, words: string[]) => {
+    const next = placed.map((p, i) => (i === index ? words : p));
+    onChange(next.some((p) => p.length > 0) ? { type: "order", sentences: next } : null);
+  };
+  return (
+    <ol className="flex flex-col gap-6">
+      {sentences.map((words, i) => (
+        <li key={i} role="group" aria-label={`Предложение ${i + 1}`} className="flex gap-3">
+          <span aria-hidden="true" className="pt-3 text-answer font-semibold text-text-secondary">
+            {i + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <WordTiles words={words} placedWords={placed[i]!} onPlace={(next) => place(i, next)} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Word tiles to tap in order; a placed tile tapped again goes back. */
+function WordTiles({ words, placedWords, onPlace }: { words: string[]; placedWords: string[]; onPlace: (words: string[]) => void }) {
   // The placed words as positions in the pool, so repeated words stay apart.
   const placed: number[] = [];
-  for (const word of answer?.type === "order" ? answer.words : []) {
-    const at = task.words.findIndex((w, i) => w === word && !placed.includes(i));
+  for (const word of placedWords) {
+    const at = words.findIndex((w, i) => w === word && !placed.includes(i));
     if (at >= 0) placed.push(at);
   }
-  const emit = (next: number[]) =>
-    onChange(next.length > 0 ? { type: "order", words: next.map((i) => task.words[i]!) } : null);
+  const emit = (next: number[]) => onPlace(next.map((i) => words[i]!));
 
   return (
     <div className="flex flex-col gap-4">
@@ -513,12 +548,12 @@ function Order({ task, answer, onChange }: BodyProps & { task: { type: "order"; 
             onClick={() => emit(placed.filter((i) => i !== at))}
             className={`${tile} ${tileState(true)}`}
           >
-            {task.words[at]}
+            {words[at]}
           </button>
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        {task.words.map((word, at) =>
+        {words.map((word, at) =>
           placed.includes(at) ? (
             <span key={at} aria-hidden="true" className="min-h-12 min-w-12 rounded-task bg-surface" />
           ) : (

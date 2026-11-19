@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_ORDER_SENTENCES } from "../../../domain/homework-format";
 import { findStudent } from "../../crm/students";
 import {
   findSubmission,
@@ -62,6 +63,14 @@ const submission = z
           verdict: z.boolean().nullable(),
           marked: z.boolean().nullable(),
           key: z.string().nullable(),
+          // Each sentence of an order task of several, its own point (#161).
+          sentences: z
+            .array(
+              z
+                .object({ answer: z.string().nullable(), key: z.string(), verdict: z.boolean(), marked: z.boolean().nullable() })
+                .strict(),
+            )
+            .nullable(),
           file: z.object({ kind: z.enum(["audio", "image"]), url: z.string() }).strict().nullable(),
         })
         .strict(),
@@ -123,10 +132,18 @@ export const reviewRouter = router({
 
   /** «Верно» / «Неверно» on a task of the current submission. */
   mark: teacherProcedure
-    .input(z.object({ id: z.uuid(), taskIndex: z.number().int().min(0).max(49), mark: z.boolean() }))
+    .input(
+      z.object({
+        id: z.uuid(),
+        taskIndex: z.number().int().min(0).max(49),
+        mark: z.boolean(),
+        // A sentence of an order task of several: each is marked on its own (#161).
+        sentence: z.number().int().min(0).max(MAX_ORDER_SENTENCES - 1).optional(),
+      }),
+    )
     .output(z.object({ ok: z.literal(true) }))
     .mutation(async ({ ctx, input }) => {
-      if (!(await markTask(ctx.db, ctx.teacherId, input.id, input.taskIndex, input.mark))) throw notFound();
+      if (!(await markTask(ctx.db, ctx.teacherId, input.id, input.taskIndex, input.mark, input.sentence))) throw notFound();
       return { ok: true as const };
     }),
 

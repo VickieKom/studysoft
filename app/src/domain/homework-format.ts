@@ -133,17 +133,43 @@ const match = z
 
 const sameWords = (a: string[], b: string[]) => [...a].sort().join("\u0000") === [...b].sort().join("\u0000");
 
+const orderWords = z.array(text).min(2).max(20);
+const sameWordsMessage = "в другом порядке должны быть те же слова";
+
+/** One sentence of an order task of several (#161): its words in the right order and other right orders. */
+const orderSentence = z
+  .object({ words: orderWords, alternatives: z.array(z.array(text)).optional() })
+  .strict()
+  .refine((s) => (s.alternatives ?? []).every((alt) => sameWords(alt, s.words)), {
+    path: ["alternatives"],
+    message: sameWordsMessage,
+  });
+
+/** The most sentences one order task holds (#161): a workbook exercise's worth. */
+export const MAX_ORDER_SENTENCES = 10;
+
+// One sentence in `words`, or several in `sentences` under one instruction,
+// each its own point (#161).
 const order = z
   .object({
     ...common,
     type: z.literal("order"),
-    words: z.array(text).min(2).max(20),
+    words: orderWords.optional(),
     alternatives: z.array(z.array(text)).optional(),
+    sentences: z.array(orderSentence).min(2).max(MAX_ORDER_SENTENCES).optional(),
   })
   .strict()
-  .refine((t) => (t.alternatives ?? []).every((alt) => sameWords(alt, t.words)), {
+  .refine((t) => (t.words === undefined) !== (t.sentences === undefined), {
+    path: ["words"],
+    message: "нужно одно из двух: words — одно предложение или sentences — несколько",
+  })
+  .refine((t) => !t.sentences || !t.alternatives, {
     path: ["alternatives"],
-    message: "в другом порядке должны быть те же слова",
+    message: "у нескольких предложений другие порядки пишутся в каждом из sentences",
+  })
+  .refine((t) => !t.words || (t.alternatives ?? []).every((alt) => sameWords(alt, t.words!)), {
+    path: ["alternatives"],
+    message: sameWordsMessage,
   });
 
 const written = z.object({ ...common, type: z.literal("written"), hint: z.string().optional() }).strict();
@@ -190,6 +216,22 @@ export const homeworkSchema = z
 export type HomeworkDocument = z.infer<typeof homeworkSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type TaskType = (typeof TASK_TYPES)[number];
+export type OrderTask = Extract<Task, { type: "order" }>;
+export type OrderSentence = { words: string[]; alternatives?: string[][] };
+
+/** The sentences of an order task (#161): the one in `words`, or each of `sentences`. */
+export function orderSentences(task: OrderTask): OrderSentence[] {
+  if (task.sentences) return task.sentences;
+  return [{ words: task.words ?? [], ...(task.alternatives ? { alternatives: task.alternatives } : {}) }];
+}
+
+/**
+ * How many points a task counts in the score: a sentence each for an order
+ * task of several sentences (#161), one for any other task.
+ */
+export function taskPoints(task: Task): number {
+  return task.type === "order" && task.sentences ? task.sentences.length : 1;
+}
 
 /** One readable line per problem: which task, which field, what is wrong. */
 function describe(issue: z.core.$ZodIssue, input: unknown): string {
@@ -274,6 +316,7 @@ export type StudentTask = (
   | { type: "gap"; prompt: string; text: string; options?: string[]; choices?: (string[] | null)[] }
   | { type: "match"; prompt: string; left: string[]; right: string[] }
   | { type: "order"; prompt: string; words: string[] }
+  | { type: "order"; prompt: string; sentences: string[][] }
   | { type: "written" | "voice"; prompt: string; hint?: string }
   | { type: "file"; prompt: string; accept: ("image" | "audio")[]; hint?: string }
 ) & {
@@ -314,10 +357,17 @@ function studentBody(task: Task, seed: string): StudentTask {
         ),
       };
     case "order":
+      if (task.sentences) {
+        return {
+          type: "order",
+          prompt: task.prompt,
+          sentences: task.sentences.map((s, i) => shuffled(s.words, `${seed}:${i}`, [s.words, ...(s.alternatives ?? [])])),
+        };
+      }
       return {
         type: "order",
         prompt: task.prompt,
-        words: shuffled(task.words, seed, [task.words, ...(task.alternatives ?? [])]),
+        words: shuffled(task.words ?? [], seed, [task.words ?? [], ...(task.alternatives ?? [])]),
       };
     case "written":
     case "voice":
@@ -351,7 +401,15 @@ const pageAnswers = [
   z
     .object({ type: z.literal("match"), pairs: z.array(z.object({ left: answerText, right: answerText }).strict()).max(10) })
     .strict(),
-  z.object({ type: z.literal("order"), words: z.array(answerText).max(20) }).strict(),
+  // One sentence in `words`, or each sentence of a task of several in `sentences` (#161).
+  z
+    .object({
+      type: z.literal("order"),
+      words: z.array(answerText).max(20).optional(),
+      sentences: z.array(z.array(answerText).max(20)).max(MAX_ORDER_SENTENCES).optional(),
+    })
+    .strict()
+    .refine((a) => (a.words === undefined) !== (a.sentences === undefined), { message: "words или sentences" }),
   z.object({ type: z.literal("written"), text: z.string().max(MAX_WRITTEN_CHARS) }).strict(),
 ] as const;
 
@@ -400,7 +458,13 @@ export function isAnswered(task: StudentTask, answer: StudentAnswer | null | und
     case "match":
       return task.type === "match" && answer.pairs.length === task.left.length;
     case "order":
-      return task.type === "order" && answer.words.length === task.words.length;
+      if (task.type !== "order") return false;
+      if ("sentences" in task)
+        return (
+          answer.sentences?.length === task.sentences.length &&
+          task.sentences.every((words, i) => answer.sentences![i]!.length === words.length)
+        );
+      return answer.words?.length === task.words.length;
     case "written":
       return answer.text.trim() !== "";
     case "voice":

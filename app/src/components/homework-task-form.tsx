@@ -1,7 +1,16 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useId, useState } from "react";
-import { gapCount, IMAGE_TYPES, MAX_IMAGE_BYTES, SKILLS, type Task, type TaskType } from "@/domain/homework-format";
+import {
+  gapCount,
+  IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_ORDER_SENTENCES,
+  orderSentences,
+  SKILLS,
+  type Task,
+  type TaskType,
+} from "@/domain/homework-format";
 import { Button } from "./button";
 
 const SKILL_LABELS: Record<(typeof SKILLS)[number], string> = {
@@ -19,6 +28,7 @@ const lines = (value: string) =>
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
+const sameWordSet = (a: string[], b: string[]) => [...a].sort().join("\u0000") === [...b].sort().join("\u0000");
 
 type Props = {
   /** Where the task's stored picture is served, to show it while editing. */
@@ -60,9 +70,17 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
   const [pairsText, setPairsText] = useState(
     task?.type === "match" ? task.pairs.map((p) => `${p.left} = ${p.right}`).join("\n") : "",
   );
-  const [wordsText, setWordsText] = useState(task?.type === "order" ? task.words.join(" ") : "");
+  // An order task: one sentence per line; several lines make a task of several sentences (#161).
+  const [wordsText, setWordsText] = useState(
+    task?.type === "order" ? orderSentences(task).map((s) => s.words.join(" ")).join("\n") : "",
+  );
   const [alternativesText, setAlternativesText] = useState(
-    task?.type === "order" ? (task.alternatives ?? []).map((words) => words.join(" ")).join("\n") : "",
+    task?.type === "order"
+      ? orderSentences(task)
+          .flatMap((s) => s.alternatives ?? [])
+          .map((words) => words.join(" "))
+          .join("\n")
+      : "",
   );
   const [hint, setHint] = useState(task && "hint" in task ? (task.hint ?? "") : "");
   const [accept, setAccept] = useState<("image" | "audio")[]>(
@@ -138,10 +156,30 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
         return { ...common, type, pairs };
       }
       case "order": {
-        const words = wordsText.split(/\s+/).filter(Boolean);
-        if (words.length < 2) return "Нужно хотя бы два слова в правильном порядке";
-        const alternatives = lines(alternativesText).map((line) => line.split(/\s+/));
-        return { ...common, type, words, ...(alternatives.length > 0 ? { alternatives } : {}) };
+        const sentences = lines(wordsText).map((line) => line.split(/\s+/));
+        if (sentences.length === 0 || sentences.some((words) => words.length < 2))
+          return "Нужно хотя бы два слова в правильном порядке в каждом предложении";
+        if (sentences.length > MAX_ORDER_SENTENCES) return `Не больше ${MAX_ORDER_SENTENCES} предложений в одном задании`;
+        // Another right order belongs to the sentence with the same words.
+        const owners = lines(alternativesText).map((line) => {
+          const words = line.split(/\s+/);
+          return { words, owner: sentences.findIndex((s) => sameWordSet(s, words)) };
+        });
+        const stray = owners.find((a) => a.owner < 0);
+        if (stray) return `Другой порядок «${stray.words.join(" ")}»: в нём должны быть те же слова, что в одном из предложений`;
+        const alternativesOf = (i: number) => owners.filter((a) => a.owner === i).map((a) => a.words);
+        if (sentences.length === 1) {
+          const alternatives = alternativesOf(0);
+          return { ...common, type, words: sentences[0]!, ...(alternatives.length > 0 ? { alternatives } : {}) };
+        }
+        return {
+          ...common,
+          type,
+          sentences: sentences.map((words, i) => {
+            const alternatives = alternativesOf(i);
+            return { words, ...(alternatives.length > 0 ? { alternatives } : {}) };
+          }),
+        };
       }
       case "written":
       case "voice":
@@ -310,8 +348,18 @@ export function HomeworkTaskForm({ imageUrl, type, task, pending, error, onSave,
 
       {type === "order" && (
         <>
-          <Labelled id={`${id}-words`} label="Слова в правильном порядке" note="через пробел">
-            <input id={`${id}-words`} value={wordsText} onChange={(e) => setWordsText(e.target.value)} className={field} />
+          <Labelled
+            id={`${id}-words`}
+            label="Слова в правильном порядке"
+            note="через пробел; несколько предложений — по одному на строку, каждое — свой балл"
+          >
+            <textarea
+              id={`${id}-words`}
+              rows={2}
+              value={wordsText}
+              onChange={(e) => setWordsText(e.target.value)}
+              className={field}
+            />
           </Labelled>
           <Labelled id={`${id}-alternatives`} label="Другие правильные порядки" note="необязательно, по одному на строку">
             <textarea
