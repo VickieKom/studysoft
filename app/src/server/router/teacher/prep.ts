@@ -46,6 +46,10 @@ export const prepRouter = router({
           draft: lessonPlanSchema.nullable(),
           revision: z.string(),
           proposed: lessonPlanSchema,
+          // The plan the page opens with, the waiting homework's review first when it belongs there (#153).
+          start: lessonPlanSchema,
+          waitingHomework: z.object({ id: z.uuid(), title: z.string() }).strict().nullable(),
+          stageHomework: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
           homeworkId: z.uuid().nullable(),
           lessons: z.array(choice),
           materials: z.array(
@@ -58,10 +62,11 @@ export const prepRouter = router({
     .query(async ({ ctx, input }) => {
       const found = await findPreparation(ctx.db, ctx.teacherId, input.lessonId);
       if (!found) throw notFound();
+      const { launch: _, ...prep } = found;
       return {
-        ...found,
-        startsAt: found.startsAt.toISOString(),
-        materials: found.materials.map((m) => ({ ...m, kind: m.kind as (typeof MATERIAL_KINDS)[number] })),
+        ...prep,
+        startsAt: prep.startsAt.toISOString(),
+        materials: prep.materials.map((m) => ({ ...m, kind: m.kind as (typeof MATERIAL_KINDS)[number] })),
       };
     }),
 

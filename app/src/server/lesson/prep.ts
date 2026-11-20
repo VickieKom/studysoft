@@ -4,10 +4,11 @@
 // teacher has saved or approved its plan. The assistant only drafts
 // (AGENTS.md, rule 5); approving is the teacher's.
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { type LessonPlan, lessonPlanSchema, STAGE_MATERIAL_KINDS } from "../../domain/lesson-plan";
+import { type LessonPlan, lessonPlanSchema, STAGE_MATERIAL_KINDS, withWaitingHomework } from "../../domain/lesson-plan";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
 import { homework, lesson, lessonPlan, libraryMaterial, student, textbook } from "../db/schema";
+import { studentHomeworkIds, waitingHomework } from "./homework";
 
 /** How far ahead «Подготовка» lists lessons: two weeks. */
 const UPCOMING_DAYS = 14;
@@ -181,14 +182,31 @@ async function checkPlan(
   const found = await studentWithTextbook(db, teacherId, studentId);
   const lessons = new Set(orderedLessons(found?.structure ?? null).map((l) => l.id));
   const materials = new Set((await stageMaterials(db, teacherId)).map((m) => m.id));
+  const ownHomework = await studentHomeworkIds(
+    db,
+    teacherId,
+    studentId,
+    parsed.data.stages.flatMap((s) => (s.type === "homework" ? [s.homeworkId] : [])),
+  );
   const errors = parsed.data.stages.flatMap((s, i) =>
     s.type === "book" && !lessons.has(s.lessonId)
       ? [`этап ${i + 1}: такого урока нет в учебнике ученика`]
       : s.type === "material" && !materials.has(s.materialId)
         ? [`этап ${i + 1}: такого материала нет в библиотеке`]
-        : [],
+        : s.type === "homework" && !ownHomework.has(s.homeworkId)
+          ? [`этап ${i + 1}: такой домашки у ученика нет`]
+          : [],
   );
   return errors.length > 0 ? { ok: false, errors } : { ok: true, plan: parsed.data };
+}
+
+/** The titles of the student's homework with these ids. */
+async function homeworkTitles(db: Database, teacherId: string, studentId: string, ids: string[]) {
+  if (ids.length === 0) return [];
+  return db
+    .select({ id: homework.id, title: homework.title })
+    .from(homework)
+    .where(and(eq(homework.teacherId, teacherId), eq(homework.studentId, studentId), inArray(homework.id, ids)));
 }
 
 /** The draft as the teacher's page loaded it: approving is refused when the assistant replaced it meanwhile. */
@@ -197,19 +215,39 @@ const draftRevision = sql<string>`md5(coalesce(${lessonPlan.draft}::text, ''))`;
 /**
  * A lesson's preparation for the teacher: the lesson and its student, the
  * approved plan, the assistant's draft, the plan proposed when there is
- * neither (the next book lesson), the homework draft attached, and the
- * choices — the textbook's lessons, the library, the student's homework drafts.
+ * neither (the review of a waiting homework, then the next book lesson), the
+ * homework draft attached, and the choices — the textbook's lessons, the
+ * library, the student's homework drafts. `start` is the plan the page opens
+ * with: the draft, the approved plan or the proposed one, with the waiting
+ * homework's stage first unless the teacher saved the plan after it was
+ * submitted (#153).
  */
 export async function findPreparation(db: Database, teacherId: string, lessonId: string) {
   const found = await ownLesson(db, teacherId, lessonId);
   if (!found) return null;
   const withBook = (await studentWithTextbook(db, teacherId, found.studentId))!;
   const [row] = await db
-    .select({ plan: lessonPlan.plan, draft: lessonPlan.draft, homeworkId: lessonPlan.homeworkId, revision: draftRevision })
+    .select({
+      plan: lessonPlan.plan,
+      draft: lessonPlan.draft,
+      homeworkId: lessonPlan.homeworkId,
+      revision: draftRevision,
+      savedAt: lessonPlan.updatedAt,
+    })
     .from(lessonPlan)
     .where(eq(lessonPlan.lessonId, lessonId));
   const next = await nextBookLesson(db, teacherId, found.studentId);
-  const proposed: LessonPlan = { stages: next ? [{ type: "book", lessonId: next.id, skip: "", minutes: found.durationMinutes }] : [] };
+  const waiting = await waitingHomework(db, teacherId, found.studentId);
+  const proposed = withWaitingHomework(
+    { stages: next ? [{ type: "book", lessonId: next.id, skip: "", minutes: found.durationMinutes }] : [] },
+    waiting,
+    null,
+  );
+  const plan = (row?.plan as LessonPlan | null) ?? null;
+  const draft = (row?.draft as LessonPlan | null) ?? null;
+  // A saved plan's moment: the teacher's last save; the assistant's drafts leave `updated_at` as it was.
+  const fromPlan = plan ? withWaitingHomework(plan, waiting, row!.savedAt) : null;
+  const start = draft ? withWaitingHomework(draft, waiting, null) : (fromPlan ?? proposed);
   const drafts = await db
     .select({ id: homework.id, title: homework.title })
     .from(homework)
@@ -222,10 +260,21 @@ export async function findPreparation(db: Database, teacherId: string, lessonId:
     startsAt: found.startsAt,
     durationMinutes: found.durationMinutes,
     textbookTitle: withBook.textbookTitle,
-    plan: (row?.plan as LessonPlan | null) ?? null,
-    draft: (row?.draft as LessonPlan | null) ?? null,
+    plan,
+    draft,
     revision: row?.revision ?? "",
     proposed,
+    start,
+    // What «Запустить урок» starts from: the approved plan, else the proposed one — never the assistant's draft.
+    launch: fromPlan ?? proposed,
+    waitingHomework: waiting ? { id: waiting.id, title: waiting.title } : null,
+    // The homework the plan's stages review, for their titles.
+    stageHomework: await homeworkTitles(
+      db,
+      teacherId,
+      found.studentId,
+      [...new Set([plan, draft, start].flatMap((p) => p?.stages ?? []).flatMap((st) => (st.type === "homework" ? [st.homeworkId] : [])))],
+    ),
     homeworkId: row?.homeworkId ?? null,
     lessons: orderedLessons(withBook.structure),
     materials: await stageMaterials(db, teacherId),
@@ -282,6 +331,11 @@ export async function saveAssistantPlan(db: Database, teacherId: string, lessonI
   await db
     .insert(lessonPlan)
     .values({ lessonId, teacherId, draft: checked.plan })
-    .onConflictDoUpdate({ target: lessonPlan.lessonId, set: { draft: checked.plan, updatedAt: sql`now()` }, setWhere: eq(lessonPlan.teacherId, teacherId) });
+    // `updated_at` stays the teacher's last save: a homework submitted after it is still added at launch (#153).
+    .onConflictDoUpdate({
+      target: lessonPlan.lessonId,
+      set: { draft: checked.plan, updatedAt: sql`${lessonPlan.updatedAt}` },
+      setWhere: eq(lessonPlan.teacherId, teacherId),
+    });
   return "saved";
 }

@@ -5,6 +5,8 @@ import {
   type BookStage,
   bookStageLabel,
   goToStage,
+  type HomeworkStage,
+  homeworkStageLabel,
   type KeptState,
   type LessonBook,
   type BookLesson,
@@ -18,8 +20,12 @@ import {
   newer,
   pageIn,
   removeStage,
+  type StageHomework,
+  stageKey,
   STATE_SAVE_MS,
+  toggleShown,
   turnPage,
+  visibleTasks,
 } from "@/domain/lesson-state";
 import { BOOK_LABELS } from "@/domain/textbook";
 import { Button } from "./button";
@@ -34,6 +40,7 @@ export type LessonResourcesView = {
   lessons: BookLesson[];
   tracks: { name: string; url: string }[];
   materials: Material[];
+  homework: StageHomework[];
 };
 
 const HINT = "В Телемосте покажите окно «Экран для ученика» и включите звук";
@@ -162,8 +169,13 @@ export function LessonPanel({
   const current = state.stages[state.current];
   const lessonOf = (id: string) => resources.lessons.find((l) => l.id === id);
   const materialOf = (id: string) => resources.materials.find((m) => m.id === id);
+  const homeworkOf = (id: string) => resources.homework.find((h) => h.id === id);
   const label = (stage: LessonState["stages"][number]) =>
-    stage.type === "book" ? bookStageLabel(lessonOf(stage.lessonId)) : (materialOf(stage.materialId)?.title ?? "материал удалён");
+    stage.type === "book"
+      ? bookStageLabel(lessonOf(stage.lessonId))
+      : stage.type === "homework"
+        ? homeworkStageLabel(homeworkOf(stage.homeworkId))
+        : (materialOf(stage.materialId)?.title ?? "материал удалён");
   const stageOn = lastHello > 0 && now - lastHello < STAGE_SILENT_MS;
   const [adding, setAdding] = useState(resources.materials[0]?.id ?? "");
 
@@ -197,7 +209,7 @@ export function LessonPanel({
         <ul aria-label="Этапы урока" className="flex flex-col gap-2">
           {state.stages.map((stage, i) => (
             <li
-              key={`${i}-${stage.type === "book" ? stage.lessonId : stage.materialId}`}
+              key={`${i}-${stageKey(stage)}`}
               className={`flex items-center gap-3 rounded-control border px-3 py-2 ${i === state.current ? "border-green-600 bg-green-50" : "border-border"}`}
             >
               <span aria-hidden="true" className="w-4 text-green-700">
@@ -269,6 +281,13 @@ export function LessonPanel({
         />
       )}
       {current?.type === "material" && <MaterialNote material={materialOf(current.materialId)} />}
+      {current?.type === "homework" && (
+        <HomeworkControls
+          stage={current}
+          homework={homeworkOf(current.homeworkId)}
+          onStage={(next) => change((s) => ({ ...s, stages: s.stages.map((x, i) => (i === s.current ? next : x)) }))}
+        />
+      )}
 
       <Note lessonId={lessonId} initial={serverNote} />
     </main>
@@ -382,6 +401,72 @@ function Tracks({
       </div>
       {track?.playing && <p className="text-small text-text-secondary">На сцене играет {track.name}</p>}
       {soundBlocked && <p className="text-small text-danger">Звук на сцене выключен: нажмите «Включить звук» в окне сцены</p>}
+    </section>
+  );
+}
+
+/**
+ * The homework under review on the stage (#153): «Все задания» or «Только
+ * ошибки», and «Показать ответ» for a task — the stage shows a key only then.
+ */
+function HomeworkControls({
+  stage,
+  homework,
+  onStage,
+}: {
+  stage: HomeworkStage;
+  homework: StageHomework | undefined;
+  onStage: (next: HomeworkStage) => void;
+}) {
+  const pressed = (on: boolean) => `rounded-control border px-3 py-1.5 text-small ${on ? "border-green-600 bg-green-50 font-semibold" : "border-border"}`;
+  if (!homework) {
+    return <p className="rounded-card border border-border p-4 text-small text-text-secondary">У этой домашки больше нет сданной попытки: её открыли заново</p>;
+  }
+  const tasks = visibleTasks(stage, homework);
+  return (
+    <section aria-label="Домашка на сцене" className="flex flex-col gap-3 rounded-card border border-border p-4">
+      <h2 className="text-h3 font-semibold">Домашка на сцене</h2>
+      <p className="text-small text-text-secondary">
+        {homework.title} · {homework.correct} верно, {homework.wrong} неверно
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" aria-pressed={stage.filter === "all"} onClick={() => onStage({ ...stage, filter: "all" })} className={pressed(stage.filter === "all")}>
+          Все задания
+        </button>
+        <button
+          type="button"
+          aria-pressed={stage.filter === "wrong"}
+          onClick={() => onStage({ ...stage, filter: "wrong" })}
+          className={pressed(stage.filter === "wrong")}
+        >
+          Только ошибки
+        </button>
+      </div>
+      {tasks.length === 0 ? (
+        <p className="text-small text-text-secondary">Ошибок нет</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {tasks.map((task) => {
+            const hasKey = task.key !== null || (task.sentences?.length ?? 0) > 0;
+            const shown = stage.shown.includes(task.index);
+            return (
+              <li key={task.index} className="flex items-center gap-3 rounded-control border border-border px-3 py-2">
+                <span className="flex-1 text-small">
+                  {task.index + 1}. {task.prompt}
+                  <span className="ml-2 text-text-secondary">
+                    {task.verdict === null ? "ждёт проверки" : task.verdict ? "верно" : "неверно"}
+                  </span>
+                </span>
+                {hasKey && (
+                  <button type="button" aria-pressed={shown} onClick={() => onStage(toggleShown(stage, task.index))} className={pressed(shown)}>
+                    {shown ? "Скрыть ответ" : "Показать ответ"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }

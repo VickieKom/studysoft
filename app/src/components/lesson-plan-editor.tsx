@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { LessonPlan, PlanStage } from "@/domain/lesson-plan";
+import { HOMEWORK_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
 import type { MaterialKind } from "@/domain/library";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
@@ -17,7 +17,9 @@ const KIND_ONE: Record<MaterialKind, string> = { warmup: "Разминка", gam
  * A lesson's plan by stages (#151): in order, with minutes; the book lesson
  * with the exercises to skip, and materials from «Библиотека». «Сохранить
  * план», or «Утвердить план» for the assistant's draft, makes the lesson
- * «подготовлен», with the homework draft chosen for it.
+ * «подготовлен», with the homework draft chosen for it. A submitted homework
+ * waiting for review comes first as «Домашка» (#153); removed, it can be
+ * added back.
  */
 export function LessonPlanEditor({
   lessonId,
@@ -28,6 +30,8 @@ export function LessonPlanEditor({
   materials,
   homeworkDrafts,
   homeworkId,
+  waitingHomework,
+  stageHomework,
 }: {
   lessonId: string;
   start: LessonPlan;
@@ -37,6 +41,8 @@ export function LessonPlanEditor({
   materials: Material[];
   homeworkDrafts: { id: string; title: string }[];
   homeworkId: string | null;
+  waitingHomework: { id: string; title: string } | null;
+  stageHomework: { id: string; title: string }[];
 }) {
   const router = useRouter();
   const [stages, setStages] = useState<PlanStage[]>(start.stages);
@@ -73,6 +79,10 @@ export function LessonPlanEditor({
 
   const titleOf = (stage: PlanStage) => {
     if (stage.type === "book") return `Student's Book: ${lessons.find((l) => l.id === stage.lessonId)?.title ?? "урок не найден"}`;
+    if (stage.type === "homework") {
+      const title = stageHomework.find((h) => h.id === stage.homeworkId)?.title ?? waitingHomework?.title;
+      return title ? `Домашка: ${title}` : "Домашка";
+    }
     const material = materials.find((m) => m.id === stage.materialId);
     return material ? `${KIND_ONE[material.kind]}: ${material.title}` : "Материал не найден";
   };
@@ -139,6 +149,14 @@ export function LessonPlanEditor({
       )}
 
       <div className="flex flex-wrap items-end gap-3">
+        {waitingHomework && !stages.some((s) => s.type === "homework" && s.homeworkId === waitingHomework.id) && (
+          <Button
+            variant="secondary"
+            onClick={() => change([{ type: "homework", homeworkId: waitingHomework.id, minutes: HOMEWORK_STAGE_MINUTES }, ...stages])}
+          >
+            Добавить разбор домашки
+          </Button>
+        )}
         {lessons.length > 0 && (
           <Button
             variant="secondary"

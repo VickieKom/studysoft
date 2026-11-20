@@ -3,7 +3,9 @@ import {
   type BookLesson,
   firstBook,
   goToStage,
+  type HomeworkStage,
   initialState,
+  isMistake,
   type LessonBook,
   type LessonState,
   lessonStateSchema,
@@ -11,7 +13,11 @@ import {
   pageIn,
   removeStage,
   shownPages,
+  type StageHomework,
+  type StageHomeworkTask,
+  toggleShown,
   turnPage,
+  visibleTasks,
 } from "./lesson-state";
 
 const LESSON = "00000000-0000-4000-8000-000000000001";
@@ -137,5 +143,61 @@ describe("newer", () => {
     expect(newer(a, { ...a })).toBe(a);
     expect(newer(null, a)).toBe(a);
     expect(newer(a, null)).toBe(a);
+  });
+});
+
+describe("a homework stage (#153)", () => {
+  const HOMEWORK = "00000000-0000-4000-8000-000000000004";
+  const task = (index: number, verdict: boolean | null, sentences: StageHomeworkTask["sentences"] = null): StageHomeworkTask => ({
+    index,
+    prompt: `Task ${index + 1}`,
+    passage: null,
+    answer: "x",
+    verdict,
+    key: verdict === null ? null : "y",
+    sentences,
+    file: null,
+  });
+  const homework: StageHomework = {
+    id: HOMEWORK,
+    title: "Demo",
+    correct: 2,
+    wrong: 2,
+    pending: 1,
+    tasks: [
+      task(0, true),
+      task(1, false),
+      task(2, null),
+      // An order task of several sentences, right as a whole by the platform but one sentence wrong.
+      task(3, true, [
+        { answer: "a b", key: "a b", verdict: true },
+        { answer: "d c", key: "c d", verdict: false },
+      ]),
+    ],
+  };
+
+  it("starts on every task, no key shown", () => {
+    const state = initialState({ stages: [{ type: "homework", homeworkId: HOMEWORK, minutes: 10 }] }, lessons, books, now);
+    expect(state.stages[0]).toEqual({ type: "homework", homeworkId: HOMEWORK, minutes: 10, done: false, filter: "all", shown: [] });
+    expect(lessonStateSchema.safeParse(state).success).toBe(true);
+    expect(visibleTasks(state.stages[0] as HomeworkStage, homework)).toHaveLength(4);
+  });
+
+  it("«Только ошибки» keeps the wrong tasks and those with a wrong sentence; one waiting for a mark is not a mistake", () => {
+    const stage: HomeworkStage = { type: "homework", homeworkId: HOMEWORK, minutes: 10, done: false, filter: "wrong", shown: [] };
+    expect(visibleTasks(stage, homework).map((t) => t.index)).toEqual([1, 3]);
+    expect(isMistake(homework.tasks[2]!)).toBe(false);
+  });
+
+  it("shows and hides a task's key", () => {
+    const stage: HomeworkStage = { type: "homework", homeworkId: HOMEWORK, minutes: 10, done: false, filter: "all", shown: [3] };
+    expect(toggleShown(stage, 1).shown).toEqual([1, 3]);
+    expect(toggleShown(toggleShown(stage, 1), 1).shown).toEqual([3]);
+  });
+
+  it("refuses a filter it does not know", () => {
+    const state = initialState({ stages: [{ type: "homework", homeworkId: HOMEWORK, minutes: 10 }] }, lessons, books, now);
+    const bad = { ...state, stages: [{ ...state.stages[0], filter: "some" }] };
+    expect(lessonStateSchema.safeParse(bad).success).toBe(false);
   });
 });

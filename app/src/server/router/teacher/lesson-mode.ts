@@ -30,6 +30,32 @@ const resources = z
         z.object({ id: z.uuid(), kind: z.enum(["game", "video"]), title: z.string() }).strict(),
       ]),
     ),
+    // The submitted homework its homework stages review (#153), keys included: the stage shows one only when the teacher says.
+    homework: z.array(
+      z
+        .object({
+          id: z.uuid(),
+          title: z.string(),
+          correct: z.number().int(),
+          wrong: z.number().int(),
+          pending: z.number().int(),
+          tasks: z.array(
+            z
+              .object({
+                index: z.number().int(),
+                prompt: z.string(),
+                passage: z.string().nullable(),
+                answer: z.string().nullable(),
+                verdict: z.boolean().nullable(),
+                key: z.string().nullable(),
+                sentences: z.array(z.object({ answer: z.string().nullable(), key: z.string(), verdict: z.boolean() }).strict()).nullable(),
+                file: z.object({ kind: z.enum(["audio", "image"]), url: z.string().startsWith("/api/files/answers/") }).strict().nullable(),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    ),
   })
   .strict();
 

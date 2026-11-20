@@ -13,6 +13,10 @@ export const MAX_LESSON_STAGES = MAX_STAGES + 10;
 export const STATE_SAVE_MS = 2000;
 
 const page = z.number().int().min(1).max(10_000);
+/** «Все задания» or «Только ошибки» on a homework stage (#153); it opens on all of them (product owner, 2026-11-19). */
+export const HOMEWORK_FILTERS = ["all", "wrong"] as const;
+/** A homework has far fewer tasks than this; the bound only keeps the document small. */
+const MAX_TASK_INDEX = 199;
 const minutes = z.number().int().min(0).max(MAX_STAGE_MINUTES);
 
 const stage = z.discriminatedUnion("type", [
@@ -29,6 +33,17 @@ const stage = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("material"), materialId: z.uuid(), minutes, done: z.boolean() }).strict(),
+  // The homework under review (#153): which tasks the stage shows, and the tasks whose right answer the teacher has shown.
+  z
+    .object({
+      type: z.literal("homework"),
+      homeworkId: z.uuid(),
+      minutes,
+      done: z.boolean(),
+      filter: z.enum(HOMEWORK_FILTERS),
+      shown: z.array(z.number().int().min(0).max(MAX_TASK_INDEX)).max(MAX_TASK_INDEX + 1),
+    })
+    .strict(),
 ]);
 
 export const lessonStateSchema = z
@@ -46,6 +61,7 @@ export const lessonStateSchema = z
 export type LessonState = z.infer<typeof lessonStateSchema>;
 export type StateStage = z.infer<typeof stage>;
 export type BookStage = Extract<StateStage, { type: "book" }>;
+export type HomeworkStage = Extract<StateStage, { type: "homework" }>;
 
 /** A book of the student's set as the lesson mode needs it. */
 export type LessonBook = { kind: BookKind; fileId: string; pageCount: number };
@@ -85,7 +101,13 @@ export function turnPage(at: number, by: 1 | -1, layout: LessonState["layout"], 
 /** The state a lesson starts with: the plan's stages, the first one current, each book stage at its lesson's first page. */
 export function initialState(plan: LessonPlan, lessons: BookLesson[], books: LessonBook[], now: Date): LessonState {
   return {
-    stages: plan.stages.map((s) => (s.type === "book" ? bookStage(s.lessonId, s.minutes, s.skip, lessons, books) : { ...s, done: false })),
+    stages: plan.stages.map((s) =>
+      s.type === "book"
+        ? bookStage(s.lessonId, s.minutes, s.skip, lessons, books)
+        : s.type === "homework"
+          ? { ...s, done: false, filter: "all" as const, shown: [] }
+          : { ...s, done: false },
+    ),
     current: 0,
     layout: "single",
     track: null,
@@ -112,6 +134,11 @@ export function removeStage(state: LessonState, index: number): LessonState {
   const stages = state.stages.filter((_, i) => i !== index);
   const current = index < state.current ? state.current - 1 : Math.min(state.current, Math.max(stages.length - 1, 0));
   return { ...state, stages, current };
+}
+
+/** What tells stages apart in a list: the lesson, the material or the homework they show. */
+export function stageKey(stage: StateStage): string {
+  return stage.type === "book" ? stage.lessonId : stage.type === "material" ? stage.materialId : stage.homeworkId;
 }
 
 /** The label of a book stage, as the plan shows it. */
@@ -153,3 +180,39 @@ export const lessonMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("sound"), status: z.enum(["blocked", "on"]) }).strict(),
 ]);
 export type LessonMessage = z.infer<typeof lessonMessageSchema>;
+
+/** A task of the homework under review, as the stage shows it: the answer, the verdict, and the key it shows only when the teacher says. */
+export type StageHomeworkTask = {
+  index: number;
+  prompt: string;
+  passage: string | null;
+  answer: string | null;
+  /** The teacher's mark if any, else the platform's result; null while it waits for her. */
+  verdict: boolean | null;
+  key: string | null;
+  sentences: { answer: string | null; key: string; verdict: boolean }[] | null;
+  file: { kind: "audio" | "image"; url: string } | null;
+};
+
+/** The submitted homework a homework stage reviews (#153). */
+export type StageHomework = { id: string; title: string; correct: number; wrong: number; pending: number; tasks: StageHomeworkTask[] };
+
+/** A task with a mistake: wrong, or a sentence of it wrong. */
+export function isMistake(task: StageHomeworkTask): boolean {
+  return task.verdict === false || (task.sentences?.some((s) => !s.verdict) ?? false);
+}
+
+/** The tasks a homework stage shows under its filter. */
+export function visibleTasks(stage: HomeworkStage, homework: StageHomework): StageHomeworkTask[] {
+  return stage.filter === "wrong" ? homework.tasks.filter(isMistake) : homework.tasks;
+}
+
+/** Shows or hides a task's right answer on the stage. */
+export function toggleShown(stage: HomeworkStage, index: number): HomeworkStage {
+  return { ...stage, shown: stage.shown.includes(index) ? stage.shown.filter((i) => i !== index) : [...stage.shown, index].sort((a, b) => a - b) };
+}
+
+/** The label of a homework stage: «Домашка: …». */
+export function homeworkStageLabel(homework: StageHomework | undefined): string {
+  return homework ? `Домашка: ${homework.title}` : "Домашка";
+}
