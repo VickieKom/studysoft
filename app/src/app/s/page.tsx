@@ -31,7 +31,7 @@ export default async function StudentPage() {
     return (
       <div className="flex flex-col gap-6">
         {games}
-        <HomeworkResult firstName={firstName} {...homework.result} />
+        <HomeworkResult firstName={firstName} />
       </div>
     );
   }
