@@ -70,6 +70,35 @@ export async function saveLessonGameResult(
   return [...rows].length === 1;
 }
 
+/**
+ * Keeps a result of this teacher's game, played on the stage of a lesson
+ * (#199), for that lesson's student with that lesson. The stage knows its
+ * lesson, so the clock is not checked (product owner, 2026-11-19): the
+ * lesson only has to be still to hold. One statement reads the lesson, the
+ * student and the game and writes the result, so a finished or cancelled
+ * lesson, another teacher's lesson or game, or a video never get one.
+ */
+export async function saveStageGameResult(
+  db: Database,
+  teacherId: string,
+  lessonId: string,
+  materialId: string,
+  answers: GameAnswer[],
+): Promise<boolean> {
+  const rows = await db.execute<{ id: string }>(sql`
+    INSERT INTO game_result (teacher_id, student_id, material_id, lesson_id, title, answers, played_with_teacher)
+    SELECT l.teacher_id, l.student_id, m.id, l.id, m.title, ${JSON.stringify(answers)}::jsonb, true
+    FROM lesson AS l
+    JOIN student AS s ON s.id = l.student_id AND s.teacher_id = l.teacher_id AND s.deleted_at IS NULL
+    JOIN library_material AS m ON m.id = ${materialId} AND m.teacher_id = l.teacher_id AND m.kind = 'game'
+    WHERE l.id = ${lessonId}
+      AND l.teacher_id = ${teacherId}
+      AND l.status = 'scheduled'
+    RETURNING id
+  `);
+  return [...rows].length === 1;
+}
+
 export type CountedGameResult = { title: string; playedAt: Date; playedWithTeacher: boolean; answers: GameAnswer[] };
 
 /**
