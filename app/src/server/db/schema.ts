@@ -911,3 +911,31 @@ export const vocabularyWord = pgTable(
     uniqueIndex("vocabulary_word_student_word_key").on(t.studentId, sql`lower(${t.word})`),
   ],
 );
+
+// A result of an assessment by skill (#255): a percent on a date, entered by
+// the teacher on the card until the monthly assessment's format is decided;
+// the assessment will write the same rows (#252–#254). One per skill and
+// date. The teacher's and the parent's dashboard read it; never a student.
+export const skillResult = pgTable(
+  "skill_result",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    skill: text("skill").notNull(),
+    percent: bigint("percent", { mode: "number" }).notNull(),
+    measuredOn: date("measured_on").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "skill_result_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("skill_result_student_skill_date_key").on(t.studentId, t.skill, t.measuredOn),
+  ],
+);

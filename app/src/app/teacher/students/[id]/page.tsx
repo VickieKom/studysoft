@@ -5,6 +5,7 @@ import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentMistakes } from "@/components/student-mistakes";
+import { StudentProgress } from "@/components/student-progress";
 import { StudentVocabulary } from "@/components/student-vocabulary";
 import { StudentSlots } from "@/components/schedule-controls";
 import { StudentTextbook } from "@/components/student-textbook";
@@ -31,6 +32,7 @@ export default async function StudentCardPage({ params }: Props) {
   const past = await caller.teacher.history.list({ studentId: student.id });
   const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
   const vocabulary = await caller.teacher.students.vocabulary({ studentId: student.id });
+  const { results, ...totals } = await caller.teacher.progress.get({ studentId: student.id });
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
   const [nextLesson] = await caller.teacher.prep.list({ studentId: student.id });
 
@@ -131,6 +133,7 @@ export default async function StudentCardPage({ params }: Props) {
           )}
         </section>
       </div>
+      <StudentProgress studentId={student.id} results={results} totals={totals} />
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
