@@ -23,7 +23,7 @@ import { teacherIdFromHeaders } from "../access/auth";
 import { readBlob } from "../blob/store";
 import { type Database, db } from "../db/client";
 import { textbook, textbookLessonTasks } from "../db/schema";
-import { storeTaskFiles, taskFileResponse } from "../homework/images";
+import { storeTaskFiles, taskFileRefs, taskFileResponse } from "../homework/images";
 import { findLesson } from "./textbook-structure";
 
 type Saved = "saved" | "not_found" | { errors: string[] };
@@ -208,6 +208,59 @@ export async function confirmLessonTasks(
     .where(and(lessonRow(teacherId, textbookId, lessonId), isNotNull(textbookLessonTasks.draft), sql`${draftRevision} = ${revision}`))
     .returning({ id: textbookLessonTasks.id });
   return rows.length > 0 ? "saved" : refused(database, teacherId, textbookId, lessonId);
+}
+
+/** The confirmed tasks as the teacher's editor saw them: an edit is refused once they changed. */
+const tasksRevision = sql<string>`md5(coalesce(${textbookLessonTasks.tasks}::text, ''))`;
+
+/** A confirmed lesson's tasks whole, keys included, for the teacher's editor (#225); null when the lesson has none confirmed. */
+export async function readConfirmedTasks(
+  database: Database,
+  teacherId: string,
+  textbookId: string,
+  lessonId: string,
+): Promise<{ entryId: string; tasks: Task[]; revision: string } | null> {
+  const [row] = await database
+    .select({ id: textbookLessonTasks.id, tasks: textbookLessonTasks.tasks, revision: tasksRevision })
+    .from(textbookLessonTasks)
+    .where(and(lessonRow(teacherId, textbookId, lessonId), isNotNull(textbookLessonTasks.tasks)));
+  return row ? { entryId: row.id, tasks: row.tasks as Task[], revision: row.revision } : null;
+}
+
+/**
+ * Saves one confirmed task as the teacher edited it (#225), checked against
+ * the format with a book source. New pictures come as data URLs; a stored
+ * one may stay only if the lesson's confirmed tasks already have it. One
+ * conditional write: the tasks must be those her editor loaded (`revision`).
+ * A homework built from the bank before keeps its own copy.
+ */
+export async function updateConfirmedTask(
+  database: Database,
+  teacherId: string,
+  textbookId: string,
+  lessonId: string,
+  index: number,
+  revision: string,
+  input: unknown,
+): Promise<"saved" | "not_found" | "conflict" | { errors: string[] }> {
+  const current = await readConfirmedTasks(database, teacherId, textbookId, lessonId);
+  if (!current || index >= current.tasks.length) return "not_found";
+  if (current.revision !== revision) return "conflict";
+  const checked = checkLessonTasks([input], []);
+  // The editor saves one task; the problems name it by its place in the lesson.
+  if (!checked.ok) return { errors: checked.errors.map((line) => line.replace(/^Задание 1\b/, `Задание ${index + 1}`)) };
+  const keep = taskFileRefs({ version: HOMEWORK_FORMAT_VERSION, title: "Задания урока", tasks: current.tasks });
+  const files = await storeTaskFiles(database, teacherId, { version: HOMEWORK_FORMAT_VERSION, title: "Задания урока", tasks: checked.tasks }, keep);
+  if (!files.ok) return { errors: files.errors };
+  const rows = await database
+    .update(textbookLessonTasks)
+    .set({
+      tasks: sql`jsonb_set(${textbookLessonTasks.tasks}, ${`{${index}}`}::text[], ${JSON.stringify(files.homework.tasks[0])}::jsonb)`,
+      updatedAt: sql`now()`,
+    })
+    .where(and(eq(textbookLessonTasks.id, current.entryId), eq(textbookLessonTasks.teacherId, teacherId), sql`${tasksRevision} = ${revision}`))
+    .returning({ id: textbookLessonTasks.id });
+  return rows.length > 0 ? "saved" : "conflict";
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

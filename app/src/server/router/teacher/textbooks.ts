@@ -2,10 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { LEVELS } from "../../../domain/student";
 import { BOOK_KINDS, MAX_TRACKS, RENDER_STATUSES } from "../../../domain/textbook";
+import { taskSchema } from "../../../domain/homework-format";
 import { DRAFT_AUTHORS, structureSchema } from "../../../domain/textbook-structure";
 import { studentTaskSchema } from "../../../domain/student-task-schema";
 import { bookSourceSchema, MAX_LESSON_TASKS, skippedSchema } from "../../../domain/task-bank";
-import { confirmLessonTasks, readTaskBank, removeDraftTask } from "../../library/task-bank";
+import { confirmLessonTasks, readConfirmedTasks, readTaskBank, removeDraftTask, updateConfirmedTask } from "../../library/task-bank";
 import { findLesson, readStructure, saveTeacherStructure } from "../../library/textbook-structure";
 import { createTextbook, findTextbook, listTextbooks, retryRender } from "../../library/textbooks";
 import { router, teacherProcedure } from "../core/trpc";
@@ -178,6 +179,36 @@ export const textbooksRouter = router({
       const confirmed = await confirmLessonTasks(ctx.db, ctx.teacherId, input.textbookId, input.lessonId, input.revision);
       if (confirmed === "not_found") throw notFound();
       if (confirmed === "conflict") throw conflict();
+      return { ok: true as const };
+    }),
+
+  /** A confirmed lesson's tasks whole, keys included, for the task editor (#225), and the revision it saves against. */
+  bankLessonTasks: teacherProcedure
+    .input(z.object({ textbookId: z.uuid(), lessonId: z.uuid() }))
+    .output(z.object({ entryId: z.uuid(), tasks: z.array(taskSchema), revision: z.string() }).strict())
+    .query(async ({ ctx, input }) => {
+      const found = await readConfirmedTasks(ctx.db, ctx.teacherId, input.textbookId, input.lessonId);
+      if (!found) throw notFound();
+      return found;
+    }),
+
+  /** «Сохранить задание» on a confirmed task (#225): fixed once in the bank. Homework built before keeps its copy. */
+  updateBankTask: teacherProcedure
+    .input(
+      z.object({
+        textbookId: z.uuid(),
+        lessonId: z.uuid(),
+        index: z.number().int().min(0).max(MAX_LESSON_TASKS - 1),
+        revision: z.string().max(64),
+        task: z.unknown(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const saved = await updateConfirmedTask(ctx.db, ctx.teacherId, input.textbookId, input.lessonId, input.index, input.revision, input.task);
+      if (saved === "not_found") throw notFound();
+      if (saved === "conflict") throw new TRPCError({ code: "CONFLICT", message: "Задания урока изменились, пока редактор был открыт. Обновите страницу" });
+      if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
       return { ok: true as const };
     }),
 
