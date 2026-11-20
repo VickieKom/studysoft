@@ -17,6 +17,7 @@ import { studentVideosRouter } from "./student/videos";
 import { studentVocabularyRouter } from "./student/vocabulary";
 import { studentHomeworkRouter } from "./student/homework";
 import { parentMeRouter } from "./parent/me";
+import { parentProgressRouter } from "./parent/progress";
 import { studentMeRouter } from "./student/me";
 import { historyRouter } from "./teacher/history";
 import { homeworkRouter } from "./teacher/homework";
@@ -41,7 +42,7 @@ export const appRouter = router({
     studentMeRouter,
     router({ homework: studentHomeworkRouter, games: studentGamesRouter, videos: studentVideosRouter, vocabulary: studentVocabularyRouter }),
   ),
-  parent: parentMeRouter,
+  parent: mergeRouters(parentMeRouter, parentProgressRouter),
   agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
   teacher: router({
     session: sessionRouter,

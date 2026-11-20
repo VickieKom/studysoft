@@ -1,8 +1,8 @@
 // «Прогресс» on the student card (#255): the results by skill the teacher
 // enters by hand — a date and a percent per skill — and the dashboard built
 // from them, the homework submitted, the textbook covered and the words. The
-// monthly assessment will write the same results (#252–#254). Never read by
-// a student procedure.
+// monthly assessment will write the same results (#252–#254). The parent's
+// page shows the same dashboard (#256); never a student procedure.
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { PROGRESS_SKILLS, type Skill, type SkillResult, unitsPassed } from "../../domain/progress";
 import { MASTERED_STEP } from "../../domain/word-training";
@@ -77,4 +77,9 @@ export async function progressTotals(db: Database, teacherId: string, studentId:
     textbook: book?.textbookTitle && book.structure ? { title: book.textbookTitle, unitsPassed: units.passed, units: units.total } : null,
     words: { total: words?.total ?? 0, learnt: words?.learnt ?? 0 },
   };
+}
+
+/** The dashboard as the teacher's card and the parent's page show it. */
+export async function progressView(db: Database, teacherId: string, studentId: string) {
+  return { results: await listSkillResults(db, teacherId, studentId), ...(await progressTotals(db, teacherId, studentId)) };
 }

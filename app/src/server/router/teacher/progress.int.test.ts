@@ -94,4 +94,20 @@ describe("«Прогресс»", () => {
     expect(seen).not.toContain("64");
     expect((await teacher.teacher.progress.get({ studentId })).results).toEqual([{ skill: "speaking", percent: 64, measuredOn: "2026-11-15" }]);
   });
+
+  it("shows the parent their child's dashboard and nothing else (#256)", async () => {
+    const mine = await newStudent("Дашборд родителя");
+    const theirs = await newStudent("Соседний дашборд");
+    await teacher.teacher.progress.save({ studentId: mine, date: "2026-11-15", previousDate: null, results: { reading: 66 } });
+    await teacher.teacher.progress.save({ studentId: theirs, date: "2026-11-15", previousDate: null, results: { reading: 33 } });
+    await teacher.teacher.notes.add({ studentId: mine, body: "Заметка не для родителя" });
+    const parent = await studentSession(mine, "parent");
+    const view = await parent.parent.progress();
+    // Exactly the teacher's dashboard of this child: the output schema leaves out anything else.
+    expect(view).toEqual(await teacher.teacher.progress.get({ studentId: mine }));
+    expect(JSON.stringify(view)).not.toMatch(/33|Заметка/);
+    // A student's session does not open the parent's dashboard.
+    const asStudent = await studentSession(mine, "student");
+    await expect(asStudent.parent.progress()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
 });
