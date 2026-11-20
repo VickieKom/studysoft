@@ -1,6 +1,6 @@
 // Acceptance for #158: a video shared from the stage stutters for the
 // student, so during a lesson the teacher opens a video to the student, the
-// way a game is opened in #118. The student finds it under «Видео» behind
+// way a game is opened in #118. The student finds it under «Видео» in «Материалы урока» (#241) behind
 // their permanent link: their own file plays on their page, served in byte
 // ranges by the same address as for the teacher; a link is a button that
 // opens it in a new tab. Another student gets the same 404 for the video's
@@ -148,8 +148,10 @@ async function openToStudent(page: Page, title: string, firstName: string) {
   await expect(page.getByText(new RegExp(`Открыто ученику: ${firstName}`))).toBeVisible();
 }
 
-/** The «Видео» section of the student's page. */
-function studentVideos(student: Page) {
+/** «Материалы урока» in the student's menu (#241), and its «Видео» section. */
+async function studentVideos(student: Page) {
+  await student.getByRole("navigation", { name: "Разделы" }).getByRole("link", { name: /^Материалы урока/ }).click();
+  await expect(student.getByRole("heading", { level: 1, name: "Материалы урока" })).toBeVisible();
   return student.getByRole("region", { name: "Видео" });
 }
 
@@ -174,13 +176,13 @@ test("during a lesson the teacher opens her own video to the student, who finds 
 
   // Before anything is opened, the student has no videos.
   const before = await openAsStudent(browser, viewerLink, "Наблюдатель");
-  await expect(studentVideos(before)).toHaveCount(0);
+  await expect(await studentVideos(before)).toHaveCount(0);
   await before.context().close();
 
   await openToStudent(page, OWN, "Наблюдатель");
 
   const student = await openAsStudent(browser, viewerLink, "Наблюдатель");
-  await studentVideos(student).getByRole("link", { name: OWN }).click();
+  await (await studentVideos(student)).getByRole("link", { name: OWN }).click();
   await expect(student.getByRole("heading", { level: 1, name: OWN })).toBeVisible();
   videoPage = student.url();
   const video = student.getByRole("main").locator("video");
@@ -206,7 +208,7 @@ test("a video link opened to the student is a button under «Видео» that o
   await openToStudent(page, LINKED, "Наблюдатель");
 
   const student = await openAsStudent(browser, viewerLink, "Наблюдатель");
-  const watch = studentVideos(student).getByRole("link", { name: LINKED });
+  const watch = (await studentVideos(student)).getByRole("link", { name: LINKED });
   await expect(watch).toHaveAttribute("href", LINK);
   await expect(watch).toHaveAttribute("target", "_blank");
   await student.context().close();
@@ -215,7 +217,7 @@ test("a video link opened to the student is a button under «Видео» that o
 test("another student gets the same 404 for the opened video's page and file as for a missing one", async ({ page, browser }) => {
   const otherLink = await createStudent(page, "Посторонний");
   const other = await openAsStudent(browser, otherLink, "Посторонний");
-  await expect(studentVideos(other)).toHaveCount(0);
+  await expect(await studentVideos(other)).toHaveCount(0);
 
   const missing = "00000000-0000-4000-8000-000000000000";
   expect((await other.goto(videoPage))?.status()).toBe(404);
