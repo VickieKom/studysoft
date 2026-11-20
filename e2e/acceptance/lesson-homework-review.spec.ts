@@ -83,7 +83,7 @@ async function submitWithOneMistake(browser: Browser, link: string) {
   await expect(page.getByText(day.prompt)).toBeVisible();
   await page.getByLabel("Ваш ответ").fill(WRITTEN);
   await page.getByRole("button", { name: "Сдать", exact: true }).click();
-  await expect(page.getByText(/\d+\s+верно/)).toBeVisible();
+  await expect(page.getByText("Домашка сдана")).toBeVisible();
   await page.context().close();
 }
 

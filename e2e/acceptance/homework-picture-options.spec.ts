@@ -28,6 +28,15 @@ function control(page: Page, name: string) {
   return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
 }
 
+/** The submission's row in «Проверка домашек»: the score is the teacher's; the student sees none (#227). */
+async function reviewRow(page: Page, firstName: string) {
+  await page.goto("/teacher/homework-review");
+  await page.getByLabel("Ученик").selectOption({ label: firstName });
+  const row = page.getByRole("listitem").filter({ hasText: firstName });
+  await expect(row).toHaveCount(1);
+  return row;
+}
+
 /** The answer option with this letter, drawn by the interface. */
 function option(page: Page, letter: string): Locator {
   return page.getByRole("button", { name: new RegExp(`^${letter}\\b`) });
@@ -105,7 +114,9 @@ test("picture, captioned picture and text options with letters; an option of two
   expect(before).not.toContain("data:image");
 
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
-  await expect(student.getByText(/2\s+верно,\s+0\s+неверно/)).toBeVisible();
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
+  // The score is the teacher's (#227).
+  await expect(await reviewRow(page, "Картинки-варианты")).toContainText("2 верно, 0 неверно");
   await student.context().close();
 });
 

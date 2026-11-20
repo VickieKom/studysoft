@@ -96,7 +96,7 @@ async function answerAndSubmit(page: Page) {
     .setInputFiles({ name: "notebook.png", mimeType: "image/png", buffer: PIXEL_PNG });
   await expect(page.locator('main img[src^="/api/files/"]')).toHaveCount(1);
   await page.getByRole("button", { name: "Сдать", exact: true }).click();
-  const result = page.getByText(/\d+\s+верно/);
+  const result = page.getByText("Домашка сдана");
   const confirm = page.getByRole("button", { name: "Всё равно сдать", exact: true });
   await expect(result.or(confirm)).toBeVisible();
   if (await confirm.isVisible()) await confirm.click();

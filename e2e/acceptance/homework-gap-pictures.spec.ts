@@ -23,6 +23,15 @@ function control(page: Page, name: string) {
   return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
 }
 
+/** The submission's row in «Проверка домашек»: the score is the teacher's; the student sees none (#227). */
+async function reviewRow(page: Page, firstName: string) {
+  await page.goto("/teacher/homework-review");
+  await page.getByLabel("Ученик").selectOption({ label: firstName });
+  const row = page.getByRole("listitem").filter({ hasText: firstName });
+  await expect(row).toHaveCount(1);
+  return row;
+}
+
 async function createStudent(page: Page, firstName: string) {
   await page.goto("/teacher/students");
   await control(page, "Новый ученик").click();
@@ -97,7 +106,9 @@ test("a picture by each gap shows next to its own field; the task is checked as 
     await student.getByRole("textbox", { name: `Пропуск ${n + 1}`, exact: true }).fill(key!);
   }
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
-  await expect(student.getByText(/1\s+верно,\s+0\s+неверно/)).toBeVisible();
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
+  // The score is the teacher's (#227).
+  await expect(await reviewRow(page, "Подпиши картинки")).toContainText("1 верно, 0 неверно");
   await student.context().close();
 });
 

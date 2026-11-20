@@ -14,6 +14,15 @@ function control(page: Page | Locator, name: string) {
   return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
 }
 
+/** The submission's row in «Проверка домашек»: the score is the teacher's; the student sees none (#227). */
+async function reviewRow(page: Page, firstName: string) {
+  await page.goto("/teacher/homework-review");
+  await page.getByLabel("Ученик").selectOption({ label: firstName });
+  const row = page.getByRole("listitem").filter({ hasText: firstName });
+  await expect(row).toHaveCount(1);
+  return row;
+}
+
 async function draftForNewStudent(page: Page, firstName: string): Promise<string> {
   await page.goto("/teacher/students");
   await control(page, "Новый ученик").click();
@@ -64,6 +73,8 @@ test("a typo is fixed and a second correct variant added; the student's answer i
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
   await expect(page.getByText("Опубликована", { exact: true })).toBeVisible();
   await answerOnlyTheGap(browser, link, "'s");
+  // The variant counts: the teacher sees the gap right (#227: the student sees no score).
+  await expect(await reviewRow(page, "Правка")).toContainText("1 верно");
 });
 
 async function answerOnlyTheGap(browser: Browser, link: string, answer: string) {
@@ -84,7 +95,7 @@ async function answerOnlyTheGap(browser: Browser, link: string, answer: string) 
   // Confirming a submission with unanswered tasks, if the page asks. The
   // question comes after the answers are saved, so wait for either it or the
   // result before deciding (#167).
-  const result = student.getByText(/1\s+верно/);
+  const result = student.getByText("Домашка сдана");
   const confirm = student.getByRole("button", { name: "Всё равно сдать", exact: true });
   await expect(result.or(confirm)).toBeVisible();
   if (await confirm.isVisible()) await confirm.click();

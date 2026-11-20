@@ -72,7 +72,7 @@ async function submitAsStudent(page: Page, answers: Answers): Promise<void> {
   // The written task is left blank; submitting anyway is allowed (#34). The
   // warning, if the page shows one, comes after the answers are saved, so
   // wait for either it or the result before deciding.
-  const result = page.getByText(/\d+\s+верно/);
+  const result = page.getByText("Домашка сдана");
   const confirm = page.getByRole("button", { name: "Всё равно сдать", exact: true });
   await expect(result.or(confirm)).toBeVisible();
   if (await confirm.isVisible()) await confirm.click();
@@ -193,7 +193,7 @@ test("«Открыть заново для ученика»: the student does it
   const again = await (await browser.newContext({ storageState: studentState })).newPage();
   await again.goto(new URL(link).pathname);
   await submitAsStudent(again, { gap: "is", animals: ["cat", "dog"] });
-  await expect(again.getByText(/3\s+верно/)).toBeVisible();
+  await expect(again.getByText("Домашка сдана")).toBeVisible();
   await again.context().close();
 
   await openSubmission(page, "Заново");
