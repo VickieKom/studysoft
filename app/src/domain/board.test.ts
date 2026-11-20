@@ -59,4 +59,12 @@ describe("the chalkboard (#155)", () => {
     const { board: _, ...older } = state;
     expect(lessonStateSchema.parse(older).board).toEqual(cleanBoard());
   });
+
+  it("«Доска крупно» (#205) is off when a lesson starts, and off for a state kept before it", () => {
+    const state = initialState({ stages: [] }, [], [], new Date("2026-11-20T10:00:00Z"));
+    expect(state.boardLarge).toBe(false);
+    const { boardLarge: _, ...older } = state;
+    expect(lessonStateSchema.parse(older).boardLarge).toBe(false);
+    expect(lessonStateSchema.parse({ ...state, boardLarge: true }).boardLarge).toBe(true);
+  });
 });

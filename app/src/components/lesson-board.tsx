@@ -25,6 +25,8 @@ type Tool = "text" | "chalk" | "sponge";
 const CHALK: Record<ChalkColour, string> = { white: "#f4f1e8", yellow: "#f2d675", pink: "#f2a7c3", blue: "#9fd3f0" };
 const SLATE = "#2f3432";
 const CHALK_FONT = "Pangolin, cursive";
+/** Text scales with the sheet, so «Доска крупно» makes it larger too: 22px on the column's sheet. */
+const TEXT_SIZE = "7.5cqw";
 
 /** A point of the sheet under the pointer, in the sheet's own coordinates. */
 function pointOf(event: PointerEvent<HTMLElement>, surface: HTMLElement): [number, number] {
@@ -46,7 +48,7 @@ function path(points: [number, number][]): string {
  * ‹ and ›. Every change goes to the panel, which keeps the board with the
  * lesson's state, so a stage opened again shows it as it was.
  */
-export function LessonBoard({ board, onChange }: { board: Board; onChange: (board: Board) => void }) {
+export function LessonBoard({ board, large, onChange }: { board: Board; large: boolean; onChange: (board: Board) => void }) {
   const [tool, setTool] = useState<Tool>("text");
   const [colour, setColour] = useState<ChalkColour>("white");
   const [typing, setTyping] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -111,7 +113,12 @@ export function LessonBoard({ board, onChange }: { board: Board; onChange: (boar
   };
 
   return (
-    <section aria-label="Доска" className="flex w-72 shrink-0 flex-col gap-2 rounded-card border-8 border-[#5b4a3a] p-2" style={{ background: SLATE }}>
+    <section
+      aria-label="Доска"
+      // «Доска крупно» (#205): the whole stage; the sheet grows with it, its text too.
+      className={`flex flex-col gap-2 rounded-card border-8 border-[#5b4a3a] p-2 ${large ? "flex-1 items-center" : "w-72 shrink-0"}`}
+      style={{ background: SLATE }}
+    >
       <div className="flex flex-wrap items-center gap-1">
         <button type="button" aria-pressed={tool === "text"} onClick={() => pick("text")} className={button(tool === "text")}>
           Текст
@@ -153,8 +160,13 @@ export function LessonBoard({ board, onChange }: { board: Board; onChange: (boar
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        className={`relative w-full touch-none overflow-hidden ${tool === "text" ? "cursor-text" : "cursor-crosshair"}`}
-        style={{ aspectRatio: `${SHEET_WIDTH} / ${SHEET_HEIGHT}`, maxHeight: "calc(100vh - 10rem)" }}
+        className={`relative touch-none overflow-hidden ${large ? "" : "w-full"} ${tool === "text" ? "cursor-text" : "cursor-crosshair"}`}
+        // Large, the sheet is as tall as the stage allows and as wide as its shape; in the column, as wide as the column.
+        style={{
+          aspectRatio: `${SHEET_WIDTH} / ${SHEET_HEIGHT}`,
+          ...(large ? { height: "calc(100vh - 10rem)" } : { maxHeight: "calc(100vh - 10rem)" }),
+          containerType: "inline-size",
+        }}
       >
         <svg aria-hidden="true" viewBox={`0 0 ${SHEET_WIDTH} ${SHEET_HEIGHT}`} className="absolute inset-0 h-full w-full">
           {[...sheet.items, ...(line ? [tool === "sponge" ? { kind: "sponge" as const, points: line } : { kind: "stroke" as const, points: line, colour }] : [])].map(
@@ -177,8 +189,8 @@ export function LessonBoard({ board, onChange }: { board: Board; onChange: (boar
           item.kind === "text" ? (
             <span
               key={i}
-              className="pointer-events-none absolute whitespace-pre text-[22px] leading-none"
-              style={{ left: `${(item.x / SHEET_WIDTH) * 100}%`, top: `${(item.y / SHEET_HEIGHT) * 100}%`, color: CHALK[item.colour], fontFamily: CHALK_FONT }}
+              className="pointer-events-none absolute whitespace-pre leading-none"
+              style={{ left: `${(item.x / SHEET_WIDTH) * 100}%`, top: `${(item.y / SHEET_HEIGHT) * 100}%`, color: CHALK[item.colour], fontFamily: CHALK_FONT, fontSize: TEXT_SIZE }}
             >
               {item.text}
             </span>
@@ -197,8 +209,8 @@ export function LessonBoard({ board, onChange }: { board: Board; onChange: (boar
               if (e.key === "Escape") setTyping(null);
             }}
             onBlur={commitText}
-            className="absolute w-40 border-b border-white/50 bg-transparent text-[22px] leading-none outline-none"
-            style={{ left: `${(typing.x / SHEET_WIDTH) * 100}%`, top: `${(typing.y / SHEET_HEIGHT) * 100}%`, color: CHALK[colour], fontFamily: CHALK_FONT }}
+            className="absolute w-1/2 border-b border-white/50 bg-transparent leading-none outline-none"
+            style={{ left: `${(typing.x / SHEET_WIDTH) * 100}%`, top: `${(typing.y / SHEET_HEIGHT) * 100}%`, color: CHALK[colour], fontFamily: CHALK_FONT, fontSize: TEXT_SIZE }}
           />
         )}
       </div>

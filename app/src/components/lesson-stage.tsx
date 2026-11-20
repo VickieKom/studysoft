@@ -131,7 +131,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
 
   return (
     <div className="flex h-screen gap-4 bg-surface p-4">
-      <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-card border border-border bg-bg p-4">
+      <main className={`${state.boardLarge ? "hidden" : "flex"} min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-card border border-border bg-bg p-4`}>
         <div role="tablist" aria-label="Этапы урока" className="flex flex-wrap gap-2">
           {state.stages.map((stage, i) => (
             <span
@@ -210,6 +210,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
       </main>
 
       <LessonBoard
+        large={state.boardLarge}
         board={drawn ?? state.board}
         onChange={(board) => {
           setDrawn(board);
