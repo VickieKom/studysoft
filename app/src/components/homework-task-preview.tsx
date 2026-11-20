@@ -1,4 +1,4 @@
-import { answerKey, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, TASK_TYPE_LABELS } from "@/domain/homework";
+import { answerKey, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, MARK_SIGNS, TASK_TYPE_LABELS } from "@/domain/homework";
 import { type ChoiceOption, matchLeftLabel, type Task, withPartPictures } from "@/domain/homework-format";
 import { ChoiceOptionContent, hasPictureOptions, MatchPictures } from "./choice-option";
 import { GapChoices } from "./gap-choices";
@@ -32,6 +32,9 @@ export function HomeworkTaskPreview({ task, number, homeworkId }: { task: Task; 
       )}
       {task.type === "match" && task.pairs.some((p) => typeof p.left !== "string") && (
         <PreviewMatchPictures task={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n))} />
+      )}
+      {task.type === "table" && (
+        <PreviewTable task={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n))} />
       )}
       {task.type === "gap" && (
         <PreviewGapText task={withPartPictures(task, (_, n) => homeworkPictureUrl(homeworkId, number - 1, n))} />
@@ -102,5 +105,39 @@ function PreviewMatchPictures({ task }: { task: Extract<Task, { type: "match" }>
         </li>
       ))}
     </ol>
+  );
+}
+
+/** A table as the student sees it, with the key in each blank (#186); `task` carries the pictures' addresses. */
+function PreviewTable({ task }: { task: Extract<Task, { type: "table" }> }) {
+  return (
+    <div className="mt-2 overflow-x-auto">
+      <table className="border-collapse text-small">
+        <thead>
+          <tr>
+            {task.header.map((cell, column) => (
+              <th key={column} scope="col" className="border border-border px-2 py-1 align-bottom">
+                <ChoiceOptionContent option={cell} index={column} lettered={false} src={(address) => address} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {task.rows.map((row, r) => (
+            <tr key={r}>
+              {row.map((cell, c) => (
+                <td key={c} className="border border-border px-2 py-1">
+                  {typeof cell === "string" ? (
+                    cell
+                  ) : (
+                    <span className="text-green-700">{"gap" in cell ? cell.gap.join(" / ") : MARK_SIGNS[cell.mark]}</span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

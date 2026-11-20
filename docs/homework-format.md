@@ -107,6 +107,29 @@ The student orders every sentence on the same screen. Each sentence is its own p
 }
 ```
 
+### `table`
+
+A workbook exercise laid out as a table (#186): characters in the header and a tick or a word under each, a timetable. The interface draws the grid.
+
+| Field | Meaning |
+|-------|---------|
+| `header` | 1 to 6 cells: text, or a picture option `{ "images": [...], "text": "caption" }` as in `single_choice` |
+| `rows` | 1 to 12 rows, each with as many cells as the header. A cell is text (a printed `✓` or `✗` included, or `""` for an empty one), `{ "gap": ["variant", …] }` for a word to type, or `{ "mark": "yes" }` / `{ "mark": "no" }` for a ✓ or ✗ the student sets |
+
+At least one cell is a gap or a mark. Gaps are compared as in `gap`. The gaps and marks are checked together, as the gaps of a `gap` task are: the task is one point.
+
+```json
+{
+  "type": "table",
+  "prompt": "Tick or cross, and write the colour.",
+  "header": ["", { "images": ["data:image/png;base64,…"], "text": "Square A" }],
+  "rows": [
+    ["Is it red?", { "mark": "yes" }],
+    ["Colour", { "gap": ["red"] }]
+  ]
+}
+```
+
 ### `written`
 
 A sentence or a text, up to 5000 characters. Checked by the teacher.
@@ -171,4 +194,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), or a wider choice, such as a picture option (#129), a picture by a gap (#181) or a picture in a pair (#184), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), a wider choice, such as a picture option (#129), a picture by a gap (#181) or a picture in a pair (#184), or a new task type, such as `table` (#186), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

@@ -114,6 +114,8 @@ export type ReviewTask = {
   gapImages: (string | null)[] | null;
   /** The pictures on the left of each match pair (#184), by their addresses; null when the task has none. */
   pairImages: (string[] | null)[] | null;
+  /** The pictures of a table's header (#186), by their addresses; null when it has none. */
+  headerImages: (string[] | null)[] | null;
   /** A recording or file to play or show, from this submission's own attempt (#93). */
   file: { kind: "audio" | "image"; url: string } | null;
 };
@@ -201,6 +203,12 @@ function reviewTasks(
       key: answerKey(task),
       sentences,
       pictureOptions: pictureOptions(submission.homeworkId, index, task, parsed.success ? parsed.data : null),
+      headerImages:
+        task.type === "table" && task.header.some((cell) => typeof cell !== "string")
+          ? withPartPictures(task, (_, n) => homeworkPictureUrl(submission.homeworkId, index, n)).header.map((cell) =>
+              typeof cell === "string" ? null : cell.images,
+            )
+          : null,
       pairImages:
         task.type === "match" && task.pairs.some((p) => typeof p.left !== "string")
           ? withPartPictures(task, (_, n) => homeworkPictureUrl(submission.homeworkId, index, n)).pairs.map((p) =>

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "title": "Demo: a table",
+  "tasks": [
+    {
+      "type": "table",
+      "prompt": "Look at the table. Tick or cross, and write the colour.",
+      "header": [
+        "",
+        {
+          "images": [
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4o6FBEmIY1TCqYfhqAAAyBCwQhvh37QAAAABJRU5ErkJggg=="
+          ],
+          "text": "Square A"
+        },
+        {
+          "images": [
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQCLhDEmIY1TCqYfhqAAANiFQQvOkcpQAAAABJRU5ErkJggg=="
+          ],
+          "text": "Square B"
+        }
+      ],
+      "rows": [
+        [
+          "Is it red?",
+          {
+            "mark": "yes"
+          },
+          {
+            "mark": "no"
+          }
+        ],
+        [
+          "Is it blue?",
+          "✗",
+          "✓"
+        ],
+        [
+          "Colour",
+          {
+            "gap": [
+              "red"
+            ]
+          },
+          {
+            "gap": [
+              "blue",
+              "dark blue"
+            ]
+          }
+        ]
+      ],
+      "topic": "colours",
+      "skill": "vocabulary"
+    }
+  ]
+}
