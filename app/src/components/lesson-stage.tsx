@@ -22,6 +22,8 @@ import {
   stageKey,
   visibleTasks,
 } from "@/domain/lesson-state";
+import type { Board } from "@/domain/board";
+import { LessonBoard } from "./lesson-board";
 import type { LessonResourcesView } from "./lesson-panel";
 import { routerClient } from "./router-client";
 
@@ -60,6 +62,8 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
   const [kept, setKept] = useState<KeptState>(() => newer(serverKept, readLocal(lessonId))!);
   const [soundOn, setSoundOn] = useState(false);
   const [finished, setFinished] = useState(false);
+  // The board as the teacher just drew it, until the panel's state carries it back (#155).
+  const [drawn, setDrawn] = useState<Board | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
 
@@ -71,6 +75,8 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
       if (message.success && message.data.type === "state") {
         const incoming = message.data.kept;
         setKept((k) => (incoming.revision >= k.revision ? incoming : k));
+        // The panel has kept the board as last drawn: it is the state's again.
+        setDrawn((d) => (d && JSON.stringify(d) === JSON.stringify(incoming.state.board) ? null : d));
       } else if (message.success && message.data.type === "finished") setFinished(true);
     };
     const hello = () => ch.postMessage({ type: "hello" } satisfies LessonMessage);
@@ -203,8 +209,13 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
         </div>
       </main>
 
-      {/* The board's place, kept for the board issue (#155). */}
-      <aside aria-hidden="true" className="w-72 shrink-0 rounded-card border-8 border-[#5b4a3a] bg-[#2f3432]" />
+      <LessonBoard
+        board={drawn ?? state.board}
+        onChange={(board) => {
+          setDrawn(board);
+          channel.current?.postMessage({ type: "board", board } satisfies LessonMessage);
+        }}
+      />
 
       {/* biome-ignore lint/a11y/useMediaCaption: a textbook's listening track has no captions; its text is on the page */}
       <audio ref={audio} preload="auto" className="hidden" />
