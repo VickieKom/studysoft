@@ -4,6 +4,7 @@
 // closed mid-lesson opens where it was. The teacher's note is not part of
 // it: the stage never receives it. Plain data, zod and pure functions only.
 import { z } from "zod";
+import { boardSchema, cleanBoard } from "./board";
 import { MAX_STAGE_MINUTES, MAX_STAGES, type LessonPlan } from "./lesson-plan";
 import { BOOK_KINDS, BOOK_LABELS, type BookKind } from "./textbook";
 
@@ -67,6 +68,8 @@ export const lessonStateSchema = z
     startedAt: z.iso.datetime(),
     // «Слова урока» (#154); a state kept before them has none.
     words: z.array(lessonWordSchema).max(MAX_LESSON_WORDS).default([]),
+    // The chalkboard (#155); a state kept before it has a clean one.
+    board: boardSchema.default(cleanBoard),
   })
   .strict()
   .refine((s) => s.stages.length === 0 || s.current < s.stages.length, { path: ["current"], message: "нет такого этапа" });
@@ -126,6 +129,7 @@ export function initialState(plan: LessonPlan, lessons: BookLesson[], books: Les
     track: null,
     startedAt: now.toISOString(),
     words: [],
+    board: cleanBoard(),
   };
 }
 
@@ -196,6 +200,8 @@ export const lessonMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("finished") }).strict(),
   // The game on the stage reported a result (#199): kept for the lesson's student, or not.
   z.object({ type: z.literal("game-result"), kept: z.boolean() }).strict(),
+  // The teacher wrote on the board in the stage window (#155): the panel keeps it as part of the state.
+  z.object({ type: z.literal("board"), board: boardSchema }).strict(),
 ]);
 export type LessonMessage = z.infer<typeof lessonMessageSchema>;
 

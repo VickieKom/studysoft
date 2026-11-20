@@ -124,6 +124,11 @@ export function LessonPanel({
         ch.postMessage({ type: "state", kept: keptRef.current } satisfies LessonMessage);
       } else if (message.data.type === "sound") setSoundBlocked(message.data.status === "blocked");
       else if (message.data.type === "game-result") setGameResult(message.data.kept);
+      else if (message.data.type === "board") {
+        // The teacher writes on the board in the stage window (#155); the panel keeps it with the rest of the state.
+        const board = message.data.board;
+        setKept((k) => ({ revision: k.revision + 1, state: { ...k.state, board } }));
+      }
     };
     return () => {
       ch.close();
