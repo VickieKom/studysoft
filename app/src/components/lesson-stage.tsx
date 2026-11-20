@@ -56,6 +56,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
   // Opened again, the stage starts where this browser left it, unless the server's is newer.
   const [kept, setKept] = useState<KeptState>(() => newer(serverKept, readLocal(lessonId))!);
   const [soundOn, setSoundOn] = useState(false);
+  const [finished, setFinished] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
 
@@ -67,7 +68,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
       if (message.success && message.data.type === "state") {
         const incoming = message.data.kept;
         setKept((k) => (incoming.revision >= k.revision ? incoming : k));
-      }
+      } else if (message.success && message.data.type === "finished") setFinished(true);
     };
     const hello = () => ch.postMessage({ type: "hello" } satisfies LessonMessage);
     hello();
@@ -106,6 +107,15 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
   }
 
   const current = state.stages[state.current];
+
+  // «Завершить урок» on the panel (#154): nothing of the lesson stays on the screen.
+  if (finished) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-surface p-4">
+        <p className="text-h1 font-bold">Урок завершён</p>
+      </div>
+    );
+  }
   const lessonOf = (id: string) => resources.lessons.find((l) => l.id === id);
   const materialOf = (id: string) => resources.materials.find((m) => m.id === id);
   const homeworkOf = (id: string) => resources.homework.find((h) => h.id === id);

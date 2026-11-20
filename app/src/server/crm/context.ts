@@ -12,6 +12,7 @@ import { countedGameResults } from "../library/game-results";
 import { studentMistakes } from "./mistakes";
 import { listNotes } from "./notes";
 import { findStudent } from "./students";
+import { CONTEXT_WORDS, studentVocabulary } from "./vocabulary";
 
 /** How many of the latest notes the context carries (#3). */
 export const CONTEXT_NOTES = 5;
@@ -35,6 +36,8 @@ export type StudentContext = {
   recentGames: { title: string; playedAt: Date; playedWithTeacher: boolean; answers: GameAnswer[] }[];
   /** Mistakes of homework and games over the last 30 days, by topic, the most frequent first (#44, #119). */
   mistakesByTopic: { topic: string; count: number }[];
+  /** The student's vocabulary, the newest words first (#154). */
+  vocabulary: { word: string; translation: string | null }[];
 };
 
 /** The context of one student of this teacher, or null — another teacher's student is the same as a missing one. */
@@ -64,5 +67,6 @@ export async function buildStudentContext(
     // The latest results whenever they were played; only the summary keeps to the last 30 days.
     recentGames: await countedGameResults(db, teacherId, studentId, { limit: CONTEXT_GAMES }),
     mistakesByTopic: mistakes.map(({ topic, count }) => ({ topic, count })),
+    vocabulary: (await studentVocabulary(db, teacherId, studentId, CONTEXT_WORDS)).map(({ word, translation }) => ({ word, translation })),
   };
 }

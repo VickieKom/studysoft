@@ -49,7 +49,8 @@ server.registerTool(
       "What the teacher knows about a student for preparing homework: first name, age, school year, CEFR level, " +
       "textbook and current unit, interests, what works, gaps, the latest notes, and the latest submitted homework " +
       "with the answers, right or wrong, the latest results of games the student played, and the mistakes by topic " +
-      "from homework and games over the last 30 days, to repeat what was hard.",
+      "from homework and games over the last 30 days, to repeat what was hard; and the student's vocabulary, the words " +
+      "of the lessons covered with their translations, newest first.",
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),

@@ -840,3 +840,33 @@ export const lessonState = pgTable("lesson_state", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+// The student's vocabulary (#154): words added when a lesson is finished —
+// those of the book lesson covered and those the teacher noted on the panel.
+// One row per word and student regardless of case; a later lesson fills in a
+// missing translation. Teacher and assistant only: the student does not see
+// it yet. A lesson removed from the schedule leaves its words.
+export const vocabularyWord = pgTable(
+  "vocabulary_word",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    word: text("word").notNull(),
+    translation: text("translation"),
+    // The lesson the word came from.
+    lessonId: uuid("lesson_id").references(() => lesson.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "vocabulary_word_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("vocabulary_word_student_word_key").on(t.studentId, sql`lower(${t.word})`),
+  ],
+);

@@ -17,6 +17,17 @@ const page = z.number().int().min(1).max(10_000);
 export const HOMEWORK_FILTERS = ["all", "wrong"] as const;
 /** A homework has far fewer tasks than this; the bound only keeps the document small. */
 const MAX_TASK_INDEX = 199;
+
+/** The most words a lesson collects on the panel, and how long a word and its translation may be. */
+export const MAX_LESSON_WORDS = 200;
+export const MAX_WORD_LENGTH = 100;
+export const MAX_TRANSLATION_LENGTH = 200;
+
+/** A word the teacher noted on the panel during the lesson (#154): the word, and its translation or "". */
+export const lessonWordSchema = z
+  .object({ word: z.string().trim().min(1).max(MAX_WORD_LENGTH), translation: z.string().trim().max(MAX_TRANSLATION_LENGTH) })
+  .strict();
+export type LessonWord = z.infer<typeof lessonWordSchema>;
 const minutes = z.number().int().min(0).max(MAX_STAGE_MINUTES);
 
 const stage = z.discriminatedUnion("type", [
@@ -54,6 +65,8 @@ export const lessonStateSchema = z
     // The track on the stage; `run` changes with every «Играть», so the same track can start again.
     track: z.object({ name: z.string().min(1).max(200), playing: z.boolean(), run: z.number().int().min(0) }).strict().nullable(),
     startedAt: z.iso.datetime(),
+    // «Слова урока» (#154); a state kept before them has none.
+    words: z.array(lessonWordSchema).max(MAX_LESSON_WORDS).default([]),
   })
   .strict()
   .refine((s) => s.stages.length === 0 || s.current < s.stages.length, { path: ["current"], message: "нет такого этапа" });
@@ -112,6 +125,7 @@ export function initialState(plan: LessonPlan, lessons: BookLesson[], books: Les
     layout: "single",
     track: null,
     startedAt: now.toISOString(),
+    words: [],
   };
 }
 
@@ -178,6 +192,8 @@ export const lessonMessageSchema = z.discriminatedUnion("type", [
   // The stage asks for the state when it opens, and says it is there every few seconds.
   z.object({ type: z.literal("hello") }).strict(),
   z.object({ type: z.literal("sound"), status: z.enum(["blocked", "on"]) }).strict(),
+  // «Завершить урок» went through: the stage says the lesson is over (#154).
+  z.object({ type: z.literal("finished") }).strict(),
 ]);
 export type LessonMessage = z.infer<typeof lessonMessageSchema>;
 
@@ -215,4 +231,14 @@ export function toggleShown(stage: HomeworkStage, index: number): HomeworkStage 
 /** The label of a homework stage: «Домашка: …». */
 export function homeworkStageLabel(homework: StageHomework | undefined): string {
   return homework ? `Домашка: ${homework.title}` : "Домашка";
+}
+
+/** Adds a word to «Слова урока»; one already there (regardless of case) gets the new translation if it had none. */
+export function addWord(words: LessonWord[], added: LessonWord): LessonWord[] {
+  const word = added.word.trim();
+  const translation = added.translation.trim();
+  if (!word) return words;
+  const at = words.findIndex((w) => w.word.toLowerCase() === word.toLowerCase());
+  if (at === -1) return words.length >= MAX_LESSON_WORDS ? words : [...words, { word, translation }];
+  return words.map((w, i) => (i === at && !w.translation && translation ? { ...w, translation } : w));
 }

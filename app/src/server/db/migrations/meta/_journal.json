@@ -218,6 +218,13 @@
       "when": 1795089708327,
       "tag": "0030_lesson_state",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795106653615,
+      "tag": "0031_vocabulary",
+      "breakpoints": true
     }
   ]
 }
