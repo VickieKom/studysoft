@@ -333,7 +333,8 @@ export type HomeworkMistake = { topic: string | null; task: string; answer: stri
 /**
  * The wrong answers of the student's homework submitted since `since` (#119),
  * newest first: the latest attempt of each, with the teacher's mark winning
- * over the platform's result. A task waiting for her is not a mistake yet.
+ * over the platform's result. A task waiting for her is not a mistake yet; an
+ * order task of several sentences gives one mistake per wrong sentence (#204).
  */
 export async function homeworkMistakes(
   db: Database,
@@ -344,7 +345,12 @@ export async function homeworkMistakes(
   const mistakes: HomeworkMistake[] = [];
   for (const { row, tasks } of await attemptsTasks(db, await latestAttempts(db, teacherId, studentId, since))) {
     for (const task of tasks) {
-      if (task.verdict === false) {
+      // An order task of several sentences: each wrong sentence is a mistake of its own, as in «Проверка домашек» (#161, #204).
+      if (task.sentences) {
+        for (const sentence of task.sentences.filter((s) => !s.verdict)) {
+          mistakes.push({ topic: task.topic, task: task.prompt, answer: sentence.answer, title: row.title, at: row.submittedAt });
+        }
+      } else if (task.verdict === false) {
         mistakes.push({ topic: task.topic, task: task.prompt, answer: task.answer, title: row.title, at: row.submittedAt });
       }
     }

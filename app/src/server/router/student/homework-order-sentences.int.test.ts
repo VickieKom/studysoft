@@ -108,6 +108,33 @@ describe("an order task of several sentences", () => {
     expect(json(context)).not.toContain(third.join(" "));
   });
 
+  it("counts each of two wrong sentences in the review, the student's mistakes and the assistant's context (#204)", async () => {
+    const twoWrong = { type: "order" as const, sentences: [first, [...second].reverse(), ["She", "is", "best", "my", "friend"]] };
+    const { studentId, submissionId } = await submitted("Две ошибки в задании", twoWrong);
+    const counts = async () => ({
+      review: (await teacher.teacher.review.get({ id: submissionId })).mistakesByTopic,
+      card: (await teacher.teacher.students.mistakes({ studentId })).map(({ topic, count, mistakes }) => ({ topic, count, listed: mistakes.length })),
+      context: (await assistant.agent.studentContext({ studentId })).mistakesByTopic,
+    });
+    expect(await counts()).toEqual({
+      review: [{ topic: "word order", count: 2 }],
+      card: [{ topic: "word order", count: 2, listed: 2 }],
+      context: [{ topic: "word order", count: 2 }],
+    });
+    // Each listed with the student's own answer for that sentence, never the key.
+    const listed = (await teacher.teacher.students.mistakes({ studentId }))[0]!.mistakes.map((m) => m.answer);
+    expect(listed.sort()).toEqual([[...second].reverse().join(" "), "She is best my friend"].sort());
+    expect(json(listed)).not.toContain(third.join(" "));
+
+    // The teacher's mark wins: one sentence marked right leaves one mistake everywhere.
+    await teacher.teacher.review.mark({ id: submissionId, taskIndex: 0, sentence: 1, mark: true });
+    expect(await counts()).toEqual({
+      review: [{ topic: "word order", count: 1 }],
+      card: [{ topic: "word order", count: 1, listed: 1 }],
+      context: [{ topic: "word order", count: 1 }],
+    });
+  });
+
   it("is marked a sentence at a time, and nothing else", async () => {
     const { student, submissionId } = await submitted("Отметка по предложению");
     await teacher.teacher.review.mark({ id: submissionId, taskIndex: 0, sentence: 2, mark: true });
