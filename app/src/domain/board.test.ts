@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardSchema, clearSheet, cleanBoard, draw, MAX_ITEMS, MAX_SHEETS, newSheet, sheetLabel, turnSheet, undo } from "./board";
+import { boardSchema, clearSheet, cleanBoard, draw, lineToWord, MAX_ITEMS, MAX_SHEETS, newSheet, printedLines, sheetLabel, turnSheet, undo } from "./board";
 import { initialState, lessonStateSchema } from "./lesson-state";
 
 const word = (text: string) => ({ kind: "text" as const, x: 10, y: 20, text, colour: "white" as const });
@@ -66,5 +66,26 @@ describe("the chalkboard (#155)", () => {
     const { boardLarge: _, ...older } = state;
     expect(lessonStateSchema.parse(older).boardLarge).toBe(false);
     expect(lessonStateSchema.parse({ ...state, boardLarge: true }).boardLarge).toBe(true);
+  });
+});
+
+describe("the board's lines for the vocabulary (#206)", () => {
+  it("lists every printed line of every sheet in order, once each, never the chalk", () => {
+    let board = draw(cleanBoard(), word("otter — выдра"));
+    board = draw(board, { kind: "stroke", points: [[1, 1]], colour: "white" });
+    board = draw(newSheet(board), word("Ex. 3 p. 12"));
+    board = draw(board, word("otter — выдра"));
+    expect(printedLines(board)).toEqual(["otter — выдра", "Ex. 3 p. 12"]);
+  });
+
+  it("splits «word — translation» at the first dash, equals sign or colon; a hyphen only with spaces round it", () => {
+    expect(lineToWord("otter — выдра")).toEqual({ word: "otter", translation: "выдра" });
+    expect(lineToWord("otter – выдра")).toEqual({ word: "otter", translation: "выдра" });
+    expect(lineToWord("otter=выдра")).toEqual({ word: "otter", translation: "выдра" });
+    expect(lineToWord("otter: выдра, зверь")).toEqual({ word: "otter", translation: "выдра, зверь" });
+    expect(lineToWord("otter - выдра")).toEqual({ word: "otter", translation: "выдра" });
+    expect(lineToWord("ice-cream")).toEqual({ word: "ice-cream", translation: "" });
+    expect(lineToWord("Ex. 3 p. 12")).toEqual({ word: "Ex. 3 p. 12", translation: "" });
+    expect(lineToWord("— выдра")).toEqual({ word: "— выдра", translation: "" });
   });
 });

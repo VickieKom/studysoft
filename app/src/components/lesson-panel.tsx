@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { lineToWord, printedLines } from "@/domain/board";
 import {
   addWord,
   type BookStage,
@@ -317,6 +318,7 @@ export function LessonPanel({
         <FinishLesson
           lessonId={lessonId}
           words={state.words}
+          boardLines={printedLines(state.board)}
           onCancel={() => setFinishing(false)}
           onFinished={() => {
             send({ type: "finished" });
@@ -574,11 +576,14 @@ type FinishFormData = Awaited<ReturnType<typeof routerClient.teacher.lessonMode.
 function FinishLesson({
   lessonId,
   words,
+  boardLines,
   onCancel,
   onFinished,
 }: {
   lessonId: string;
   words: LessonWord[];
+  /** The board's printed lines (#206), each offered for the vocabulary, checked. */
+  boardLines: string[];
   onCancel: () => void;
   onFinished: () => void;
 }) {
@@ -590,7 +595,10 @@ function FinishLesson({
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unchecked, setUnchecked] = useState<Set<string>>(() => new Set());
   const field = "rounded-control border border-border bg-bg px-3 py-2";
+  // The panel's words, then the checked lines of the board as words.
+  const allWords = boardLines.filter((l) => !unchecked.has(l)).reduce((all, line) => addWord(all, lineToWord(line)), words);
 
   useEffect(() => {
     let live = true;
@@ -621,7 +629,7 @@ function FinishLesson({
         note,
         bookLessonId: bookLessonId || null,
         homework: form.homework ? { id: form.homework.id, revision: form.homework.revision, dueDate } : null,
-        words,
+        words: allWords,
       });
       onFinished();
       router.push(`/teacher/students/${studentId}`);
@@ -679,6 +687,28 @@ function FinishLesson({
             )}
             <div className="flex flex-col gap-1">
               <p className="text-small text-text-secondary">Слова в словарь ученика{bookLessonId && " (и слова урока учебника)"}</p>
+              {boardLines.length > 0 && (
+                <fieldset aria-label="Строки доски" className="flex flex-col gap-1 rounded-control border border-border p-3">
+                  <legend className="px-1 text-small text-text-secondary">Строки доски</legend>
+                  {boardLines.map((line) => (
+                    <label key={line} className="flex items-center gap-2 text-small">
+                      <input
+                        type="checkbox"
+                        checked={!unchecked.has(line)}
+                        onChange={(e) =>
+                          setUnchecked((u) => {
+                            const next = new Set(u);
+                            if (e.target.checked) next.delete(line);
+                            else next.add(line);
+                            return next;
+                          })
+                        }
+                      />
+                      <span>{line}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              )}
               {words.length === 0 ? (
                 <p className="text-small">Слов урока нет</p>
               ) : (
