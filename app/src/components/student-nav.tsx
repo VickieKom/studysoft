@@ -1,15 +1,17 @@
 import Link from "next/link";
 
-export type StudentSection = "materials" | "homework";
+export type StudentSection = "materials" | "homework" | "words";
 
 const SECTIONS: { id: StudentSection; href: string; label: string }[] = [
   { id: "materials", href: "/s/materials", label: "Материалы урока" },
   { id: "homework", href: "/s", label: "Домашка" },
+  { id: "words", href: "/s/words", label: "Тренировка слов" },
 ];
 
 /**
  * The sections behind the student's link (#241): «Материалы урока» — the
- * games and videos the teacher opened in a lesson — and «Домашка». At the
+ * games and videos the teacher opened in a lesson — «Домашка» and
+ * «Тренировка слов», the student's words (#236). At the
  * bottom of the screen, as on a phone. While something from the lesson is
  * open, its item carries a mark, so the child does not miss it.
  */

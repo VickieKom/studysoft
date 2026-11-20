@@ -14,7 +14,7 @@ import {
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
-import { studentVocabulary } from "../../crm/vocabulary";
+import { addWord, deleteWord, studentVocabulary, updateWord } from "../../crm/vocabulary";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -22,6 +22,17 @@ import { router, teacherProcedure } from "../core/trpc";
 // typed. Only an empty first name is refused. The length cap only keeps a
 // request from carrying megabytes.
 const MAX_NAME_LENGTH = 1000;
+
+// A word of the student's vocabulary as the card's form sends it (#236): the word is required; an empty translation or example is none.
+const wordFields = {
+  word: z
+    .string()
+    .max(200)
+    .refine((value) => !isBlank(value), { message: "the word is required" }),
+  translation: z.string().max(200),
+  example: z.string().max(500),
+};
+const duplicateWord = () => new TRPCError({ code: "CONFLICT", message: "Такое слово уже есть в словаре" });
 
 const firstName = z
   .string()
@@ -102,10 +113,47 @@ export const studentsRouter = router({
   /** «Словарь» on the card (#154): the student's words, newest first, with the date each was added. */
   vocabulary: teacherProcedure
     .input(z.object({ studentId: z.uuid() }))
-    .output(z.array(z.object({ word: z.string(), translation: z.string().nullable(), addedAt: z.iso.datetime() }).strict()))
+    .output(
+      z.array(
+        z
+          .object({ id: z.uuid(), word: z.string(), translation: z.string().nullable(), example: z.string().nullable(), addedAt: z.iso.datetime() })
+          .strict(),
+      ),
+    )
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
       return (await studentVocabulary(ctx.db, ctx.teacherId, input.studentId)).map((w) => ({ ...w, addedAt: w.addedAt.toISOString() }));
+    }),
+
+  /** «Добавить слово» on the card (#236): a word by hand, with its translation and example if any. */
+  addWord: teacherProcedure
+    .input(z.object({ studentId: z.uuid(), ...wordFields }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
+      const saved = await addWord(ctx.db, ctx.teacherId, input.studentId, input);
+      if (saved === "duplicate") throw duplicateWord();
+      return { ok: true as const };
+    }),
+
+  /** «Изменить» a word of the card's «Словарь» (#236). */
+  updateWord: teacherProcedure
+    .input(z.object({ studentId: z.uuid(), id: z.uuid(), ...wordFields }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const saved = await updateWord(ctx.db, ctx.teacherId, input.studentId, input.id, input);
+      if (saved === "not_found") throw new TRPCError({ code: "NOT_FOUND" });
+      if (saved === "duplicate") throw duplicateWord();
+      return { ok: true as const };
+    }),
+
+  /** «Удалить» a word of the card's «Словарь» (#236). */
+  deleteWord: teacherProcedure
+    .input(z.object({ studentId: z.uuid(), id: z.uuid() }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await deleteWord(ctx.db, ctx.teacherId, input.studentId, input.id))) throw new TRPCError({ code: "NOT_FOUND" });
+      return { ok: true as const };
     }),
 
   /** «Ошибки по темам» (#119): wrong answers of homework and games over the last 30 days, by topic. */

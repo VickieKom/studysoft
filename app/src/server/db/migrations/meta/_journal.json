@@ -232,6 +232,13 @@
       "when": 1795166844798,
       "tag": "0032_task_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795239171982,
+      "tag": "0033_vocabulary_example",
+      "breakpoints": true
     }
   ]
 }

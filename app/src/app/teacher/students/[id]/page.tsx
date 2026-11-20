@@ -133,7 +133,7 @@ export default async function StudentCardPage({ params }: Props) {
       </div>
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
-      <StudentVocabulary words={vocabulary} timeZone={timeZone} />
+      <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />
     </main>
