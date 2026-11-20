@@ -212,6 +212,10 @@ export function LessonPanel({
             <Button variant="secondary" onClick={() => openStageWindow(lessonId)}>
               Открыть сцену
             </Button>
+            {/* #205: the board over the whole stage, and back. */}
+            <Button variant="secondary" aria-pressed={state.boardLarge} onClick={() => change((s) => ({ ...s, boardLarge: !s.boardLarge }))}>
+              Доска крупно
+            </Button>
             <Button onClick={() => setFinishing(true)}>Завершить урок</Button>
           </span>
           <span className={`text-small ${stageOn ? "text-green-700" : "text-text-secondary"}`}>{stageOn ? "сцена на связи" : "сцена не открыта"}</span>

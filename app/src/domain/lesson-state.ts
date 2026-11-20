@@ -70,6 +70,8 @@ export const lessonStateSchema = z
     words: z.array(lessonWordSchema).max(MAX_LESSON_WORDS).default([]),
     // The chalkboard (#155); a state kept before it has a clean one.
     board: boardSchema.default(cleanBoard),
+    // «Доска крупно» (#205): the board over the whole stage.
+    boardLarge: z.boolean().default(false),
   })
   .strict()
   .refine((s) => s.stages.length === 0 || s.current < s.stages.length, { path: ["current"], message: "нет такого этапа" });
@@ -130,6 +132,7 @@ export function initialState(plan: LessonPlan, lessons: BookLesson[], books: Les
     startedAt: now.toISOString(),
     words: [],
     board: cleanBoard(),
+    boardLarge: false,
   };
 }
 
