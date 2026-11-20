@@ -8,11 +8,19 @@ import { routerClient } from "./router-client";
 const field = "h-10 rounded-control border border-border bg-bg px-3";
 
 /**
- * «Открыть ученику» on a game's page (#118): offered only while a lesson with
- * at least one student is going on, and lists only those students. The game
- * stays open to the student until an hour after that lesson's end.
+ * «Открыть ученику» on a game's or a video's page (#118, #158): offered only
+ * while a lesson with at least one student is going on, and lists only those
+ * students. It stays open to the student until an hour after that lesson's end.
  */
-export function LibraryOpenToStudent({ id, students }: { id: string; students: { studentId: string; name: string }[] }) {
+export function LibraryOpenToStudent({
+  id,
+  students,
+  kind,
+}: {
+  id: string;
+  students: { studentId: string; name: string }[];
+  kind: "game" | "video";
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [studentId, setStudentId] = useState(students[0]?.studentId ?? "");
@@ -32,7 +40,7 @@ export function LibraryOpenToStudent({ id, students }: { id: string; students: {
     } catch (caught) {
       const message = (caught as { message?: string })?.message;
       const isOwn = (caught as { data?: { code?: string } })?.data?.code === "BAD_REQUEST";
-      setError(isOwn && message ? message : "Не получилось открыть игру. Попробуйте ещё раз");
+      setError(isOwn && message ? message : `Не получилось открыть ${kind === "game" ? "игру" : "видео"}. Попробуйте ещё раз`);
     }
     setPending(false);
   }
@@ -64,7 +72,9 @@ export function LibraryOpenToStudent({ id, students }: { id: string; students: {
       <Button variant="secondary" onClick={() => setOpen(false)}>
         Отмена
       </Button>
-      <p className="w-full text-small text-text-secondary">Игра будет у ученика до конца урока и ещё час после.</p>
+      <p className="w-full text-small text-text-secondary">
+        {kind === "game" ? "Игра будет" : "Видео будет"} у ученика до конца урока и ещё час после.
+      </p>
       {error && (
         <p role="alert" className="w-full text-small text-danger">
           {error}

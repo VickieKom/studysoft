@@ -199,10 +199,10 @@ export const libraryRouter = router({
     }),
 
   /**
-   * «Открыть ученику» (#118): opens a game to a student while a lesson of
-   * theirs is going on, until an hour after it ends. A missing or another
-   * teacher's game is NOT_FOUND; a video, or a student without a lesson now
-   * (another teacher's included), is refused with a message.
+   * «Открыть ученику» (#118, #158): opens a game or a video to a student while
+   * a lesson of theirs is going on, until an hour after it ends. A missing or
+   * another teacher's material is NOT_FOUND; a warm-up, or a student without a
+   * lesson now (another teacher's included), is refused with a message.
    */
   openToStudent: teacherProcedure
     .input(z.object({ id: z.uuid(), studentId: z.uuid() }))
@@ -210,7 +210,7 @@ export const libraryRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (!(await findMaterial(ctx.db, ctx.teacherId, input.id))) throw notFound();
       const until = await openGameToStudent(ctx.db, ctx.teacherId, input.id, input.studentId.toLowerCase());
-      if (!until) throw new TRPCError({ code: "BAD_REQUEST", message: "Открыть игру можно, пока идёт урок с этим учеником" });
+      if (!until) throw new TRPCError({ code: "BAD_REQUEST", message: "Открыть ученику можно, пока идёт урок с этим учеником" });
       return { until: until.toISOString() };
     }),
 

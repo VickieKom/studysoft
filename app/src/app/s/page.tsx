@@ -4,6 +4,7 @@ import { HomeworkRunner } from "@/components/homework-runner";
 import { formatDueDate, tasksLabel } from "@/domain/homework";
 import { LinkExchange } from "@/components/link-exchange";
 import { StudentGames } from "@/components/student-games";
+import { StudentVideos } from "@/components/student-videos";
 import { createServerCaller, isNotFound, isUnauthorized } from "@/server/router";
 
 export const metadata = { title: "Домашка — StudySoft" };
@@ -18,8 +19,13 @@ export default async function StudentPage() {
     throw error;
   }
   const homework = await caller.student.homework.current();
-  // The games the teacher opened during a lesson (#118) come first, above the homework.
-  const games = <StudentGames games={await caller.student.games.list()} />;
+  // The games and videos the teacher opened during a lesson (#118, #158) come first, above the homework.
+  const games = (
+    <>
+      <StudentGames games={await caller.student.games.list()} />
+      <StudentVideos videos={await caller.student.videos.list()} />
+    </>
+  );
 
   if (homework?.result) {
     return (
