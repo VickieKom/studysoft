@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "title": "Demo: match the pictures to the sentences",
+  "tasks": [
+    {
+      "type": "match",
+      "prompt": "Match the squares to the sentences.",
+      "pairs": [
+        {
+          "left": {
+            "images": [
+              "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4o6FBEmIY1TCqYfhqAAAyBCwQhvh37QAAAABJRU5ErkJggg=="
+            ]
+          },
+          "right": "It is red."
+        },
+        {
+          "left": {
+            "images": [
+              "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQWGBDEmIY1TCqYfhqAAAmYgQQV7FoPwAAAABJRU5ErkJggg=="
+            ]
+          },
+          "right": "It is green."
+        },
+        {
+          "left": {
+            "images": [
+              "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGPQCLhDEmIY1TCqYfhqAAANiFQQvOkcpQAAAABJRU5ErkJggg=="
+            ]
+          },
+          "right": "It is blue."
+        }
+      ],
+      "topic": "colours",
+      "skill": "reading"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 // Checking answers on the server (#34; architecture 6.1). The keys stay here:
 // the student's page gets only studentView() and sends answers back.
-import { type Answer, gapCount, type OrderSentence, type OrderTask, orderSentences, type Task } from "../../domain/homework-format";
+import { type Answer, gapCount, matchLeftLabel, type OrderSentence, type OrderTask, orderSentences, type Task } from "../../domain/homework-format";
 
 // Every apostrophe a keyboard or a phone may produce counts as the plain one.
 const APOSTROPHES = /[‘’ʼʹ`´′]/g;
@@ -27,7 +27,7 @@ export function checkAnswer(task: Task, answer: Answer): boolean {
       );
     case "match": {
       if (answer.type !== "match" || answer.pairs.length !== task.pairs.length) return false;
-      const key = new Set(task.pairs.map((p) => `${p.left}\u0000${p.right}`));
+      const key = new Set(task.pairs.map((p, i) => `${matchLeftLabel(p.left, i)}\u0000${p.right}`));
       const given = new Set(answer.pairs.map((p) => `${p.left}\u0000${p.right}`));
       return given.size === key.size && [...given].every((pair) => key.has(pair));
     }
@@ -96,7 +96,7 @@ export function fitsTask(task: Task, answer: Answer): boolean {
       );
     case "match": {
       if (task.type !== "match") return false;
-      const lefts = new Set(task.pairs.map((p) => p.left));
+      const lefts = new Set(task.pairs.map((p, i) => matchLeftLabel(p.left, i)));
       const rights = new Set(task.pairs.map((p) => p.right));
       const usedLeft = new Set(answer.pairs.map((p) => p.left));
       return (

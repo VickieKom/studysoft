@@ -143,3 +143,26 @@ describe("an order task of several sentences (#161)", () => {
     expect(fitsTask(order, { type: "order", sentences: [["We"]] })).toBe(false);
   });
 });
+
+describe("a match with pictures on the left (#184)", () => {
+  const PNG = "blob:00000000-0000-4000-8000-000000000001";
+  const pictures: Task = {
+    type: "match",
+    prompt: "p",
+    pairs: [
+      { left: { images: [PNG] }, right: "one" },
+      { left: { images: [PNG], text: "Tom" }, right: "two" },
+    ],
+  };
+
+  it("names a picture by its caption or its number, and checks the pairs by those names", () => {
+    const right = [
+      { left: "картинка 1", right: "one" },
+      { left: "Tom", right: "two" },
+    ];
+    expect(checkAnswer(pictures, { type: "match", pairs: right })).toBe(true);
+    expect(checkAnswer(pictures, { type: "match", pairs: [{ left: "картинка 1", right: "two" }, { left: "Tom", right: "one" }] })).toBe(false);
+    expect(fitsTask(pictures, { type: "match", pairs: right })).toBe(true);
+    expect(fitsTask(pictures, { type: "match", pairs: [{ left: "картинка 2", right: "one" }] })).toBe(false);
+  });
+});

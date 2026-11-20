@@ -13,7 +13,7 @@ import {
   type StudentAnswer,
   type StudentTask,
 } from "@/domain/homework-format";
-import { ChoiceOptionContent, hasPictureOptions } from "./choice-option";
+import { ChoiceOptionContent, hasPictureOptions, MatchPictures } from "./choice-option";
 import { HomeworkResult } from "./homework-result";
 import { routerClient } from "./router-client";
 import { TaskExampleLine, TaskPassage } from "./task-parts";
@@ -453,7 +453,11 @@ export function GapPicture({ src, gap }: { src: string; gap: number }) {
   );
 }
 
-function Match({ task, answer, onChange }: BodyProps & { task: { type: "match"; left: string[]; right: string[] } }) {
+function Match({
+  task,
+  answer,
+  onChange,
+}: BodyProps & { task: { type: "match"; left: string[]; right: string[]; leftImages?: (string[] | null)[] } }) {
   const [selected, setSelected] = useState<string | null>(null);
   const pairs = answer?.type === "match" ? answer.pairs : [];
   const pairOfLeft = (left: string) => pairs.find((p) => p.left === left);
@@ -477,7 +481,7 @@ function Match({ task, answer, onChange }: BodyProps & { task: { type: "match"; 
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-3">
-          {task.left.map((left) => (
+          {task.left.map((left, i) => (
             <button
               key={left}
               type="button"
@@ -485,7 +489,7 @@ function Match({ task, answer, onChange }: BodyProps & { task: { type: "match"; 
               onClick={() => pickLeft(left)}
               className={`${tile} ${tileState(selected === left)} ${pairOfLeft(left) ? "opacity-50" : ""}`}
             >
-              {left}
+              {task.leftImages?.[i] ? <MatchPictures images={task.leftImages[i]} pair={i + 1} label={left} /> : left}
             </button>
           ))}
         </div>

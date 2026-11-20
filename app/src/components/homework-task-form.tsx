@@ -78,8 +78,10 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
   const [gapAnswers, setGapAnswers] = useState<string[]>(
     task?.type === "gap" ? task.answers.map((variants) => variants.join("\n")) : [],
   );
+  // shortcut: pairs with pictures (#184) are kept as imported and not edited here; edit them when the editor gets pictures (#129)
+  const picturePairs = task?.type === "match" && task.pairs.some((p) => typeof p.left !== "string") ? task.pairs : null;
   const [pairsText, setPairsText] = useState(
-    task?.type === "match" ? task.pairs.map((p) => `${p.left} = ${p.right}`).join("\n") : "",
+    task?.type === "match" && !picturePairs ? task.pairs.map((p) => `${typeof p.left === "string" ? p.left : ""} = ${p.right}`).join("\n") : "",
   );
   // An order task: one sentence per line; several lines make a task of several sentences (#161).
   const [wordsText, setWordsText] = useState(
@@ -185,6 +187,7 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
         };
       }
       case "match": {
+        if (picturePairs) return { ...common, type, pairs: picturePairs };
         const pairs = lines(pairsText).map((line) => {
           const [left = "", ...rest] = line.split("=");
           return { left: left.trim(), right: rest.join("=").trim() };
@@ -406,7 +409,10 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
         </>
       )}
 
-      {type === "match" && (
+      {type === "match" && picturePairs && (
+        <p className="text-small text-text-secondary">Пары с картинками меняются импортом JSON</p>
+      )}
+      {type === "match" && !picturePairs && (
         <Labelled id={`${id}-pairs`} label="Пары" note="по одной на строку: слева = справа">
           <textarea id={`${id}-pairs`} rows={4} value={pairsText} onChange={(e) => setPairsText(e.target.value)} className={field} />
         </Labelled>

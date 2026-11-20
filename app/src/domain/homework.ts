@@ -1,6 +1,6 @@
 // Labels and formatting for homework, shared by the workspace and the
 // student's page. Plain data only.
-import { type ChoiceOption, type OrderSentence, orderSentences, type StoredAnswer, type Task, type TaskExample } from "./homework-format";
+import { type ChoiceOption, matchLeftLabel, type OrderSentence, orderSentences, type StoredAnswer, type Task, type TaskExample } from "./homework-format";
 
 export const HOMEWORK_STATUS_LABELS = {
   draft: "Черновик",
@@ -66,7 +66,7 @@ export function answerKey(task: Task): string | null {
     case "gap":
       return task.answers.map((variants) => variants.join(" / ")).join("; ");
     case "match":
-      return task.pairs.map((p) => `${p.left} — ${p.right}`).join("; ");
+      return task.pairs.map((p, i) => `${matchLeftLabel(p.left, i)} — ${p.right}`).join("; ");
     case "order":
       if (task.sentences) return task.sentences.map((sentence, i) => `${i + 1}) ${sentenceKey(sentence)}`).join("; ");
       return sentenceKey(orderSentences(task)[0]!);

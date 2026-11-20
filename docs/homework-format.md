@@ -81,6 +81,8 @@ Pairs to connect; shown shuffled.
 |-------|---------|
 | `pairs` | 2 to 10 objects `{ "left": "…", "right": "…" }`, each a correct pair |
 
+The left side of a pair may be a picture instead of text (#184): `{ "images": ["data:image/png;base64,…"], "text": "caption" }`, as an answer option is. The right side stays text. The left column keeps its order and the right one is shuffled, so pictures go on the left. In a task with pictures every left side must differ: two equal texts or captions cannot be told apart.
+
 ### `order`
 
 Words to put in order; shown shuffled. One sentence goes in `words`; a workbook exercise of several sentences under one instruction goes in `sentences` instead. A task has one of the two.
@@ -169,4 +171,4 @@ A photo (JPEG, PNG, WebP) or an audio file (MP3, M4A, WAV, OGG, WebM), up to 10 
 
 ## Versions
 
-A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), or a wider choice, such as a picture option (#129) or a picture by a gap (#181), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.
+A change that an older homework would not pass gets a new `version`; optional fields added later, such as `choices` (#128), `passage` and `example` (#131), `sentences` (#161) or `audio` (#127), or a wider choice, such as a picture option (#129), a picture by a gap (#181) or a picture in a pair (#184), keep the version, since every older homework still passes. The platform keeps accepting every version it has published, so exported homework can always be imported again.

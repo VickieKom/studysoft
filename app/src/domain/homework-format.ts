@@ -183,9 +183,23 @@ const match = z
   .object({
     ...common,
     type: z.literal("match"),
-    pairs: z.array(z.object({ left: text, right: text }).strict()).min(2).max(10),
+    // The left side may be pictures (#184); it keeps its order, so numbering its pictures gives nothing away.
+    pairs: z.array(z.object({ left: option, right: text }).strict()).min(2).max(10),
   })
-  .strict();
+  .strict()
+  // Only with pictures, so every older homework still passes.
+  .refine((t) => t.pairs.every((p) => typeof p.left === "string") || new Set(t.pairs.map((p, i) => matchLeftLabel(p.left, i))).size === t.pairs.length, {
+    path: ["pairs"],
+    message: "у каждой пары слева своё: два одинаковых текста или подписи не различить",
+  });
+
+/**
+ * The left side of a match pair as the answer names it: its text, the
+ * caption of its picture, or «картинка N» for a picture without one (#184).
+ */
+export function matchLeftLabel(left: ChoiceOption, index: number): string {
+  return typeof left === "string" ? left : (left.text ?? `картинка ${index + 1}`);
+}
 
 const sameWords = (a: string[], b: string[]) => [...a].sort().join("\u0000") === [...b].sort().join("\u0000");
 
@@ -299,6 +313,11 @@ export function partPictures(task: Task): { value: string; place: string }[] {
   if (task.type === "gap") {
     return (task.gapImages ?? []).flatMap((value, i) => (value ? [{ value, place: `пропуск ${i + 1}` }] : []));
   }
+  if (task.type === "match") {
+    return task.pairs.flatMap((pair, i) =>
+      typeof pair.left === "string" ? [] : pair.left.images.map((value, n) => ({ value, place: `пара ${i + 1}, картинка ${n + 1}` })),
+    );
+  }
   if (task.type !== "single_choice" && task.type !== "multiple_choice") return [];
   return task.options.flatMap((option, i) =>
     typeof option === "string" ? [] : option.images.map((value, n) => ({ value, place: `вариант ${i + 1}, картинка ${n + 1}` })),
@@ -306,11 +325,20 @@ export function partPictures(task: Task): { value: string; place: string }[] {
 }
 
 /** The task with each picture of its parts replaced, by its position in partPictures(). */
-export function withPartPictures<T extends { type: string; options?: unknown; gapImages?: unknown }>(
+export function withPartPictures<T extends { type: string; options?: unknown; gapImages?: unknown; pairs?: unknown; leftImages?: unknown }>(
   task: T,
   replace: (value: string, n: number) => string,
 ): T {
   let n = 0;
+  if (task.type === "match" && Array.isArray(task.pairs)) {
+    const pairs = (task.pairs as { left: ChoiceOption; right: string }[]).map((pair) =>
+      typeof pair.left === "string" ? pair : { ...pair, left: { ...pair.left, images: pair.left.images.map((value) => replace(value, n++)) } },
+    );
+    return { ...task, pairs };
+  }
+  if (task.type === "match" && Array.isArray(task.leftImages)) {
+    return { ...task, leftImages: (task.leftImages as (string[] | null)[]).map((images) => images?.map((value) => replace(value, n++)) ?? null) };
+  }
   if (task.type === "gap" && Array.isArray(task.gapImages)) {
     return { ...task, gapImages: (task.gapImages as (string | null)[]).map((value) => (value ? replace(value, n++) : null)) };
   }
@@ -336,6 +364,10 @@ function innermost(issue: z.core.$ZodIssue): z.core.$ZodIssue {
 function place(rest: PropertyKey[]): string {
   const [field, option, part, picture] = rest;
   if (field === "gapImages" && typeof option === "number") return `пропуск ${option + 1}`;
+  if (field === "pairs" && typeof option === "number") {
+    if (part === "left" && picture === "images" && typeof rest[4] === "number") return `пара ${option + 1}, картинка ${rest[4] + 1}`;
+    return `пара ${option + 1}`;
+  }
   if (field === "options" && typeof option === "number") {
     if (part === "images" && typeof picture === "number") return `вариант ${option + 1}, картинка ${picture + 1}`;
     return `вариант ${option + 1}`;
@@ -426,7 +458,7 @@ function shuffled<T>(items: readonly T[], seed: string, solved: readonly (readon
 export type StudentTask = (
   | { type: "single_choice" | "multiple_choice"; prompt: string; options: ChoiceOption[] }
   | { type: "gap"; prompt: string; text: string; options?: string[]; choices?: (string[] | null)[]; gapImages?: (string | null)[] }
-  | { type: "match"; prompt: string; left: string[]; right: string[] }
+  | { type: "match"; prompt: string; left: string[]; right: string[]; leftImages?: (string[] | null)[] }
   | { type: "order"; prompt: string; words: string[] }
   | { type: "order"; prompt: string; sentences: string[][] }
   | { type: "written" | "voice"; prompt: string; hint?: string }
@@ -464,7 +496,11 @@ function studentBody(task: Task, seed: string): StudentTask {
       return {
         type: "match",
         prompt: task.prompt,
-        left: task.pairs.map((p) => p.left),
+        left: task.pairs.map((p, i) => matchLeftLabel(p.left, i)),
+        // The pictures on the left (#184), in the left's own order.
+        ...(task.pairs.some((p) => typeof p.left !== "string")
+          ? { leftImages: task.pairs.map((p) => (typeof p.left === "string" ? null : p.left.images)) }
+          : {}),
         right: shuffled(
           task.pairs.map((p) => p.right),
           seed,
