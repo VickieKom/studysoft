@@ -14,7 +14,7 @@ import {
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
-import { addWord, deleteWord, studentVocabulary, updateWord } from "../../crm/vocabulary";
+import { addWord, confirmWordDrafts, deleteWord, draftOf, studentVocabulary, updateWord } from "../../crm/vocabulary";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -116,13 +116,42 @@ export const studentsRouter = router({
     .output(
       z.array(
         z
-          .object({ id: z.uuid(), word: z.string(), translation: z.string().nullable(), example: z.string().nullable(), addedAt: z.iso.datetime() })
+          .object({
+            id: z.uuid(),
+            word: z.string(),
+            translation: z.string().nullable(),
+            example: z.string().nullable(),
+            // The assistant's proposal (#237), until the teacher confirms it.
+            draft: z.object({ translation: z.string().nullable(), example: z.string().nullable() }).strict().nullable(),
+            addedAt: z.iso.datetime(),
+          })
           .strict(),
       ),
     )
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
-      return (await studentVocabulary(ctx.db, ctx.teacherId, input.studentId)).map((w) => ({ ...w, addedAt: w.addedAt.toISOString() }));
+      return (await studentVocabulary(ctx.db, ctx.teacherId, input.studentId)).map(({ draftTranslation, draftExample, ...w }) => ({
+        ...w,
+        draft: draftOf({ draftTranslation, draftExample }),
+        addedAt: w.addedAt.toISOString(),
+      }));
+    }),
+
+  /** «Подтвердить» or «Подтвердить все» (#237): the assistant's drafts, as the page showed them, become the words' translations and examples. */
+  confirmWordDrafts: teacherProcedure
+    .input(
+      z.object({
+        studentId: z.uuid(),
+        words: z.array(z.object({ id: z.uuid(), translation: z.string().nullable(), example: z.string().nullable() })).min(1).max(1000),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
+      if ((await confirmWordDrafts(ctx.db, ctx.teacherId, input.studentId, input.words)) === "conflict") {
+        throw new TRPCError({ code: "CONFLICT", message: "Ассистент прислал новые переводы, пока страница была открыта. Обновите страницу" });
+      }
+      return { ok: true as const };
     }),
 
   /** «Добавить слово» on the card (#236): a word by hand, with its translation and example if any. */

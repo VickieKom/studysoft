@@ -131,3 +131,15 @@ describe("task bank tools (#224)", () => {
     expect(result.content[0]!.text).toMatch(/^invalid lesson tasks, nothing was saved/);
   });
 });
+
+describe("vocabulary tools (#237)", () => {
+  it("send the word drafts and a missing word back as words", async () => {
+    const saved = createTools(platformAnswering(200, { result: { data: { status: "draft", count: 1 } } }));
+    const ok = await saved.saveWordDrafts({ studentId: "00000000-0000-4000-8000-000000000001", words: [{ wordId: "00000000-0000-4000-8000-000000000002", translation: "фонарь", example: "" }] });
+    expect(ok.content[0]!.text).toContain('"status": "draft"');
+    const missing = createTools(platformAnswering(404, { error: { message: "NOT_FOUND", code: -32004, data: { code: "NOT_FOUND", httpStatus: 404 } } }));
+    const result = await missing.saveWordDrafts({ studentId: "00000000-0000-4000-8000-000000000001", words: [{ wordId: "00000000-0000-4000-8000-000000000002", translation: "x", example: "" }] });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toBe("not found: there is no such student, or word of this student");
+  });
+});
