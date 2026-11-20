@@ -85,3 +85,21 @@ export function sheetLabel(board: Board): string {
   return `лист ${board.current + 1} из ${board.sheets.length}`;
 }
 
+
+/** Every printed line of every sheet, in order, once each: what «Завершить урок» offers for the vocabulary (#206). */
+export function printedLines(board: Board): string[] {
+  const lines = board.sheets.flatMap((s) => s.items.flatMap((i) => (i.kind === "text" ? [i.text] : [])));
+  return [...new Set(lines)];
+}
+
+/**
+ * A printed line as a word of the vocabulary (#206): «word — translation»
+ * splits at the first dash, equals sign or colon (a hyphen counts only with
+ * spaces round it, so «ice-cream» stays whole); a line without one is a word
+ * without a translation.
+ */
+export function lineToWord(line: string): { word: string; translation: string } {
+  const at = /\s*(?:—|–|=|:|\s-\s)\s*/.exec(line);
+  if (!at || at.index === 0) return { word: line.trim(), translation: "" };
+  return { word: line.slice(0, at.index).trim(), translation: line.slice(at.index + at[0].length).trim() };
+}
