@@ -3,6 +3,9 @@ import { z } from "zod";
 import { LEVELS } from "../../../domain/student";
 import { BOOK_KINDS, MAX_TRACKS, RENDER_STATUSES } from "../../../domain/textbook";
 import { DRAFT_AUTHORS, structureSchema } from "../../../domain/textbook-structure";
+import { studentTaskSchema } from "../../../domain/student-task-schema";
+import { bookSourceSchema, MAX_LESSON_TASKS, skippedSchema } from "../../../domain/task-bank";
+import { confirmLessonTasks, readTaskBank, removeDraftTask } from "../../library/task-bank";
 import { findLesson, readStructure, saveTeacherStructure } from "../../library/textbook-structure";
 import { createTextbook, findTextbook, listTextbooks, retryRender } from "../../library/textbooks";
 import { router, teacherProcedure } from "../core/trpc";
@@ -10,6 +13,11 @@ import { router, teacherProcedure } from "../core/trpc";
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 const title = z.string().trim().min(1).max(200);
 const fileName = z.string().trim().min(1).max(300);
+
+// A bank task as the child will see it (#224): no keys, its files at the bank's addresses, and its source.
+const bankTask = z.object({ task: studentTaskSchema("/api/files/bank/"), source: bookSourceSchema.nullable() }).strict();
+const bankTasks = z.object({ tasks: z.array(bankTask), skipped: skippedSchema });
+const conflict = () => new TRPCError({ code: "CONFLICT", message: "Пока страница была открыта, пришёл новый черновик. Обновите страницу" });
 
 /** Textbook sets in «Библиотека» (#156): the teacher's only. */
 export const textbooksRouter = router({
@@ -120,6 +128,57 @@ export const textbooksRouter = router({
       const found = await findLesson(ctx.db, ctx.teacherId, input.textbookId, input.lessonId);
       if (!found) throw notFound();
       return found;
+    }),
+
+  /** The task bank (#224): every lesson of the confirmed structure, its confirmed tasks and the draft beside them. */
+  taskBank: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(
+      z.array(
+        z
+          .object({
+            lessonId: z.uuid(),
+            unit: z.string(),
+            title: z.string(),
+            confirmed: bankTasks.strict().nullable(),
+            draft: bankTasks.extend({ revision: z.string() }).strict().nullable(),
+          })
+          .strict(),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      const bank = await readTaskBank(ctx.db, ctx.teacherId, input.id);
+      if (!bank) throw notFound();
+      return bank;
+    }),
+
+  /** «Убрать»: one task out of a lesson's draft, as the page showed it (`revision`). */
+  removeBankTask: teacherProcedure
+    .input(
+      z.object({
+        textbookId: z.uuid(),
+        lessonId: z.uuid(),
+        index: z.number().int().min(0).max(MAX_LESSON_TASKS - 1),
+        revision: z.string().max(64),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const removed = await removeDraftTask(ctx.db, ctx.teacherId, input.textbookId, input.lessonId, input.index, input.revision);
+      if (removed === "not_found") throw notFound();
+      if (removed === "conflict") throw conflict();
+      return { ok: true as const };
+    }),
+
+  /** «Подтвердить урок»: the lesson's draft, as the page showed it, becomes its tasks. */
+  confirmBankLesson: teacherProcedure
+    .input(z.object({ textbookId: z.uuid(), lessonId: z.uuid(), revision: z.string().max(64) }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const confirmed = await confirmLessonTasks(ctx.db, ctx.teacherId, input.textbookId, input.lessonId, input.revision);
+      if (confirmed === "not_found") throw notFound();
+      if (confirmed === "conflict") throw conflict();
+      return { ok: true as const };
     }),
 
   /** «Повторить»: renders a failed book again. */

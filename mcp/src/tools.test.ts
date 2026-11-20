@@ -116,3 +116,18 @@ describe("textbook tools (#150)", () => {
     expect((result.content[0] as { text: string }).text).toMatch(/^invalid textbook structure, nothing was saved/);
   });
 });
+
+describe("task bank tools (#224)", () => {
+  it("send a lesson's tasks as a draft and a refused draft back as words to fix", async () => {
+    const saved = createTools(platformAnswering(200, { result: { data: { status: "draft" } } }));
+    const ok = await saved.saveTextbookLessonTasks({ textbookId: "00000000-0000-4000-8000-000000000001", lessonId: "00000000-0000-4000-8000-000000000002", tasks: [] });
+    expect(ok.isError).toBeUndefined();
+    expect(ok.content[0]!.text).toContain('"status": "draft"');
+    const refused = createTools(
+      platformAnswering(400, { error: { message: "Задание 1, поле source: укажите книгу, страницу и упражнение", code: -32600, data: { code: "BAD_REQUEST", httpStatus: 400 } } }),
+    );
+    const result = await refused.saveTextbookLessonTasks({ textbookId: "00000000-0000-4000-8000-000000000001", lessonId: "00000000-0000-4000-8000-000000000002", tasks: [{}] });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/^invalid lesson tasks, nothing was saved/);
+  });
+});

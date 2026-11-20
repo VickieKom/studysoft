@@ -282,6 +282,35 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
   );
 }
 
+/**
+ * One task as the child will see it, for the teacher (#224): the same prompt,
+ * parts and controls as in the homework, without the keys. She may try it;
+ * nothing is saved and nothing is checked.
+ */
+export function TaskAsStudent({ task }: { task: StudentTask }) {
+  const [answer, setAnswer] = useState<StudentAnswer | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="whitespace-pre-line text-answer font-bold">{task.prompt}</p>
+      {task.passage && <TaskPassage passage={task.passage} />}
+      {task.example && <TaskExampleLine example={task.example} />}
+      {task.image && (
+        // biome-ignore lint/performance/noImgElement: the image optimiser fetches without the user's session, so a permission-checked file cannot go through it
+        // eslint-disable-next-line @next/next/no-img-element -- same reason as above
+        <img src={task.image} alt="Картинка к заданию" className="max-h-56 w-full rounded-task object-contain" />
+      )}
+      {task.audio && <audio controls preload="metadata" src={task.audio} className="w-full" />}
+      <TaskBody
+        task={task}
+        answer={answer}
+        onChange={(next) => setAnswer(next)}
+        upload={() => Promise.resolve("В предпросмотре запись и файл не сохраняются")}
+        onRecording={() => undefined}
+      />
+    </div>
+  );
+}
+
 function NavButton({
   children,
   onClick,

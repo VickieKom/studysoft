@@ -3,13 +3,15 @@ import { z } from "zod";
 import { BOOK_KINDS, RENDER_STATUSES } from "../../../domain/textbook";
 import { DRAFT_AUTHORS, structureSchema } from "../../../domain/textbook-structure";
 import { readBlob } from "../../blob/store";
+import { saveAssistantLessonTasks } from "../../library/task-bank";
 import { readStructure, saveAssistantStructure } from "../../library/textbook-structure";
 import { bookText, findTextbook, listTextbooks, MAX_TEXT_PAGES, textbookBlob } from "../../library/textbooks";
 import { agentProcedure, router } from "../core/trpc";
 
 // The assistant's textbook tools (#150): it reads a textbook's pages and
-// saves a structure as a draft. There is no agent procedure that confirms a
-// structure (AGENTS.md, rule 5): confirming is the teacher's.
+// saves a structure as a draft, and a lesson's tasks for the task bank as a
+// draft (#224). There is no agent procedure that confirms a structure or a
+// lesson's tasks (AGENTS.md, rule 5): confirming is the teacher's.
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
@@ -101,6 +103,23 @@ export const agentTextbooksRouter = router({
       if (saved === "conflict") {
         throw new TRPCError({ code: "CONFLICT", message: "the teacher is editing a draft of her own; it can be replaced once she confirms" });
       }
+      if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
+      return { status: "draft" as const };
+    }),
+
+  /**
+   * Saves a lesson's tasks for the task bank as the lesson's draft (#224):
+   * tasks in the homework format, each with its `source`, and the exercises
+   * that did not become tasks with their reasons. The lesson is one of the
+   * textbook's confirmed structure. The draft replaces the lesson's previous
+   * draft; the confirmed tasks stay until the teacher confirms it.
+   */
+  saveTextbookLessonTasks: agentProcedure
+    .input(z.object({ textbookId: z.uuid(), lessonId: z.uuid(), tasks: z.unknown(), skipped: z.unknown().default([]) }))
+    .output(z.object({ status: z.literal("draft") }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const saved = await saveAssistantLessonTasks(ctx.db, ctx.teacherId, input.textbookId, input.lessonId, input.tasks, input.skipped);
+      if (saved === "not_found") throw notFound();
       if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
       return { status: "draft" as const };
     }),

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TextbookStructureEditor } from "@/components/textbook-structure-editor";
+import { TextbookTaskBank } from "@/components/textbook-task-bank";
 import { TextbookRetry } from "@/components/textbook-upload-form";
 import { BOOK_LABELS, RENDER_LABELS } from "@/domain/textbook";
 import { isNotFound } from "@/server/router";
@@ -13,8 +14,9 @@ type Props = { params: Promise<{ id: string }> };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * One textbook set (#156): each book's rendering status, then its pages, and
- * the tracks, which play. The pages and the tracks are served to this teacher
+ * One textbook set (#156): its units and lessons (#150), the task bank lesson
+ * by lesson (#224), each book's rendering status, then its pages, and the
+ * tracks, which play. The pages and the tracks are served to this teacher
  * only, after a permission check.
  */
 export default async function TextbookPage({ params }: Props) {
@@ -23,8 +25,13 @@ export default async function TextbookPage({ params }: Props) {
   const { caller } = await teacherCaller();
   let textbook;
   let structure;
+  let bank;
   try {
-    [textbook, structure] = await Promise.all([caller.teacher.textbooks.get({ id }), caller.teacher.textbooks.structure({ id })]);
+    [textbook, structure, bank] = await Promise.all([
+      caller.teacher.textbooks.get({ id }),
+      caller.teacher.textbooks.structure({ id }),
+      caller.teacher.textbooks.taskBank({ id }),
+    ]);
   } catch (error) {
     if (isNotFound(error)) notFound();
     throw error;
@@ -85,6 +92,8 @@ export default async function TextbookPage({ params }: Props) {
           books={textbook.books.filter((b) => b.status === "done").map((b) => b.kind)}
         />
       </section>
+
+      <TextbookTaskBank textbookId={textbook.id} lessons={bank} />
 
       {textbook.books.map((book) => (
         <section key={book.id} aria-label={BOOK_LABELS[book.kind]} className="flex flex-col gap-3">

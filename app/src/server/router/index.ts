@@ -84,6 +84,8 @@ export { handleHomeworkImageRequest } from "../homework/images";
 export { handleAnswerFileRequest, handleAnswerFileUpload } from "../homework/answer-files";
 export { handleLibraryFileRequest, handleLibraryVideoUpload } from "../library/files";
 export { handleTextbookFileRequest, handleTextbookUpload } from "../library/textbook-files";
+/** Pictures and recordings of the task bank's tasks, served to their teacher only (#224). */
+export { handleBankFileRequest } from "../library/task-bank";
 
 /** True when a procedure refused because there is no valid session. */
 export function isUnauthorized(error: unknown): boolean {

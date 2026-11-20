@@ -32,6 +32,7 @@ function failure(error: unknown, subject: { refused?: string; missing?: string }
 
 const TEXTBOOK = { refused: "invalid textbook structure", missing: "textbook or page" };
 const PLAN = { refused: "invalid lesson plan", missing: "lesson still to hold" };
+const LESSON_TASKS = { refused: "invalid lesson tasks", missing: "textbook, or lesson in its confirmed structure" };
 
 export const studentIdInput = { studentId: z.string().uuid().describe("The student's id from list_students") };
 
@@ -97,6 +98,22 @@ export const structureInput = {
     .describe(
       "{ units: [{ title, lessons: [{ title, pages: { students_book?: { from, to }, workbook?: { from, to } }, tracks: [track names], words: [words] }] }] }",
     ),
+};
+
+// A textbook lesson's tasks for the task bank (#224).
+export const lessonTasksInput = {
+  ...textbookIdInput,
+  lessonId: z.string().uuid().describe("The id of a lesson of the textbook's confirmed structure, from read_textbook_structure"),
+  tasks: z
+    .array(z.record(z.string(), z.unknown()))
+    .describe(
+      "The lesson's tasks in the homework format from get_homework_format, up to 50, each with its source: " +
+        '{ "book": "Workbook", "unit": "1", "page": "5", "exercise": "2" } (or "Student\'s Book" when the teacher asks for one)',
+    ),
+  skipped: z
+    .array(z.object({ source: z.record(z.string(), z.unknown()), reason: z.string() }))
+    .optional()
+    .describe("The lesson's exercises that did not become tasks: their source as above and the reason, up to 300 characters"),
 };
 
 export const lessonIdInput = { lessonId: z.string().uuid().describe("The lesson's id from list_upcoming_lessons") };
@@ -178,6 +195,27 @@ export function createTools(platform: Platform) {
         return json({ status: "draft", note: "Saved as a draft on the textbook's page; the teacher corrects and confirms it." });
       } catch (error) {
         return failure(error, TEXTBOOK);
+      }
+    },
+    async saveTextbookLessonTasks({
+      textbookId,
+      lessonId,
+      tasks,
+      skipped = [],
+    }: {
+      textbookId: string;
+      lessonId: string;
+      tasks: unknown[];
+      skipped?: unknown[];
+    }): Promise<ToolResult> {
+      try {
+        await platform.agent.saveTextbookLessonTasks.mutate({ textbookId, lessonId, tasks, skipped });
+        return json({
+          status: "draft",
+          note: "Saved as the lesson's draft under «Задания» on the textbook's page; the teacher confirms it. Confirmed tasks stay until she does.",
+        });
+      } catch (error) {
+        return failure(error, LESSON_TASKS);
       }
     },
     async listStudents(): Promise<ToolResult> {
