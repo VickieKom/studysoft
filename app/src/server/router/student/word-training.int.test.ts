@@ -122,4 +122,17 @@ describe("the daily word training", () => {
     await answerExercise(db(), teacherId, studentId, answer, day(0));
     expect(await stateOf(ids.ladder!)).toMatchObject({ step: 1, dueOn: "2026-11-21", right: 2 });
   });
+
+  it("shows the teacher each word's mark and gives the assistant the words often missed (#240)", async () => {
+    const { studentId, teacherId, ids } = await newStudent("Метки слов");
+    const assistant = createServerCaller(new Headers({ authorization: `Bearer ${(await teacher.teacher.assistant.createToken()).token}` }));
+    await answerExercise(db(), teacherId, studentId, { wordId: ids.teapot!, type: "choose_translation", answer: "чайник", extra: false }, day(0));
+    await answerExercise(db(), teacherId, studentId, { wordId: ids.ladder!, type: "choose_translation", answer: "варежка", extra: false }, day(0));
+    const marks = Object.fromEntries((await teacher.teacher.students.vocabulary({ studentId })).map((w) => [w.word, w.mark]));
+    expect(marks).toEqual({ teapot: "learning", ladder: "often_wrong", pebble: null, mitten: null });
+    const card = await teacher.teacher.students.vocabulary({ studentId });
+    expect(card.find((w) => w.word === "teapot")!.trainedAt).toBe(day(0).toISOString());
+    expect(card.find((w) => w.word === "pebble")!.trainedAt).toBeNull();
+    expect((await assistant.agent.studentContext({ studentId })).weakWords).toEqual([{ word: "ladder", translation: "лестница" }]);
+  });
 });
