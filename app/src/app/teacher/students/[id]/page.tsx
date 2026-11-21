@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { FamilyGoal } from "@/components/family-goal";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
@@ -35,6 +36,7 @@ export default async function StudentCardPage({ params }: Props) {
   const { results, ...totals } = await caller.teacher.progress.get({ studentId: student.id });
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
   const [nextLesson] = await caller.teacher.prep.list({ studentId: student.id });
+  const { values: measureValues, ...goal } = await caller.teacher.goal.get({ studentId: student.id });
 
   return (
     <main>
@@ -79,6 +81,7 @@ export default async function StudentCardPage({ params }: Props) {
             </Fragment>
           ))}
         </dl>
+        <FamilyGoal studentId={student.id} goal={goal} values={measureValues} />
         <section aria-label="Учебник ученика" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
           <h2 className="text-small font-semibold text-text-secondary">Учебник ученика</h2>
           <StudentTextbook studentId={student.id} textbookId={book.textbookId} passedLessonId={book.passedLessonId} textbooks={book.textbooks} />

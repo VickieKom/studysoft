@@ -40,6 +40,7 @@ const markOutput = {
   needsMark: z.boolean(),
 };
 const MAX_MARK_TEXT = 5000;
+const MAX_MEASURE = 100_000;
 const markText = z
   .string()
   .max(MAX_MARK_TEXT)
@@ -85,6 +86,9 @@ const lessonsOutput = z
           ...markOutput,
           movedFrom: z.iso.datetime().nullable(),
           meetingLink: z.string().nullable(),
+          measure: z.number().nullable(),
+          measureName: z.string().nullable(),
+          measureUnit: z.string().nullable(),
         })
         .strict(),
     ),
@@ -141,6 +145,8 @@ export const scheduleRouter = router({
         charged: z.boolean(),
         unit: markText,
         note: markText,
+        // The number for the student's personal measure (#266); none when left empty.
+        measure: z.number().min(0).max(MAX_MEASURE).nullable().optional(),
       }),
     )
     .output(z.object({ ok: z.literal(true) }))

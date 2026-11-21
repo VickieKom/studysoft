@@ -222,6 +222,10 @@ export type WeekLesson = {
   note: string | null;
   movedFrom: Date | null;
   meetingLink: string | null;
+  /** The number for the student's personal measure, and the measure itself when they have one (#266). */
+  measure: number | null;
+  measureName: string | null;
+  measureUnit: string | null;
 };
 
 const markColumns = { status: lesson.status, charged: lesson.charged, unit: lesson.unit, note: lesson.note };
@@ -237,6 +241,9 @@ const weekColumns = {
   ...markColumns,
   movedFrom: lesson.movedFrom,
   meetingLink: lesson.meetingLink,
+  measure: lesson.measure,
+  measureName: student.measureName,
+  measureUnit: student.measureUnit,
 };
 
 /** A lesson that has ended and is not marked yet asks to be marked (#82). */
@@ -244,7 +251,7 @@ export function needsMark(l: { status: string; startsAt: Date; durationMinutes: 
   return l.status === "scheduled" && l.startsAt.getTime() + l.durationMinutes * 60_000 <= now.getTime();
 }
 
-export type LessonMark = { status: "held" | "missed"; charged: boolean; unit: string | null; note: string | null };
+export type LessonMark = { status: "held" | "missed"; charged: boolean; unit: string | null; note: string | null; measure?: number | null };
 
 /**
  * Marks a lesson of this teacher that has started: held or missed, charged
@@ -267,7 +274,8 @@ export async function markLesson(
   // The write repeats the conditions: a lesson moved ahead since the read stays unmarked.
   const rows = await db
     .update(lesson)
-    .set({ ...mark, charged: row.kind === "intro" ? false : mark.charged, updatedAt: now })
+    // A missed lesson has no number for the measure (#266).
+    .set({ ...mark, charged: row.kind === "intro" ? false : mark.charged, measure: mark.status === "held" ? (mark.measure ?? null) : null, updatedAt: now })
     .where(and(eq(lesson.id, lessonId), eq(lesson.teacherId, teacherId), lte(lesson.startsAt, now)))
     .returning({ id: lesson.id });
   return rows.length > 0;
