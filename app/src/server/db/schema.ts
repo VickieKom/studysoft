@@ -886,6 +886,9 @@ export const vocabularyWord = pgTable(
     translation: text("translation"),
     // A sentence that uses the word (#236), written by the teacher; the student sees it under the word.
     example: text("example"),
+    // The assistant's proposal (#237): a translation and an example the student does not see until the teacher confirms them.
+    draftTranslation: text("draft_translation"),
+    draftExample: text("draft_example"),
     // The lesson the word came from.
     lessonId: uuid("lesson_id").references(() => lesson.id, { onDelete: "set null" }),
     createdAt: createdAt(),

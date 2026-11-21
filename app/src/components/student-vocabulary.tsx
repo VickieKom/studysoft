@@ -6,7 +6,8 @@ import { dayMonthIn } from "@/domain/schedule";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
-type Word = { id: string; word: string; translation: string | null; example: string | null; addedAt: string };
+type Draft = { translation: string | null; example: string | null };
+type Word = { id: string; word: string; translation: string | null; example: string | null; draft: Draft | null; addedAt: string };
 type Fields = { word: string; translation: string; example: string };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
@@ -16,7 +17,9 @@ const field = "rounded-control border border-border bg-bg px-3 py-2";
  * finished — the book lesson's and those the teacher noted on the panel —
  * and by hand, newest first, each with its translation and example if any
  * and the day it was added. The teacher corrects, deletes and adds words
- * here (#236); the student sees them in «Тренировка слов».
+ * here (#236); the student sees them in «Тренировка слов». The assistant's
+ * translations and examples wait «от ассистента» by each word until the
+ * teacher confirms them, one by one or all at once (#237).
  */
 export function StudentVocabulary({ studentId, words, timeZone }: { studentId: string; words: Word[]; timeZone: string }) {
   const router = useRouter();
@@ -39,6 +42,15 @@ export function StudentVocabulary({ studentId, words, timeZone }: { studentId: s
     }
   }
 
+  const drafts = words.filter((w) => w.draft);
+  const confirm = (list: Word[]) =>
+    run(() =>
+      routerClient.teacher.students.confirmWordDrafts.mutate({
+        studentId,
+        words: list.map((w) => ({ id: w.id, translation: w.draft!.translation, example: w.draft!.example })),
+      }),
+    );
+
   const open = (target: string | "new" | null) => {
     setError(null);
     setEditing(target);
@@ -50,11 +62,18 @@ export function StudentVocabulary({ studentId, words, timeZone }: { studentId: s
         <h2 id="vocabulary-heading" className="text-h3 font-semibold">
           Словарь
         </h2>
-        {editing !== "new" && (
-          <Button variant="secondary" disabled={busy} onClick={() => open("new")}>
-            Добавить слово
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {drafts.length > 0 && (
+            <Button variant="secondary" disabled={busy} onClick={() => void confirm(drafts)}>
+              Подтвердить все
+            </Button>
+          )}
+          {editing !== "new" && (
+            <Button variant="secondary" disabled={busy} onClick={() => open("new")}>
+              Добавить слово
+            </Button>
+          )}
+        </div>
       </div>
       {editing === "new" && (
         <WordForm
@@ -87,6 +106,16 @@ export function StudentVocabulary({ studentId, words, timeZone }: { studentId: s
                   {w.translation && <span>— {w.translation}</span>}
                   <span className="text-text-secondary">· {dayMonthIn(new Date(w.addedAt), timeZone)}</span>
                   {w.example && <span className="basis-full text-text-secondary">{w.example}</span>}
+                  {w.draft && (
+                    <span className="flex basis-full flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1">
+                      <span className="text-text-secondary">от ассистента:</span>
+                      {w.draft.translation && <span>{w.draft.translation}</span>}
+                      {w.draft.example && <span className="text-text-secondary">{w.draft.example}</span>}
+                      <button type="button" disabled={busy} onClick={() => void confirm([w])} className="font-semibold text-green-600 hover:text-green-700 disabled:opacity-60">
+                        Подтвердить
+                      </button>
+                    </span>
+                  )}
                   <span className="flex gap-2">
                     <button type="button" disabled={busy} onClick={() => open(w.id)} className="text-green-600 hover:text-green-700 disabled:opacity-60">
                       Изменить

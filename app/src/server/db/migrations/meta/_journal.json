@@ -239,6 +239,13 @@
       "when": 1795239171982,
       "tag": "0033_vocabulary_example",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795239239623,
+      "tag": "0034_word_drafts",
+      "breakpoints": true
     }
   ]
 }

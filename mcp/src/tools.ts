@@ -116,6 +116,20 @@ export const lessonTasksInput = {
     .describe("The lesson's exercises that did not become tasks: their source as above and the reason, up to 300 characters"),
 };
 
+// The student's words and the assistant's translations for them (#237).
+export const wordDraftsInput = {
+  ...studentIdInput,
+  words: z
+    .array(
+      z.object({
+        wordId: z.string().uuid().describe("The word's id from list_student_words"),
+        translation: z.string().describe("A Russian translation for a child, up to 200 characters; empty for none"),
+        example: z.string().describe("A short English sentence that uses the word, for a child of the student's level, up to 500 characters; empty for none"),
+      }),
+    )
+    .describe("1 to 300 words of this student"),
+};
+
 export const lessonIdInput = { lessonId: z.string().uuid().describe("The lesson's id from list_upcoming_lessons") };
 
 export const upcomingInput = { studentId: z.string().uuid().optional().describe("Only this student's lessons") };
@@ -216,6 +230,21 @@ export function createTools(platform: Platform) {
         });
       } catch (error) {
         return failure(error, LESSON_TASKS);
+      }
+    },
+    async listStudentWords({ studentId }: { studentId: string }): Promise<ToolResult> {
+      try {
+        return json(await platform.agent.studentWords.query({ studentId }));
+      } catch (error) {
+        return failure(error);
+      }
+    },
+    async saveWordDrafts({ studentId, words }: { studentId: string; words: { wordId: string; translation: string; example: string }[] }): Promise<ToolResult> {
+      try {
+        const saved = await platform.agent.saveWordDrafts.mutate({ studentId, words });
+        return json({ ...saved, note: "Saved as drafts «от ассистента» in «Словарь» on the student card; the student sees them once the teacher confirms." });
+      } catch (error) {
+        return failure(error, { refused: "invalid word drafts", missing: "student, or word of this student" });
       }
     },
     async listStudents(): Promise<ToolResult> {

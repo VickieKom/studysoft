@@ -21,6 +21,7 @@ import {
   textInput,
   upcomingInput,
   warmupDraftInput,
+  wordDraftsInput,
 } from "./tools";
 
 const url = process.env.STUDYSOFT_URL;
@@ -55,6 +56,31 @@ server.registerTool(
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),
+);
+
+server.registerTool(
+  "list_student_words",
+  {
+    title: "The student's words",
+    description:
+      "The student's vocabulary with each word's id: the confirmed translation and example, and your draft if any. " +
+      "Words from the textbook come without a translation.",
+    inputSchema: studentIdInput,
+  },
+  (input) => tools.listStudentWords(input),
+);
+
+server.registerTool(
+  "save_word_drafts",
+  {
+    title: "Propose translations and examples",
+    description:
+      "Saves a translation and an example sentence for words of the student's vocabulary as drafts «от ассистента» " +
+      "on the student card. The student sees nothing until the teacher confirms; a confirmed translation stays until " +
+      "then. Saving again replaces your draft. Use the ids from list_student_words. Only the teacher confirms.",
+    inputSchema: wordDraftsInput,
+  },
+  (input) => tools.saveWordDrafts(input),
 );
 
 server.registerTool(
