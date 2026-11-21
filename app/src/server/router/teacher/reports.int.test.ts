@@ -108,7 +108,8 @@ describe("a report draft", () => {
     const draft = await teacher.teacher.reports.open({ studentId });
     expect(draft).toMatchObject({ periodFrom: moscow(-7), periodTo: moscow(0) });
     expect(draft.id).not.toBe(published!.id);
-    await expect(teacher.teacher.reports.save({ reportId: published!.id, blocks: [], showPayments: false })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // A published report is edited in place and stays published (#268).
+    await teacher.teacher.reports.save({ reportId: published!.id, blocks: [], showPayments: false });
     expect((await teacher.teacher.reports.list({ studentId })).map((r) => r.status)).toEqual(["draft", "published"]);
   });
 
