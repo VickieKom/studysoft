@@ -89,3 +89,11 @@ export const progressViewSchema = z
   })
   .strict();
 export type ProgressView = z.infer<typeof progressViewSchema>;
+
+/** A slip worth the teacher's attention: a fall of this many points or more from the point before (product owner, 2026-11-20). */
+export const SLIP_POINTS = 10;
+
+/** The skills whose last point fell by `SLIP_POINTS` or more, in the dashboard's order. */
+export function slips(rows: readonly SkillRow[]): { skill: Skill; trend: number }[] {
+  return rows.flatMap((r) => (r.trend !== null && r.trend <= -SLIP_POINTS ? [{ skill: r.skill, trend: r.trend }] : []));
+}

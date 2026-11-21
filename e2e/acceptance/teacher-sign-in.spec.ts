@@ -11,6 +11,8 @@ const teacher = teachers[0];
 // what the scenario pins.
 const SIGN_IN_URL = /\/sign-in(\?.*)?$/;
 const STUDENTS_URL = /\/teacher\/students(\?.*)?$/;
+// After signing in the teacher lands on the general screen (#257).
+const HOME_URL = /\/teacher(\?.*)?$/;
 const WRONG_CREDENTIALS = "Неверная почта или пароль";
 
 test("the health check reports the database and the build", async ({ request }) => {
@@ -24,12 +26,15 @@ test("the health check reports the database and the build", async ({ request }) 
   expect(body.build).toMatch(/^[0-9a-f]{7,40}$/);
 });
 
-test("the teacher signs in and sees an empty student list", async ({ page }) => {
+test("the teacher signs in to the general screen and sees an empty student list", async ({ page }) => {
   await page.goto("/sign-in");
   await page.getByLabel("Электронная почта").fill(teacher.email);
   await page.getByLabel("Пароль").fill(teacher.password);
   await page.getByRole("button", { name: "Войти" }).click();
 
+  await expect(page).toHaveURL(HOME_URL);
+  await expect(page.getByRole("heading", { level: 1, name: "Главная" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Разделы" }).getByRole("link", { name: "Ученики", exact: true }).click();
   await expect(page).toHaveURL(STUDENTS_URL);
   await expect(page.getByRole("heading", { level: 1, name: "Ученики" })).toBeVisible();
   await expect(page.getByText("Пока нет учеников")).toBeVisible();

@@ -33,7 +33,7 @@ export function SignInForm() {
         setError(messageFor(response.status));
         return;
       }
-      router.replace("/teacher/students");
+      router.replace("/teacher");
       router.refresh();
     } catch {
       setError(messageFor(0));
