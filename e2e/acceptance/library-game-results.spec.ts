@@ -151,9 +151,10 @@ async function uploadAndOpenGame(page: Page, title: string, file: Buffer, firstN
   await expect(page.getByText(new RegExp(`Открыта ученику: ${firstName}`))).toBeVisible();
 }
 
-/** The student opens the game under «Игры» on their page and presses «Finish» inside it. */
+/** The student opens the game under «Игры» in «Материалы урока» (#241) and presses «Finish» inside it. */
 async function play(student: Page, title: string) {
   await student.goto("/s");
+  await student.getByRole("navigation", { name: "Разделы" }).getByRole("link", { name: /^Материалы урока/ }).click();
   await student.getByRole("region", { name: "Игры" }).getByRole("link", { name: title }).click();
   await expect(student.getByRole("heading", { level: 1, name: title })).toBeVisible();
   const frame = student.frameLocator(`iframe[title="${title}"]`);

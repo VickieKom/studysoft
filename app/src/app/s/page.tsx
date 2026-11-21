@@ -3,8 +3,7 @@ import { HomeworkResult } from "@/components/homework-result";
 import { HomeworkRunner } from "@/components/homework-runner";
 import { formatDueDate, tasksLabel } from "@/domain/homework";
 import { LinkExchange } from "@/components/link-exchange";
-import { StudentGames } from "@/components/student-games";
-import { StudentVideos } from "@/components/student-videos";
+import { StudentNav } from "@/components/student-nav";
 import { createServerCaller, isNotFound, isUnauthorized } from "@/server/router";
 
 export const metadata = { title: "Домашка — StudySoft" };
@@ -19,18 +18,14 @@ export default async function StudentPage() {
     throw error;
   }
   const homework = await caller.student.homework.current();
-  // The games and videos the teacher opened during a lesson (#118, #158) come first, above the homework.
-  const games = (
-    <>
-      <StudentGames games={await caller.student.games.list()} />
-      <StudentVideos videos={await caller.student.videos.list()} />
-    </>
-  );
+  // The games and videos the teacher opened in a lesson (#118, #158) are in «Материалы урока» (#241); the menu marks them.
+  const [games, videos] = await Promise.all([caller.student.games.list(), caller.student.videos.list()]);
+  const nav = <StudentNav current="homework" lessonOpen={games.length + videos.length > 0} />;
 
   if (homework?.result) {
     return (
       <div className="flex flex-col gap-6">
-        {games}
+        {nav}
         <HomeworkResult firstName={firstName} />
       </div>
     );
@@ -50,7 +45,7 @@ export default async function StudentPage() {
     return (
       <main className="flex flex-col gap-6">
         <h1 className="text-task-title font-bold">Привет, {firstName}!</h1>
-        {games}
+        {nav}
         <div className="rounded-task border border-border bg-accent-50 px-6 py-10 text-center">
           <p className="text-answer font-semibold text-accent-900">Домашних заданий пока нет</p>
         </div>
@@ -60,7 +55,7 @@ export default async function StudentPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {games}
+      {nav}
       <HomeworkRunner
       homeworkId={homework.id}
       firstName={firstName}

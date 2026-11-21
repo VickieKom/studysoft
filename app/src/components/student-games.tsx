@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-/** «Игры» on the student's page (#118): the games the teacher opened during a lesson; nothing when there are none. */
+/** «Игры» in the student's «Материалы урока» (#118, #241): the games the teacher opened during a lesson; nothing when there are none. */
 export function StudentGames({ games }: { games: { id: string; title: string }[] }) {
   if (games.length === 0) return null;
   return (

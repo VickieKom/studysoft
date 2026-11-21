@@ -30,8 +30,8 @@ export default async function StudentVideoPage({ params }: Props) {
   return (
     <main className="flex flex-col gap-4">
       <p>
-        <Link href="/s" className="text-small text-accent-900">
-          ← На главную
+        <Link href="/s/materials" className="text-small text-accent-900">
+          ← Материалы урока
         </Link>
       </p>
       <h1 className="text-task-title font-bold">{video.title}</h1>

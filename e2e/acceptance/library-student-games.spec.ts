@@ -1,6 +1,6 @@
 // Acceptance for #118: while a lesson with a student is going on, the teacher
 // opens a game from «Библиотека» to that student; the student finds it under
-// «Игры» behind their permanent link and plays it in the same isolated frame.
+// «Игры» in «Материалы урока» behind their permanent link (#241) and plays it in the same isolated frame.
 // Another student gets the same 404 for it as for a missing game, and a game
 // deleted from the library is gone from the student's page at once. The end
 // of the access — one hour after the lesson's end — is pinned by an
@@ -113,8 +113,10 @@ async function openGame(page: Page, title: string) {
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 }
 
-/** The «Игры» section of the student's page. */
-function studentGames(student: Page) {
+/** «Материалы урока» in the student's menu (#241), and its «Игры» section. */
+async function studentGames(student: Page) {
+  await student.getByRole("navigation", { name: "Разделы" }).getByRole("link", { name: /^Материалы урока/ }).click();
+  await expect(student.getByRole("heading", { level: 1, name: "Материалы урока" })).toBeVisible();
   return student.getByRole("region", { name: "Игры" });
 }
 
@@ -140,7 +142,7 @@ test("during a lesson the teacher opens a game to the student, who finds it unde
 
   // Before anything is opened, the student has no games.
   const before = await openAsStudent(browser, playerLink, "Игрок");
-  await expect(studentGames(before)).toHaveCount(0);
+  await expect(await studentGames(before)).toHaveCount(0);
   await before.context().close();
 
   await openGame(page, "Space quiz");
@@ -153,7 +155,11 @@ test("during a lesson the teacher opens a game to the student, who finds it unde
   await expect(page.getByText(/Открыта ученику: Игрок/)).toBeVisible();
 
   const student = await openAsStudent(browser, playerLink, "Игрок");
-  await studentGames(student).getByRole("link", { name: "Space quiz" }).click();
+  // The link opens «Домашка»; the game is in «Материалы урока», whose menu item is marked while it is open (#241).
+  const menu = student.getByRole("navigation", { name: "Разделы" });
+  await expect(menu.getByRole("link", { name: /^Материалы урока/ }).getByLabel("Открыто на уроке")).toBeVisible();
+  await expect(student.getByRole("region", { name: "Игры" })).toHaveCount(0);
+  await (await studentGames(student)).getByRole("link", { name: "Space quiz" }).click();
   await expect(student.getByRole("heading", { level: 1, name: "Space quiz" })).toBeVisible();
   const frame = student.frameLocator('iframe[title="Space quiz"]');
   await expect(frame.getByText("Space quiz is ready")).toBeVisible();
@@ -169,11 +175,11 @@ test("another student gets the same 404 for the opened game's page and file as f
   await createStudent(page, "Соседний");
   const otherLink = await copyStudentLink(page);
   const other = await openAsStudent(browser, otherLink, "Соседний");
-  await expect(studentGames(other)).toHaveCount(0);
+  await expect(await studentGames(other)).toHaveCount(0);
 
   // The opened game's page, as the first student reaches it.
   const player = await openAsStudent(browser, playerLink, "Игрок");
-  await studentGames(player).getByRole("link", { name: "Space quiz" }).click();
+  await (await studentGames(player)).getByRole("link", { name: "Space quiz" }).click();
   await expect(player.getByRole("heading", { level: 1, name: "Space quiz" })).toBeVisible();
   const gamePage = player.url();
   await player.context().close();
@@ -197,7 +203,7 @@ test("a game deleted from the library is gone from the student's page at once", 
   await expect(page.getByRole("heading", { level: 1, name: "Библиотека" })).toBeVisible();
 
   const student = await openAsStudent(browser, playerLink, "Игрок");
-  await expect(studentGames(student)).toHaveCount(0);
+  await expect(await studentGames(student)).toHaveCount(0);
   expect((await student.request.get(gameFile)).status()).toBe(404);
   await student.context().close();
 });
