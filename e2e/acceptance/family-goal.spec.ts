@@ -128,7 +128,7 @@ test("the card keeps the family's goal and a personal measure, counted when a le
   await page.goto(card);
   const goal = page.getByRole("region", { name: "Цель и показатель" });
   await expect(goal).toContainText("Цель не задана");
-  await goal.getByRole("button", { name: "Изменить", exact: true }).click();
+  await goal.getByRole("button", { name: "Настроить", exact: true }).click();
   await goal.getByLabel("Цель семьи").fill("Больше говорить по-английски");
   await goal.getByLabel("Показатель").fill("на английском");
   await goal.getByLabel("Единица").fill("мин");
