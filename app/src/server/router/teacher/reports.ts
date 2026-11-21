@@ -10,6 +10,7 @@ import {
   openDraft,
   publishReport,
   type ReportRow,
+  recordingUrls,
   reportNumbers,
   saveReport,
   unpublishReport,
@@ -37,6 +38,7 @@ const reportView = z
     numbers: reportNumbersSchema,
     // The balance line «Показать оплаты» adds to the messenger text; never on the parent's page (AGENTS.md, rule 4).
     balance: z.string().nullable(),
+    recordings: z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
   })
   .strict();
 
@@ -54,6 +56,7 @@ async function view(db: Database, teacherId: string, studentId: string, found: R
     showPayments: found.showPayments,
     numbers: found.numbers ?? (await reportNumbers(db, teacherId, studentId, found.periodFrom, found.periodTo, card.timeZone)),
     balance: await balanceLine(db, teacherId, studentId, dateIn(new Date(), card.timeZone)),
+    recordings: recordingUrls(found),
   };
 }
 

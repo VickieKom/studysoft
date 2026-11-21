@@ -968,6 +968,10 @@ export const report = pgTable(
     blocks: jsonb("blocks").notNull(),
     showPayments: boolean("show_payments").notNull().default(false),
     numbers: jsonb("numbers"),
+    // The recordings «было» and «стало» the teacher uploaded (#269): blobs, served by
+    // /api/files/reports to her and, once published, to the parent of the student.
+    recordingBefore: uuid("recording_before").references(() => blob.id),
+    recordingAfter: uuid("recording_after").references(() => blob.id),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

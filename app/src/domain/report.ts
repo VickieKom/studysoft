@@ -84,3 +84,15 @@ export function reportText(report: {
   parts.push(`Подробнее: ${report.link}`);
   return parts.join("\n\n");
 }
+
+/** The two recordings of a report (#269), as the parent's page names them. */
+export const RECORDINGS = ["before", "after"] as const;
+export type Recording = (typeof RECORDINGS)[number];
+export const RECORDING_LABELS: Record<Recording, string> = { before: "Было", after: "Стало" };
+/** A recording may be this big. */
+export const MAX_RECORDING_BYTES = 20 * 1024 * 1024;
+
+/** Where a report's recording is uploaded and played. */
+export function reportRecordingUrl(reportId: string, which: Recording): string {
+  return `/api/files/reports/${reportId}/${which}`;
+}
