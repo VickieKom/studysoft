@@ -8,6 +8,7 @@ import { routerClient } from "./router-client";
 type Listed = { id: string; status: "draft" | "published"; periodFrom: string; periodTo: string };
 type Draft = {
   id: string;
+  status: "draft" | "published";
   firstName: string;
   periodFrom: string;
   periodTo: string;
@@ -26,9 +27,12 @@ const field = "rounded-control border border-border bg-bg px-3 py-2";
  * «Отчёты» on the card (#267): the student's reports, and a draft with the
  * period's numbers and the teacher's blocks. «Скопировать текст» gives the
  * report as text for a messenger with the parent's link; «Показать оплаты»
- * adds the balance line to that text only.
+ * adds the balance line to that text only. «Опубликовать» puts it on the
+ * parent's page; a published report opens with «Открыть», is edited there
+ * and taken down with «Снять с публикации» (#268).
  */
 export function StudentReports({ studentId, reports }: { studentId: string; reports: Listed[] }) {
+  const [list, setList] = useState(reports);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [showPayments, setShowPayments] = useState(false);
@@ -37,22 +41,35 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   const [error, setError] = useState<string | null>(null);
   const [nextKey, setNextKey] = useState(0);
 
-  async function open() {
+  /** Runs a request with the buttons off; a failure shows `failed`, or the server's own message for a refusal. */
+  async function run(failed: string, action: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
-      const opened = await routerClient.teacher.reports.open.mutate({ studentId });
-      setDraft(opened);
-      setBlocks(opened.blocks.map((b, i) => ({ ...b, key: i, own: false })));
-      setNextKey(opened.blocks.length);
-      setShowPayments(opened.showPayments);
-      setState("idle");
-    } catch {
-      setError("Не получилось открыть отчёт. Проверьте интернет и попробуйте ещё раз");
+      await action();
+    } catch (cause) {
+      const refused = (cause as { data?: { code?: string } }).data?.code === "CONFLICT";
+      setError(refused ? (cause as Error).message : failed);
     } finally {
       setBusy(false);
     }
   }
+
+  function show(opened: Draft) {
+    setDraft(opened);
+    setBlocks(opened.blocks.map((b, i) => ({ ...b, key: i, own: false })));
+    setNextKey(opened.blocks.length);
+    setShowPayments(opened.showPayments);
+    setState("idle");
+  }
+
+  async function refresh() {
+    setList(await routerClient.teacher.reports.list.query({ studentId }));
+  }
+
+  const openFailed = "Не получилось открыть отчёт. Проверьте интернет и попробуйте ещё раз";
+  const open = () => run(openFailed, async () => show(await routerClient.teacher.reports.open.mutate({ studentId })));
+  const openReport = (reportId: string) => run(openFailed, async () => show(await routerClient.teacher.reports.get.query({ reportId })));
 
   function change(next: Block[]) {
     setBlocks(next);
@@ -62,24 +79,41 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   const kept = () => blocks.filter((b) => b.title.trim() !== "").map(({ title, text }) => ({ title: title.trim(), text }));
   /** A section of her own with text but no title would be dropped, its text with it. */
   const untitled = () => blocks.some((b) => b.title.trim() === "" && b.text.trim() !== "");
+  const untitledError = "Назовите раздел с текстом или уберите его";
 
-  async function save() {
-    if (!draft) return;
-    if (untitled()) {
-      setError("Назовите раздел с текстом или уберите его");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
+  const saveFailed = "Не получилось сохранить. Проверьте интернет и попробуйте ещё раз";
+  const save = () =>
+    run(saveFailed, async () => {
+      if (!draft) return;
+      if (untitled()) {
+        setError(untitledError);
+        return;
+      }
       await routerClient.teacher.reports.save.mutate({ reportId: draft.id, blocks: kept(), showPayments });
       setState("saved");
-    } catch {
-      setError("Не получилось сохранить. Проверьте интернет и попробуйте ещё раз");
-    } finally {
-      setBusy(false);
-    }
-  }
+    });
+
+  /** «Опубликовать»: saves what is on screen, then publishes. */
+  const publish = () =>
+    run(saveFailed, async () => {
+      if (!draft) return;
+      if (untitled()) {
+        setError(untitledError);
+        return;
+      }
+      await routerClient.teacher.reports.save.mutate({ reportId: draft.id, blocks: kept(), showPayments });
+      await routerClient.teacher.reports.publish.mutate({ reportId: draft.id });
+      setDraft(null);
+      await refresh();
+    });
+
+  const unpublish = () =>
+    run(saveFailed, async () => {
+      if (!draft) return;
+      await routerClient.teacher.reports.unpublish.mutate({ reportId: draft.id });
+      setDraft(null);
+      await refresh();
+    });
 
   async function copy() {
     if (!draft) return;
@@ -98,13 +132,20 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   return (
     <section aria-label="Отчёты" className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
       <h2 className="text-small font-semibold text-text-secondary">Отчёты</h2>
-      {reports.length === 0 ? (
+      {list.length === 0 ? (
         <p className="text-small text-text-secondary">Отчётов пока нет</p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {reports.map((r) => (
-            <li key={r.id} className="text-small">
-              <span className="font-semibold">{STATUS_LABELS[r.status]}</span> · {periodLabel(r.periodFrom, r.periodTo)}
+          {list.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-2 text-small">
+              <span>
+                <span className="font-semibold">{STATUS_LABELS[r.status]}</span> · {periodLabel(r.periodFrom, r.periodTo)}
+              </span>
+              {draft?.id !== r.id && (
+                <button type="button" disabled={busy} onClick={() => void openReport(r.id)} className="text-green-600 hover:text-green-700">
+                  Открыть
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -115,7 +156,7 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
         </Button>
       )}
       {draft && (
-        <div role="group" aria-label="Черновик отчёта" className="flex flex-col gap-4 rounded-card border border-border p-4">
+        <div role="group" aria-label={draft.status === "published" ? "Опубликованный отчёт" : "Черновик отчёта"} className="flex flex-col gap-4 rounded-card border border-border p-4">
           <p className="font-semibold">Отчёт за {periodLabel(draft.periodFrom, draft.periodTo)}</p>
           {lines.length === 0 ? (
             <p className="text-small text-text-secondary">Нет данных за период: цифр в отчёте не будет</p>
@@ -164,14 +205,23 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
           )}
           <div className="flex flex-wrap items-center gap-2">
             <Button disabled={busy} onClick={() => void save()}>
-              Сохранить черновик
+              {draft.status === "published" ? "Сохранить" : "Сохранить черновик"}
             </Button>
+            {draft.status === "draft" ? (
+              <Button disabled={busy} onClick={() => void publish()}>
+                Опубликовать
+              </Button>
+            ) : (
+              <Button variant="secondary" disabled={busy} onClick={() => void unpublish()}>
+                Снять с публикации
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => void copy()}>
               Скопировать текст
             </Button>
             {state !== "idle" && (
               <p role="status" className="text-small text-green-700">
-                {state === "saved" ? "Черновик сохранён" : "Текст скопирован"}
+                {state === "copied" ? "Текст скопирован" : draft.status === "published" ? "Отчёт сохранён" : "Черновик сохранён"}
               </p>
             )}
           </div>
