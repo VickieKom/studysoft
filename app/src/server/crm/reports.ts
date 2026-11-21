@@ -3,10 +3,12 @@
 // the first one covers the last 30 days. The numbers of a draft are counted
 // whenever it is shown, from the same sources as the card: results by skill
 // (#255), the personal measure (#266), lessons, homework, words and the
-// textbook. Publishing is #268. The teacher's only.
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+// textbook. Publishing (#268) freezes the numbers and shows the report on
+// the parent's page; the teacher may still edit its text, or take it down,
+// which turns it back into a draft. The teacher's only until published.
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { balanceLabel, computeBalance } from "../../domain/payments";
-import { DEFAULT_BLOCKS, FIRST_PERIOD_DAYS, type ReportBlock, type ReportNumbers, skillsInPeriod } from "../../domain/report";
+import { DEFAULT_BLOCKS, filledBlocks, FIRST_PERIOD_DAYS, type ReportBlock, type ReportNumbers, skillsInPeriod } from "../../domain/report";
 import { addDays, dateIn, zonedMoment } from "../../domain/schedule";
 import { measureLabel } from "../../domain/student";
 import { MASTERED_STEP } from "../../domain/word-training";
@@ -26,6 +28,7 @@ export type ReportRow = {
   blocks: ReportBlock[];
   showPayments: boolean;
   publishedAt: Date | null;
+  numbers: ReportNumbers | null;
 };
 
 const columns = {
@@ -36,9 +39,14 @@ const columns = {
   blocks: report.blocks,
   showPayments: report.showPayments,
   publishedAt: report.publishedAt,
+  numbers: report.numbers,
 };
 
-const toRow = (r: Omit<ReportRow, "blocks"> & { blocks: unknown }): ReportRow => ({ ...r, blocks: r.blocks as ReportBlock[] });
+const toRow = (r: Omit<ReportRow, "blocks" | "numbers"> & { blocks: unknown; numbers: unknown }): ReportRow => ({
+  ...r,
+  blocks: r.blocks as ReportBlock[],
+  numbers: (r.numbers as ReportNumbers | null) ?? null,
+});
 
 /** The student's reports, the newest period first. */
 export async function listReports(db: Database, teacherId: string, studentId: string): Promise<ReportRow[]> {
@@ -65,7 +73,8 @@ export async function nextPeriodFrom(db: Database, teacherId: string, studentId:
 /**
  * «Новый отчёт»: the student's draft, created with the default blocks when
  * there is none — two calls never make two, the database keeps one draft
- * per student. An open draft runs to today. Null for a student that is not
+ * per student. An open draft runs to today, unless it was published once and
+ * its numbers are frozen. Null for a student that is not
  * this teacher's.
  */
 export async function openDraft(db: Database, teacherId: string, studentId: string, now: Date = new Date()): Promise<ReportRow | null> {
@@ -79,14 +88,14 @@ export async function openDraft(db: Database, teacherId: string, studentId: stri
     .onConflictDoNothing();
   const [draft] = await db
     .update(report)
-    .set({ periodTo: sql`greatest(${report.periodFrom}, ${today}::date)` })
+    .set({ periodTo: sql`case when ${report.numbers} is null then greatest(${report.periodFrom}, ${today}::date) else ${report.periodTo} end` })
     .where(and(eq(report.teacherId, teacherId), eq(report.studentId, studentId), eq(report.status, "draft")))
     .returning(columns);
   return draft ? toRow(draft) : null;
 }
 
-/** Saves a draft's blocks and «Показать оплаты»; false when it is not this teacher's draft. */
-export async function saveDraft(
+/** Saves a report's blocks and «Показать оплаты», a draft or a published one; false when it is not this teacher's. */
+export async function saveReport(
   db: Database,
   teacherId: string,
   reportId: string,
@@ -95,9 +104,69 @@ export async function saveDraft(
   const rows = await db
     .update(report)
     .set({ blocks: draft.blocks, showPayments: draft.showPayments, updatedAt: new Date() })
+    .where(and(eq(report.id, reportId), eq(report.teacherId, teacherId), inArray(report.status, ["draft", "published"])))
+    .returning({ id: report.id });
+  return rows.length > 0;
+}
+
+/**
+ * «Опубликовать»: the draft goes to the parent's page. Its numbers freeze at
+ * the first publishing — the counted ones are written only while none are —
+ * and the write is conditional on it still being a draft. False when it is
+ * not this teacher's draft.
+ */
+export async function publishReport(db: Database, teacherId: string, reportId: string, now: Date = new Date()): Promise<boolean> {
+  const found = await findReport(db, teacherId, reportId);
+  if (!found || found.status !== "draft") return false;
+  const card = await findStudent(db, teacherId, found.studentId);
+  if (!card) return false;
+  const numbers = found.numbers ?? (await reportNumbers(db, teacherId, found.studentId, found.periodFrom, found.periodTo, card.timeZone));
+  await db
+    .update(report)
+    .set({ numbers })
+    .where(and(eq(report.id, reportId), eq(report.teacherId, teacherId), isNull(report.numbers)));
+  const rows = await db
+    .update(report)
+    .set({ status: "published", publishedAt: sql`coalesce(${report.publishedAt}, ${now.toISOString()}::timestamptz)`, updatedAt: now })
     .where(and(eq(report.id, reportId), eq(report.teacherId, teacherId), eq(report.status, "draft")))
     .returning({ id: report.id });
   return rows.length > 0;
+}
+
+/**
+ * «Снять с публикации»: the report is a draft again and leaves the parent's
+ * page; its numbers stay frozen. "draft_exists" when the student already has
+ * a draft — one per student — and "not_found" when it is not this teacher's
+ * published report.
+ */
+export async function unpublishReport(db: Database, teacherId: string, reportId: string): Promise<"ok" | "draft_exists" | "not_found"> {
+  try {
+    const rows = await db
+      .update(report)
+      .set({ status: "draft", updatedAt: new Date() })
+      .where(and(eq(report.id, reportId), eq(report.teacherId, teacherId), eq(report.status, "published")))
+      .returning({ id: report.id });
+    return rows.length > 0 ? "ok" : "not_found";
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505") return "draft_exists";
+    throw error;
+  }
+}
+
+/** The published reports of the student for the parent's page, newest first: the frozen numbers and the filled blocks, nothing else. */
+export async function publishedReports(db: Database, teacherId: string, studentId: string) {
+  const rows = await db
+    .select(columns)
+    .from(report)
+    .where(and(eq(report.teacherId, teacherId), eq(report.studentId, studentId), eq(report.status, "published")))
+    .orderBy(desc(report.periodTo), desc(report.publishedAt));
+  return rows.map(toRow).map((r) => ({
+    id: r.id,
+    periodFrom: r.periodFrom,
+    periodTo: r.periodTo,
+    numbers: r.numbers!,
+    blocks: filledBlocks(r.blocks),
+  }));
 }
 
 /** One report of this teacher with its student, or null. */
