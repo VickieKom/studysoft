@@ -7,6 +7,7 @@ import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentProgress } from "@/components/student-progress";
+import { StudentReports } from "@/components/student-reports";
 import { StudentVocabulary } from "@/components/student-vocabulary";
 import { StudentSlots } from "@/components/schedule-controls";
 import { StudentTextbook } from "@/components/student-textbook";
@@ -37,6 +38,7 @@ export default async function StudentCardPage({ params }: Props) {
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
   const [nextLesson] = await caller.teacher.prep.list({ studentId: student.id });
   const { values: measureValues, ...goal } = await caller.teacher.goal.get({ studentId: student.id });
+  const reports = await caller.teacher.reports.list({ studentId: student.id });
 
   return (
     <main>
@@ -142,6 +144,8 @@ export default async function StudentCardPage({ params }: Props) {
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />
+      {/* Last on the card: scenarios read the notes' first list item (#267). */}
+      <StudentReports studentId={student.id} reports={reports} />
     </main>
   );
 }

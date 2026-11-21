@@ -947,3 +947,40 @@ export const skillResult = pgTable(
     uniqueIndex("skill_result_student_skill_date_key").on(t.studentId, t.skill, t.measuredOn),
   ],
 );
+
+// A parent's report (#267): the period it covers in the student's dates, the
+// teacher's blocks of text — a title and a text each, in her order — and
+// whether the messenger text carries the balance line. A draft's numbers are
+// counted when it is shown; publishing (#268) freezes them in `numbers`. At
+// most one draft per student, kept by the database. The teacher's only until
+// published; never a student's.
+export const report = pgTable(
+  "report",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    periodFrom: date("period_from").notNull(),
+    periodTo: date("period_to").notNull(),
+    status: text("status").notNull().default("draft"),
+    blocks: jsonb("blocks").notNull(),
+    showPayments: boolean("show_payments").notNull().default(false),
+    numbers: jsonb("numbers"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "report_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("report_student_id_idx").on(t.studentId),
+    uniqueIndex("report_one_draft_per_student")
+      .on(t.studentId)
+      .where(sql`${t.status} = 'draft'`),
+  ],
+);
