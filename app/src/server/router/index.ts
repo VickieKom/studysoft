@@ -34,6 +34,7 @@ import { textbooksRouter } from "./teacher/textbooks";
 import { goalRouter } from "./teacher/goal";
 import { homeRouter } from "./teacher/home";
 import { prepRouter } from "./teacher/prep";
+import { reportsRouter } from "./teacher/reports";
 import { progressRouter } from "./teacher/progress";
 import { lessonModeRouter } from "./teacher/lesson-mode";
 
@@ -54,6 +55,7 @@ export const appRouter = router({
     notes: notesRouter,
     progress: progressRouter,
     goal: goalRouter,
+    reports: reportsRouter,
     links: linksTeacherRouter,
     homework: homeworkRouter,
     review: reviewRouter,
