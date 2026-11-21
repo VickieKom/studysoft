@@ -5,6 +5,7 @@ import { useState } from "react";
 import { HOMEWORK_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
 import type { MaterialKind } from "@/domain/library";
 import { Button } from "./button";
+import { type PrepBankLesson, PrepBankTasks } from "./prep-bank-tasks";
 import { routerClient } from "./router-client";
 
 type Choice = { id: string; label: string; title: string };
@@ -19,7 +20,8 @@ const KIND_ONE: Record<MaterialKind, string> = { warmup: "Разминка", gam
  * план», or «Утвердить план» for the assistant's draft, makes the lesson
  * «подготовлен», with the homework draft chosen for it. A submitted homework
  * waiting for review comes first as «Домашка» (#153); removed, it can be
- * added back.
+ * added back. The book lesson's confirmed bank tasks build the homework
+ * draft (#226).
  */
 export function LessonPlanEditor({
   lessonId,
@@ -32,6 +34,7 @@ export function LessonPlanEditor({
   homeworkId,
   waitingHomework,
   stageHomework,
+  bank,
 }: {
   lessonId: string;
   start: LessonPlan;
@@ -43,6 +46,7 @@ export function LessonPlanEditor({
   homeworkId: string | null;
   waitingHomework: { id: string; title: string } | null;
   stageHomework: { id: string; title: string }[];
+  bank: PrepBankLesson[];
 }) {
   const router = useRouter();
   const [stages, setStages] = useState<PlanStage[]>(start.stages);
@@ -201,6 +205,19 @@ export function LessonPlanEditor({
             </select>
           </label>
         )}
+        {bank.map((lesson) => (
+          <PrepBankTasks
+            key={lesson.bookLessonId}
+            lessonId={lessonId}
+            lesson={lesson}
+            homeworkId={homework || null}
+            onBuilt={(id) => {
+              setHomework(id);
+              setState("idle");
+              router.refresh();
+            }}
+          />
+        ))}
         <p className="text-caption text-text-muted">Ученик увидит домашку после «Завершить урок»</p>
       </section>
 

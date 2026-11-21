@@ -2,6 +2,9 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { lessonPlanSchema } from "../../../domain/lesson-plan";
 import { MATERIAL_KINDS } from "../../../domain/library";
+import { bookSourceSchema, MAX_LESSON_TASKS } from "../../../domain/task-bank";
+import { studentTaskSchema } from "../../../domain/student-task-schema";
+import { buildHomeworkFromBank, prepBankTasks } from "../../lesson/bank-homework";
 import { findPreparation, savePlan, setStudentTextbook, studentTextbook, upcomingLessons } from "../../lesson/prep";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -80,6 +83,53 @@ export const prepRouter = router({
       if (saved === "conflict") throw new TRPCError({ code: "CONFLICT", message: "Пока вы правили, ассистент прислал новый план. Обновите страницу" });
       if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
       return { ok: true as const };
+    }),
+
+  /** The confirmed bank tasks of the plan's book lessons, as the child will see them (#226). */
+  bankTasks: teacherProcedure
+    .input(z.object({ lessonId: z.uuid() }))
+    .output(
+      z.array(
+        z
+          .object({
+            bookLessonId: z.uuid(),
+            title: z.string(),
+            textbookId: z.uuid(),
+            confirmed: z
+              .object({
+                tasks: z.array(z.object({ task: studentTaskSchema("/api/files/bank/"), source: bookSourceSchema.nullable() }).strict()),
+                revision: z.string(),
+              })
+              .strict()
+              .nullable(),
+          })
+          .strict(),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      const found = await prepBankTasks(ctx.db, ctx.teacherId, input.lessonId);
+      if (!found) throw notFound();
+      return found;
+    }),
+
+  /** «Собрать домашку» (#226): the checked bank tasks appended to the lesson's draft, or a new one; attached to the lesson. */
+  buildHomework: teacherProcedure
+    .input(
+      z.object({
+        lessonId: z.uuid(),
+        bookLessonId: z.uuid(),
+        picks: z.array(z.number().int().min(0).max(MAX_LESSON_TASKS - 1)).max(MAX_LESSON_TASKS),
+        revision: z.string().max(64),
+        homeworkId: z.uuid().nullable(),
+      }),
+    )
+    .output(z.object({ homeworkId: z.uuid() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const built = await buildHomeworkFromBank(ctx.db, ctx.teacherId, input.lessonId, input.bookLessonId, input.picks, input.revision, input.homeworkId);
+      if (built === "not_found") throw notFound();
+      if (built === "conflict") throw new TRPCError({ code: "CONFLICT", message: "Задания урока в учебнике изменились. Обновите страницу" });
+      if ("errors" in built) throw new TRPCError({ code: "BAD_REQUEST", message: built.errors.join("\n") });
+      return built;
     }),
 
   /** The student's textbook and passed lesson, for the card (#151). */
