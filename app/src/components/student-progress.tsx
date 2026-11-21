@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { dateLabel, monthLabel, PROGRESS_SKILLS, type Skill, SKILL_LABELS, type SkillResult, skillsByMonth, trendLabel } from "@/domain/progress";
+import { dateLabel, PROGRESS_SKILLS, type Skill, SKILL_LABELS, type SkillResult } from "@/domain/progress";
+import { ProgressView } from "./progress-view";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
@@ -25,7 +26,6 @@ export function StudentProgress({ studentId, results, totals }: { studentId: str
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { months, rows } = skillsByMonth(results);
   const dates = [...new Set(results.map((r) => r.measuredOn))].sort().reverse();
 
   async function run(change: () => Promise<unknown>) {
@@ -46,7 +46,6 @@ export function StudentProgress({ studentId, results, totals }: { studentId: str
   const save = (date: string, values: Partial<Record<Skill, number>>, previousDate: string | null) =>
     run(() => routerClient.teacher.progress.save.mutate({ studentId, date, previousDate, results: values }));
 
-  const { homework, textbook, words } = totals;
   return (
     <section aria-labelledby="progress-heading" className="mt-6 flex flex-col gap-4 rounded-card border border-border p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -60,54 +59,8 @@ export function StudentProgress({ studentId, results, totals }: { studentId: str
         )}
       </div>
 
-      <div className="flex flex-col gap-1 text-small">
-        <p>
-          {homework.due > 0
-            ? `Домашки: сдано ${homework.submitted} из ${homework.due} (${Math.round((homework.submitted / homework.due) * 100)}%)`
-            : "Домашек со сроком ещё не было"}
-        </p>
-        <p>{textbook ? `Учебник «${textbook.title}»: пройдено юнитов ${textbook.unitsPassed} из ${textbook.units}` : "Учебник не выбран"}</p>
-        <p>{`Слов: ${words.total}, закрепилось ${words.learnt}`}</p>
-      </div>
-
+      <ProgressView view={{ results, ...totals }} />
       {editing === "new" && <ResultsForm busy={busy} error={error} onSave={(date, values) => save(date, values, null)} onCancel={() => setEditing(null)} />}
-
-      {rows.length === 0 ? (
-        <p className="text-small text-text-secondary">Результатов по навыкам пока нет</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table aria-label="Навыки по месяцам" className="w-full text-small">
-            <thead>
-              <tr>
-                <th className="px-2 py-1 text-left font-semibold">Навык</th>
-                {months.map((m) => (
-                  <th key={m} className="px-2 py-1 text-right font-semibold">
-                    {monthLabel(m)}
-                  </th>
-                ))}
-                <th className="px-2 py-1 text-right font-semibold">Изменение</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.skill} className="border-t border-border">
-                  <th scope="row" className="px-2 py-1 text-left font-normal">
-                    {SKILL_LABELS[row.skill]}
-                  </th>
-                  {months.map((m) => (
-                    <td key={m} className="px-2 py-1 text-right">
-                      {m in row.byMonth ? `${row.byMonth[m]}%` : "—"}
-                    </td>
-                  ))}
-                  <td className={`px-2 py-1 text-right ${row.trend === null ? "" : row.trend > 0 ? "text-green-700" : row.trend < 0 ? "text-danger" : ""}`}>
-                    {row.trend === null ? "—" : trendLabel(row.trend)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {dates.length > 0 && (
         <div className="flex flex-col gap-2">

@@ -1,6 +1,7 @@
 // «Прогресс» on the student card (#255): the results by skill as a table by
 // month, growth or slip against the point before, and how far the textbook
 // is covered. Plain data and functions only.
+import { z } from "zod";
 import { SKILLS } from "./homework-format";
 import type { TextbookStructure } from "./textbook-structure";
 
@@ -77,3 +78,14 @@ export function dateLabel(date: string): string {
   const [year, month, day] = date.split("-");
   return `${Number(day)} ${MONTHS_OF[Number(month) - 1]} ${year}`;
 }
+
+/** What a dashboard gets (#255, #256): the results by skill and the totals beside them; no answers, recordings or notes. */
+export const progressViewSchema = z
+  .object({
+    results: z.array(z.object({ skill: z.enum(PROGRESS_SKILLS), percent: z.number().int().min(0).max(100), measuredOn: z.iso.date() }).strict()),
+    homework: z.object({ submitted: z.number().int(), due: z.number().int() }).strict(),
+    textbook: z.object({ title: z.string(), unitsPassed: z.number().int(), units: z.number().int() }).strict().nullable(),
+    words: z.object({ total: z.number().int(), learnt: z.number().int() }).strict(),
+  })
+  .strict();
+export type ProgressView = z.infer<typeof progressViewSchema>;
