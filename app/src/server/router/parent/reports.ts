@@ -12,7 +12,15 @@ export const parentReportsRouter = router({
     .output(
       z.array(
         z
-          .object({ id: z.uuid(), periodFrom: z.iso.date(), periodTo: z.iso.date(), numbers: reportNumbersSchema, blocks: z.array(reportBlockSchema) })
+          .object({
+            id: z.uuid(),
+            periodFrom: z.iso.date(),
+            periodTo: z.iso.date(),
+            numbers: reportNumbersSchema,
+            blocks: z.array(reportBlockSchema),
+            // The recordings «было» and «стало» (#269): addresses served to this parent only.
+            recordings: z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
+          })
           .strict(),
       ),
     )

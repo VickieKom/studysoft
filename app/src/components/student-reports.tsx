@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { MAX_BLOCKS, numberLines, periodLabel, type ReportBlock, type ReportNumbers, reportText } from "@/domain/report";
 import { Button } from "./button";
+import { ReportRecordings } from "./report-recordings";
 import { routerClient } from "./router-client";
 
 type Listed = { id: string; status: "draft" | "published"; periodFrom: string; periodTo: string };
@@ -16,6 +17,7 @@ type Draft = {
   showPayments: boolean;
   numbers: ReportNumbers;
   balance: string | null;
+  recordings: { before: string | null; after: string | null };
 };
 /** A block on screen; one the teacher added here has its title editable. */
 type Block = ReportBlock & { key: number; own: boolean };
@@ -165,6 +167,7 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
             />
           ))}
           <p className="text-small text-text-secondary">Пустые разделы в отчёт не попадают</p>
+          <ReportRecordings key={draft.id} reportId={draft.id} recordings={draft.recordings} />
           <Button
             variant="secondary"
             className="self-start"
