@@ -97,7 +97,8 @@ export type BankLessonView = {
 /** The draft as the teacher's page loaded it: removing and confirming are refused once a new save replaced it. */
 const draftRevision = sql<string>`md5(coalesce(${textbookLessonTasks.draft}::text, '') || coalesce(${textbookLessonTasks.draftSkipped}::text, ''))`;
 
-function view(entryId: string, list: BankList, tasks: Task[]): BankTaskView[] {
+/** Tasks as the child will see them, their files at the bank's addresses. */
+export function bankTaskViews(entryId: string, list: BankList, tasks: Task[]): BankTaskView[] {
   return tasks.map((task, index) => ({
     task: {
       ...withPartPictures(studentView(task, `${entryId}:${list}:${index}`), (_, n) => bankFileUrl(entryId, list, index, { picture: n })),
@@ -137,9 +138,9 @@ export async function readTaskBank(database: Database, teacherId: string, textbo
         lessonId: lesson.id!,
         unit: unit.title,
         title: lesson.title,
-        confirmed: row?.tasks ? { tasks: view(row.id, "tasks", row.tasks as Task[]), skipped: (row.skipped as SkippedExercise[] | null) ?? [] } : null,
+        confirmed: row?.tasks ? { tasks: bankTaskViews(row.id, "tasks", row.tasks as Task[]), skipped: (row.skipped as SkippedExercise[] | null) ?? [] } : null,
         draft: row?.draft
-          ? { tasks: view(row.id, "draft", row.draft as Task[]), skipped: (row.draftSkipped as SkippedExercise[] | null) ?? [], revision: row.revision }
+          ? { tasks: bankTaskViews(row.id, "draft", row.draft as Task[]), skipped: (row.draftSkipped as SkippedExercise[] | null) ?? [], revision: row.revision }
           : null,
       };
     }),

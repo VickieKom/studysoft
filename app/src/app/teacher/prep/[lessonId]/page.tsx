@@ -23,8 +23,9 @@ export default async function LessonPrepPage({ params }: Props) {
   if (!UUID.test(lessonId)) notFound();
   const { caller } = await teacherCaller();
   let prep;
+  let bank;
   try {
-    prep = await caller.teacher.prep.get({ lessonId });
+    [prep, bank] = await Promise.all([caller.teacher.prep.get({ lessonId }), caller.teacher.prep.bankTasks({ lessonId })]);
   } catch (error) {
     if (isNotFound(error)) notFound();
     throw error;
@@ -74,6 +75,7 @@ export default async function LessonPrepPage({ params }: Props) {
         homeworkId={prep.homeworkId}
         waitingHomework={prep.waitingHomework}
         stageHomework={prep.stageHomework}
+        bank={bank}
       />
     </main>
   );
