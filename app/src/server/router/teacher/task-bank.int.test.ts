@@ -269,3 +269,74 @@ describe("the task bank", () => {
     expect(prompts(after.draft)).toEqual([gap.prompt]);
   });
 });
+
+describe("a confirmed task edited in the bank (#225)", () => {
+  /** A lesson 1.2 confirmed with the given tasks; returns the ids. */
+  async function confirmedLesson(title: string, tasks: unknown[]) {
+    const { id, lessonId } = await newTextbook(title);
+    await assistant.agent.saveTextbookLessonTasks({ textbookId: id, lessonId, tasks });
+    const { draft } = await lessonOf(id, lessonId);
+    await teacher.teacher.textbooks.confirmBankLesson({ textbookId: id, lessonId, revision: draft!.revision });
+    return { id, lessonId };
+  }
+
+  it("opens whole, key included, and saves back with its source; the page shows the new prompt", async () => {
+    const { id, lessonId } = await confirmedLesson("Edited bank set", [choice("Choose the house.", "1"), gap]);
+    const loaded = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    expect(loaded.tasks[1]).toMatchObject({ type: "gap", answers: [["hoots"]], source: workbook("5", "2") });
+
+    const fixed = { ...loaded.tasks[1]!, prompt: "Complete the fixed sentence.", answers: [["hoots", "calls"]] };
+    await teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 1, revision: loaded.revision, task: fixed });
+    const after = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    expect(after.tasks[1]).toMatchObject({ prompt: "Complete the fixed sentence.", answers: [["hoots", "calls"]], source: workbook("5", "2") });
+    expect(after.tasks[0]).toEqual(loaded.tasks[0]);
+    expect(prompts((await lessonOf(id, lessonId)).confirmed)).toEqual(["Choose the house.", "Complete the fixed sentence."]);
+  });
+
+  it("refuses an invalid task by its place, one without a book source, and a task the lesson does not have; nothing changes", async () => {
+    const { id, lessonId } = await confirmedLesson("Checked edit set", [choice("Choose the house.", "1"), gap]);
+    const { tasks, revision } = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    await expect(
+      teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 1, revision, task: { ...tasks[1]!, answers: [] } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/^Задание 2/) });
+    await expect(
+      teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 1, revision, task: { ...tasks[1]!, source: "own" } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/source/) });
+    // A stored file from elsewhere cannot be slipped in by its reference.
+    await expect(
+      teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 1, revision, task: { ...tasks[1]!, image: `blob:${crypto.randomUUID()}` } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 2, revision, task: tasks[1] })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    for (const call of [
+      () => other.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId }),
+      () => other.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 1, revision, task: tasks[1] }),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" });
+    }
+    expect((await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId })).tasks).toEqual(tasks);
+  });
+
+  it("refuses a save from an editor opened before another save of the lesson's tasks", async () => {
+    const { id, lessonId } = await confirmedLesson("Raced edit set", [choice("Choose the house.", "1"), gap]);
+    // Two editors read the lesson.
+    const first = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    const second = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    // The first saves.
+    await teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 0, revision: first.revision, task: { ...first.tasks[0]!, prompt: "First edit." } });
+    // The second, loaded before it, is refused rather than overwriting it.
+    await expect(
+      teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 1, revision: second.revision, task: { ...second.tasks[1]!, prompt: "Second edit." } }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(prompts((await lessonOf(id, lessonId)).confirmed)).toEqual(["First edit.", gap.prompt]);
+  });
+
+  it("keeps a stored picture the task already has", async () => {
+    const { id, lessonId } = await confirmedLesson("Picture edit set", [{ ...pictures.tasks[0]!, source: workbook("6", "1") }]);
+    const { tasks, revision } = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    await teacher.teacher.textbooks.updateBankTask({ textbookId: id, lessonId, index: 0, revision, task: { ...tasks[0]!, prompt: "Which square is red?" } });
+    const after = await teacher.teacher.textbooks.bankLessonTasks({ textbookId: id, lessonId });
+    expect(after.tasks[0]).toEqual({ ...tasks[0]!, prompt: "Which square is red?" });
+  });
+});
