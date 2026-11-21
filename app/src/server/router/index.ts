@@ -31,6 +31,7 @@ import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 import { textbooksRouter } from "./teacher/textbooks";
 import { prepRouter } from "./teacher/prep";
+import { progressRouter } from "./teacher/progress";
 import { lessonModeRouter } from "./teacher/lesson-mode";
 
 export const appRouter = router({
@@ -47,6 +48,7 @@ export const appRouter = router({
     students: studentsRouter,
     assistant: assistantRouter,
     notes: notesRouter,
+    progress: progressRouter,
     links: linksTeacherRouter,
     homework: homeworkRouter,
     review: reviewRouter,

@@ -253,6 +253,13 @@
       "when": 1795239286047,
       "tag": "0035_word_training",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795239367810,
+      "tag": "0036_skill_results",
+      "breakpoints": true
     }
   ]
 }
