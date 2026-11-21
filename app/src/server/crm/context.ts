@@ -12,6 +12,7 @@ import { countedGameResults } from "../library/game-results";
 import { studentMistakes } from "./mistakes";
 import { listNotes } from "./notes";
 import { findStudent } from "./students";
+import { wordMark } from "../../domain/word-training";
 import { CONTEXT_WORDS, studentVocabulary } from "./vocabulary";
 
 /** How many of the latest notes the context carries (#3). */
@@ -38,6 +39,8 @@ export type StudentContext = {
   mistakesByTopic: { topic: string; count: number }[];
   /** The student's vocabulary, the newest words first (#154). */
   vocabulary: { word: string; translation: string | null }[];
+  /** The words the student misses more often than not in the training (#240), for homework around them. */
+  weakWords: { word: string; translation: string | null }[];
 };
 
 /** The context of one student of this teacher, or null — another teacher's student is the same as a missing one. */
@@ -68,5 +71,8 @@ export async function buildStudentContext(
     recentGames: await countedGameResults(db, teacherId, studentId, { limit: CONTEXT_GAMES }),
     mistakesByTopic: mistakes.map(({ topic, count }) => ({ topic, count })),
     vocabulary: (await studentVocabulary(db, teacherId, studentId, CONTEXT_WORDS)).map(({ word, translation }) => ({ word, translation })),
+    weakWords: (await studentVocabulary(db, teacherId, studentId))
+      .filter((w) => wordMark({ step: w.trainStep, rightCount: w.rightCount, wrongCount: w.wrongCount, trained: w.trainedAt !== null }) === "often_wrong")
+      .map(({ word, translation }) => ({ word, translation })),
   };
 }

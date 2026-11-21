@@ -61,3 +61,15 @@ export function afterAnswer(state: WordState, right: boolean, today: string, cou
 export function isMastered(step: number): boolean {
   return step >= MASTERED_STEP;
 }
+
+/** What the teacher sees by a word (#240): learnt, missed more often than not, or still learning; nothing before its first training. */
+export const WORD_MARKS = ["learnt", "often_wrong", "learning"] as const;
+export type WordMark = (typeof WORD_MARKS)[number];
+export const WORD_MARK_LABELS: Record<WordMark, string> = { learnt: "закрепилось", often_wrong: "часто ошибается", learning: "учится" };
+
+export function wordMark(word: { step: number; rightCount: number; wrongCount: number; trained: boolean }): WordMark | null {
+  if (!word.trained) return null;
+  if (isMastered(word.step)) return "learnt";
+  if (word.wrongCount > word.rightCount) return "often_wrong";
+  return "learning";
+}

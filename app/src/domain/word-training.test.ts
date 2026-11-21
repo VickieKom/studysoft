@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { todayIn } from "./homework";
-import { addDays, afterAnswer, exerciseFor, isDue, isMastered, MASTERED_STEP } from "./word-training";
+import { addDays, afterAnswer, exerciseFor, isDue, isMastered, MASTERED_STEP, wordMark } from "./word-training";
 
 describe("the word training's schedule (#238)", () => {
   it("moves a right answer on through 1, 2, 4, 8 and 16 days, learnt after five on different days", () => {
@@ -53,5 +53,15 @@ describe("the word training's schedule (#238)", () => {
   it("starts a word with choosing its translation, then its word, then typing; typing when there is nothing to choose from", () => {
     expect([0, 1, 2, 4, 5].map((step) => exerciseFor(step, true))).toEqual(["choose_translation", "choose_word", "type_word", "type_word", "type_word"]);
     expect(exerciseFor(0, false)).toBe("type_word");
+  });
+});
+
+describe("a word's mark for the teacher (#240)", () => {
+  it("is nothing before a training, then learning, often wrong with more mistakes than right answers, learnt at the last step", () => {
+    expect(wordMark({ step: 0, rightCount: 0, wrongCount: 0, trained: false })).toBeNull();
+    expect(wordMark({ step: 0, rightCount: 0, wrongCount: 1, trained: true })).toBe("often_wrong");
+    expect(wordMark({ step: 1, rightCount: 1, wrongCount: 1, trained: true })).toBe("learning");
+    expect(wordMark({ step: 2, rightCount: 2, wrongCount: 0, trained: true })).toBe("learning");
+    expect(wordMark({ step: MASTERED_STEP, rightCount: 5, wrongCount: 9, trained: true })).toBe("learnt");
   });
 });

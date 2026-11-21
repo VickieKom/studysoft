@@ -22,6 +22,11 @@ export async function studentVocabulary(db: Database, teacherId: string, student
       example: vocabularyWord.example,
       draftTranslation: vocabularyWord.draftTranslation,
       draftExample: vocabularyWord.draftExample,
+      // The training's progress (#238), for the card's marks (#240).
+      trainStep: vocabularyWord.trainStep,
+      rightCount: vocabularyWord.rightCount,
+      wrongCount: vocabularyWord.wrongCount,
+      trainedAt: vocabularyWord.trainedAt,
       addedAt: vocabularyWord.createdAt,
     })
     .from(vocabularyWord)

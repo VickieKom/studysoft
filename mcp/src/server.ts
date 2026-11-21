@@ -52,7 +52,8 @@ server.registerTool(
       "textbook and current unit, interests, what works, gaps, the latest notes, and the latest submitted homework " +
       "with the answers, right or wrong, the latest results of games the student played, and the mistakes by topic " +
       "from homework and games over the last 30 days, to repeat what was hard; and the student's vocabulary, the words " +
-      "of the lessons covered with their translations, newest first.",
+      "of the lessons covered with their translations, newest first, and the words the student misses more often than " +
+      "not in the word training, to work into homework.",
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),

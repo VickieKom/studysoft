@@ -2,12 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
+import { todayIn } from "@/domain/homework";
 import { dayMonthIn } from "@/domain/schedule";
+import { addDays, WORD_MARK_LABELS, type WordMark } from "@/domain/word-training";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
 type Draft = { translation: string | null; example: string | null };
-type Word = { id: string; word: string; translation: string | null; example: string | null; draft: Draft | null; addedAt: string };
+type Word = {
+  id: string;
+  word: string;
+  translation: string | null;
+  example: string | null;
+  draft: Draft | null;
+  mark: WordMark | null;
+  trainedAt: string | null;
+  addedAt: string;
+};
 type Fields = { word: string; translation: string; example: string };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
@@ -20,6 +31,9 @@ const field = "rounded-control border border-border bg-bg px-3 py-2";
  * here (#236); the student sees them in «Тренировка слов». The assistant's
  * translations and examples wait «от ассистента» by each word until the
  * teacher confirms them, one by one or all at once (#237).
+ * After the
+ * student's training each word is marked, and a line counts what is learnt
+ * and says when the last training was (#240).
  */
 export function StudentVocabulary({ studentId, words, timeZone }: { studentId: string; words: Word[]; timeZone: string }) {
   const router = useRouter();
@@ -75,6 +89,7 @@ export function StudentVocabulary({ studentId, words, timeZone }: { studentId: s
           )}
         </div>
       </div>
+      {words.length > 0 && <p className="text-small text-text-secondary">{progressLine(words, timeZone)}</p>}
       {editing === "new" && (
         <WordForm
           legend="Новое слово"
@@ -105,6 +120,7 @@ export function StudentVocabulary({ studentId, words, timeZone }: { studentId: s
                   <span className="font-semibold">{w.word}</span>
                   {w.translation && <span>— {w.translation}</span>}
                   <span className="text-text-secondary">· {dayMonthIn(new Date(w.addedAt), timeZone)}</span>
+                  {w.mark && <span className={`rounded-full px-2 text-caption ${MARK_STYLE[w.mark]}`}>{WORD_MARK_LABELS[w.mark]}</span>}
                   {w.example && <span className="basis-full text-text-secondary">{w.example}</span>}
                   {w.draft && (
                     <span className="flex basis-full flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1">
@@ -194,4 +210,22 @@ function WordForm({
       </div>
     </fieldset>
   );
+}
+
+const MARK_STYLE: Record<WordMark, string> = {
+  learnt: "bg-green-100 text-green-700",
+  often_wrong: "bg-danger-bg text-danger",
+  learning: "bg-surface text-text-secondary",
+};
+
+/** «Закреплено 12 из 40, последняя тренировка — вчера» (#240): the day in the teacher's time zone. */
+function progressLine(words: Word[], timeZone: string): string {
+  const learnt = words.filter((w) => w.mark === "learnt").length;
+  const last = words.reduce<string | null>((latest, w) => (w.trainedAt && (!latest || w.trainedAt > latest) ? w.trainedAt : latest), null);
+  const head = `Закреплено ${learnt} из ${words.length}`;
+  if (!last) return `${head}, тренировок ещё не было`;
+  const today = todayIn(timeZone);
+  const day = todayIn(timeZone, new Date(last));
+  const when = day === today ? "сегодня" : day === addDays(today, -1) ? "вчера" : dayMonthIn(new Date(last), timeZone);
+  return `${head}, последняя тренировка — ${when}`;
 }

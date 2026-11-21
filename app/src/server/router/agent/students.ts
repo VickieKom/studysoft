@@ -73,6 +73,8 @@ const studentContext = z
     mistakesByTopic: z.array(z.object({ topic: z.string(), count: z.number().int() }).strict()),
     // The student's vocabulary, the newest words first (#154).
     vocabulary: z.array(z.object({ word: z.string(), translation: z.string().nullable() }).strict()),
+    // The words missed more often than not in the student's training (#240).
+    weakWords: z.array(z.object({ word: z.string(), translation: z.string().nullable() }).strict()),
   })
   .strict();
 

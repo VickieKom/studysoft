@@ -16,6 +16,7 @@ import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
 import { addWord, confirmWordDrafts, deleteWord, draftOf, studentVocabulary, updateWord } from "../../crm/vocabulary";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
+import { WORD_MARKS, wordMark } from "../../../domain/word-training";
 import { router, teacherProcedure } from "../core/trpc";
 
 // No format checks on names (#18): whatever the teacher types is stored as
@@ -123,6 +124,9 @@ export const studentsRouter = router({
             example: z.string().nullable(),
             // The assistant's proposal (#237), until the teacher confirms it.
             draft: z.object({ translation: z.string().nullable(), example: z.string().nullable() }).strict().nullable(),
+            // What sticks (#240): the word's mark, and when it was last trained.
+            mark: z.enum(WORD_MARKS).nullable(),
+            trainedAt: z.iso.datetime().nullable(),
             addedAt: z.iso.datetime(),
           })
           .strict(),
@@ -130,11 +134,15 @@ export const studentsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw new TRPCError({ code: "NOT_FOUND" });
-      return (await studentVocabulary(ctx.db, ctx.teacherId, input.studentId)).map(({ draftTranslation, draftExample, ...w }) => ({
-        ...w,
-        draft: draftOf({ draftTranslation, draftExample }),
-        addedAt: w.addedAt.toISOString(),
-      }));
+      return (await studentVocabulary(ctx.db, ctx.teacherId, input.studentId)).map(
+        ({ draftTranslation, draftExample, trainStep, rightCount, wrongCount, trainedAt, ...w }) => ({
+          ...w,
+          draft: draftOf({ draftTranslation, draftExample }),
+          mark: wordMark({ step: trainStep, rightCount, wrongCount, trained: trainedAt !== null }),
+          trainedAt: trainedAt?.toISOString() ?? null,
+          addedAt: w.addedAt.toISOString(),
+        }),
+      );
     }),
 
   /** «Подтвердить» or «Подтвердить все» (#237): the assistant's drafts, as the page showed them, become the words' translations and examples. */
