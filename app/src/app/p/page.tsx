@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { LinkExchange } from "@/components/link-exchange";
 import { ProgressView } from "@/components/progress-view";
-import { numberLines, periodLabel } from "@/domain/report";
+import { numberLines, periodLabel, RECORDING_LABELS, RECORDINGS } from "@/domain/report";
 import { createServerCaller, isUnauthorized } from "@/server/router";
 
 export const metadata = { title: "Успехи — StudySoft" };
@@ -54,6 +54,19 @@ function ParentReports({ reports }: { reports: Published }) {
                   {lines.map((line) => (
                     <p key={line}>{line}</p>
                   ))}
+                </div>
+              )}
+              {RECORDINGS.some((which) => r.recordings[which]) && (
+                <div className="flex flex-wrap gap-4">
+                  {RECORDINGS.map(
+                    (which) =>
+                      r.recordings[which] && (
+                        <figure key={which} className="flex flex-col gap-1">
+                          <figcaption className="text-small font-semibold">{RECORDING_LABELS[which]}</figcaption>
+                          <audio controls preload="none" src={r.recordings[which]!} aria-label={RECORDING_LABELS[which]} />
+                        </figure>
+                      ),
+                  )}
                 </div>
               )}
               {r.blocks.map((b, i) => (
