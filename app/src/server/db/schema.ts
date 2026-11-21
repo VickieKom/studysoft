@@ -532,6 +532,34 @@ export const textbookPage = pgTable(
   (t) => [primaryKey({ columns: [t.fileId, t.number] })],
 );
 
+// The workbook task bank (#224): the tasks of one lesson of a textbook's
+// structure, in the homework format, each with its source. `tasks` and
+// `skipped` are the confirmed lesson; `draft` and `draft_skipped` the
+// assistant's latest save, which replaces them only when the teacher
+// confirms. `lesson_id` is a lesson's id inside `textbook.structure`, not a
+// foreign key. The teacher's only: no student, parent or link reaches it.
+export const textbookLessonTasks = pgTable(
+  "textbook_lesson_tasks",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    textbookId: uuid("textbook_id")
+      .notNull()
+      .references(() => textbook.id),
+    lessonId: uuid("lesson_id").notNull(),
+    tasks: jsonb("tasks"),
+    skipped: jsonb("skipped"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    draft: jsonb("draft"),
+    draftSkipped: jsonb("draft_skipped"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("textbook_lesson_tasks_lesson_key").on(t.textbookId, t.lessonId)],
+);
+
 // A student's weekly slot (#80; architecture 8.6): a weekday and a local time
 // in the student's time zone, so a lesson stays "Tuesday at 17:00" for the
 // student when clocks change. Lessons are created from it ahead of time.

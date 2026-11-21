@@ -15,6 +15,7 @@ import {
   pageInput,
   planInput,
   structureInput,
+  lessonTasksInput,
   studentIdInput,
   textbookIdInput,
   textInput,
@@ -174,6 +175,22 @@ server.registerTool(
     inputSchema: structureInput,
   },
   (input) => tools.saveTextbookStructure(input),
+);
+
+server.registerTool(
+  "save_textbook_lesson_tasks",
+  {
+    title: "Save a textbook lesson's tasks",
+    description:
+      "Saves the tasks of one lesson of a textbook for the task bank, as a draft «от ассистента» under «Задания» on the " +
+      "textbook's page: the lesson's workbook exercises turned into tasks in the homework format (get_homework_format), " +
+      "each with its source, and the exercises that did not become tasks (listening without a recording, a word search…) " +
+      "with the reason. Add a Student's Book exercise only when the teacher asks. The lesson must be in the confirmed " +
+      "structure (read_textbook_structure). Saving again replaces your draft of the lesson; its confirmed tasks stay " +
+      "until the teacher confirms the new draft. Only the teacher confirms.",
+    inputSchema: lessonTasksInput,
+  },
+  (input) => tools.saveTextbookLessonTasks(input),
 );
 
 server.registerTool(

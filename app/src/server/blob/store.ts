@@ -209,8 +209,8 @@ export async function readBlob(
 export const BLOB_GRACE_HOURS = 24;
 
 /**
- * Removes the files nothing refers to (#73): no homework document of any
- * teacher names it as "blob:<id>" (a picture), no answer as its file (a
+ * Removes the files nothing refers to (#73): no homework document and no
+ * task of the task bank (#224) of any teacher names it as "blob:<id>" (a picture), no answer as its file (a
  * recording or a photo), no library material as its file (a game or a warm-up picture, #115, #116), no textbook as a book, a track or a page (#156), and
  * it is older than the grace period. A file can
  * belong to more than one homework — a new assistant draft keeps the old
@@ -227,7 +227,12 @@ export async function removeUnreferencedBlobs(
     DELETE FROM blob AS b
     WHERE b.created_at < ${before.toISOString()}
       AND NOT EXISTS (
-        SELECT 1 FROM homework AS h, jsonb_array_elements(h.document -> 'tasks') AS task
+        SELECT 1 FROM (
+          SELECT h.document -> 'tasks' AS tasks FROM homework AS h
+          -- The task bank's confirmed tasks and drafts (#224).
+          UNION ALL SELECT t.tasks FROM textbook_lesson_tasks AS t
+          UNION ALL SELECT t.draft FROM textbook_lesson_tasks AS t
+        ) AS list, jsonb_array_elements(coalesce(list.tasks, '[]'::jsonb)) AS task
         WHERE task ->> 'image' = 'blob:' || b.id::text OR task ->> 'audio' = 'blob:' || b.id::text
           -- The pictures of answer options (#129).
           OR jsonb_path_exists(task, '$.options[*].images[*] ? (@ == $ref)', jsonb_build_object('ref', 'blob:' || b.id::text))

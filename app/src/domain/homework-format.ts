@@ -9,12 +9,11 @@ export const SKILLS = ["grammar", "vocabulary", "reading", "writing", "speaking"
 const text = z.string().trim().min(1);
 const variants = z.array(text).min(1);
 
-const source = z.union([
-  z.literal("own"),
-  z
-    .object({ book: text, unit: z.string().optional(), page: z.string().optional(), exercise: z.string().optional() })
-    .strict(),
-]);
+/** A textbook exercise: the book, and its unit, page and exercise when known. */
+export const bookSourceSchema = z
+  .object({ book: text, unit: z.string().optional(), page: z.string().optional(), exercise: z.string().optional() })
+  .strict();
+const source = z.union([z.literal("own"), bookSourceSchema]);
 /** Where a task comes from: the teacher's own, or a textbook exercise. */
 export const taskSourceSchema = source;
 

@@ -190,6 +190,20 @@ export async function handleHomeworkImageRequest(
   const file = ref ? await readBlob(database, owner.teacherId, ref) : null;
   if (!file || !ref) return notFound();
 
+  return taskFileResponse(request, ref, file, part === "audio");
+}
+
+/**
+ * A task's stored file as the answer to a GET, for homework and for the task
+ * bank (#224) alike, after the caller's permission check. A recording
+ * (`ranges`) answers byte ranges.
+ */
+export function taskFileResponse(
+  request: Request,
+  ref: string,
+  file: { contentType: string; bytes: Uint8Array },
+  ranges: boolean,
+): Response {
   // The address names a task's position, not a file: reordering or replacing
   // puts another file there. The browser keeps a copy but asks every time;
   // the ETag is the file's id, so an unchanged picture costs a 304.
@@ -204,7 +218,7 @@ export async function handleHomeworkImageRequest(
   };
   // A player seeks in a recording with byte ranges, and Safari plays audio only from a server that answers them.
   const size = file.bytes.byteLength;
-  const range = part === "audio" ? byteRange(request.headers.get("Range"), size) : null;
+  const range = ranges ? byteRange(request.headers.get("Range"), size) : null;
   if (range === "unsatisfiable") {
     return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
   }
