@@ -1,5 +1,8 @@
 // Acceptance for #34: the student does a published homework of auto-checked
-// tasks on a phone, one task per screen, submits once and sees the score.
+// tasks on a phone, one task per screen, and submits once. After «Сдать» the
+// child is praised without a score (#227, product owner 2026-11-20: the
+// automatic check does not decide for the teacher); the score is the
+// teacher's, in «Проверка домашек».
 //
 // The teacher's part starts signed in (sessions.setup.ts); the student opens
 // the link in a fresh, phone-sized browser. The homework is synthetic
@@ -116,7 +119,7 @@ test("the student does the homework on a phone, one task per screen, with a prog
   await student.context.close();
 });
 
-test("answers survive closing the tab, and «Сдать» shows praise and the score without saying which", async ({
+test("answers survive closing the tab, and «Сдать» shows praise without a score; the teacher sees the score", async ({
   page,
   browser,
 }) => {
@@ -144,15 +147,21 @@ test("answers survive closing the tab, and «Сдать» shows praise and the s
   await answerSecondHalf(page2);
   await page2.getByRole("button", { name: "Сдать", exact: true }).click();
 
-  // 3 right (colour, gap, pairs), 2 wrong (animals, order) — and not which ones.
-  await expect(page2.getByText(/3\s+верно/)).toBeVisible();
-  await expect(page2.getByText(/2\s+неверно/)).toBeVisible();
+  // Praise, no score and nothing of the tasks.
+  await expect(page2.getByText("Готово! Домашка сдана, учитель посмотрит")).toBeVisible();
+  await expect(page2.getByText(/верно/)).toHaveCount(0);
   for (const task of homework.tasks) await expect(page2.getByText(task.prompt)).toHaveCount(0);
 
-  // Opening the link again shows the result, not the tasks.
+  // Opening the link again shows the same, not the tasks.
   await page2.goto(bookmark);
-  await expect(page2.getByText(/3\s+верно/)).toBeVisible();
+  await expect(page2.getByText("Домашка сдана")).toBeVisible();
+  await expect(page2.getByText(/верно/)).toHaveCount(0);
   await expect(page2.getByText(homework.tasks[0]!.prompt)).toHaveCount(0);
   await expect(page2.getByRole("button", { name: "Сдать", exact: true })).toHaveCount(0);
   await context.close();
+
+  // 3 right (colour, gap, pairs), 2 wrong (animals, order): the teacher's to see.
+  await page.goto("/teacher/homework-review");
+  await page.getByLabel("Ученик").selectOption({ label: "Сдача" });
+  await expect(page.getByRole("listitem").filter({ hasText: "Сдача" })).toContainText("3 верно, 2 неверно");
 });

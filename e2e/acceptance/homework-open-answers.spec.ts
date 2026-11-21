@@ -33,6 +33,15 @@ function control(page: Page, name: string) {
   return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
 }
 
+/** The submission's row in «Проверка домашек»: the score is the teacher's; the student sees none (#227). */
+async function reviewRow(page: Page, firstName: string) {
+  await page.goto("/teacher/homework-review");
+  await page.getByLabel("Ученик").selectOption({ label: firstName });
+  const row = page.getByRole("listitem").filter({ hasText: firstName });
+  await expect(row).toHaveCount(1);
+  return row;
+}
+
 async function publishedHomeworkLink(page: Page, firstName: string): Promise<string> {
   await page.goto("/teacher/students");
   await control(page, "Новый ученик").click();
@@ -157,15 +166,18 @@ test("written, voice and photo answers are kept across a reload, and a new recor
   await context.close();
 });
 
-test("the result counts the open tasks as «проверит учитель»", async ({ page, browser }) => {
+test("after «Сдать» the student sees only that it is submitted; the open tasks wait for the teacher", async ({ page, browser }) => {
   const link = await publishedHomeworkLink(page, "Итог открытых");
   const { context, page: student } = await openOnPhone(browser, link);
   await answerOpenTasks(student);
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
 
-  await expect(student.getByText(/1\s+верно/)).toBeVisible();
-  await expect(student.getByText(/0\s+неверно/)).toBeVisible();
-  await expect(student.getByText(/3\s+задания\s+проверит учитель/)).toBeVisible();
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
+  await expect(student.getByText(/верно/)).toHaveCount(0);
+  // The score and the tasks waiting for the teacher are hers (#227).
+  const row = await reviewRow(page, "Итог открытых");
+  await expect(row).toContainText("1 верно, 0 неверно");
+  await expect(row).toContainText("ждёт проверки");
   await context.close();
 });
 

@@ -193,7 +193,7 @@ async function doHomeworkWrongInToBe(student: Page) {
   await next(student);
   for (const word of ["We", "play", "after", "school"]) await option(student, word).click();
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
-  await expect(student.getByText(/4\s+верно/)).toBeVisible();
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
 }
 
 /** «Ошибки по темам» on the student card. */

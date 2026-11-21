@@ -97,7 +97,7 @@ async function doHomework(student: Page, link: string) {
   const submit = student.getByRole("button", { name: "Сдать", exact: true });
   while (!(await submit.isVisible())) await student.getByRole("button", { name: "Дальше", exact: true }).click();
   await submit.click();
-  const result = student.getByText(/\d+\s+верно/);
+  const result = student.getByText("Домашка сдана");
   const confirm = student.getByRole("button", { name: "Всё равно сдать", exact: true });
   await expect(result.or(confirm)).toBeVisible();
   if (await confirm.isVisible()) await confirm.click();

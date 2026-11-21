@@ -179,7 +179,7 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
     }
   }
 
-  if (result) return <HomeworkResult firstName={firstName} {...result} />;
+  if (result) return <HomeworkResult firstName={firstName} />;
 
   if (index < 0) {
     return (

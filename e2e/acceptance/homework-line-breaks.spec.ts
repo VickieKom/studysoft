@@ -89,7 +89,7 @@ test("line breaks in a prompt and a gap text stay new lines in the preview, for 
   expect(await innerText(main)).toMatch(TEXT_LINES);
   for (let i = 1; i <= 3; i++) await student.getByLabel(`Пропуск ${i}`).fill("is");
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
-  await expect(student.getByText(/\d+\s+верно/)).toBeVisible();
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
   await student.context().close();
 
   // «Проверка домашек»: the prompt keeps its lines.

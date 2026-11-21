@@ -20,6 +20,15 @@ function control(page: Page, name: string) {
   return page.getByRole("link", { name, exact: true }).or(page.getByRole("button", { name, exact: true }));
 }
 
+/** The submission's row in «Проверка домашек»: the score is the teacher's; the student sees none (#227). */
+async function reviewRow(page: Page, firstName: string) {
+  await page.goto("/teacher/homework-review");
+  await page.getByLabel("Ученик").selectOption({ label: firstName });
+  const row = page.getByRole("listitem").filter({ hasText: firstName });
+  await expect(row).toHaveCount(1);
+  return row;
+}
+
 type Choice = { prompt: string; passage: string; options: string[]; answer: number };
 type Gap = { prompt: string; example: { text: string; answer: string } };
 const [blog, blogAgain, gap] = layout.tasks as unknown as [Choice, Choice, Gap];
@@ -87,8 +96,11 @@ test("instruction, reading text and example are parts of their own, for the teac
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
 
   // Three tasks, three right: the example is not counted.
-  await expect(student.getByText(/3\s+верно/)).toBeVisible();
-  await expect(student.getByText(/4\s+верно/)).toHaveCount(0);
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
+  // The score is the teacher's (#227); the example is not a task.
+  const row = await reviewRow(page, "Тетрадный");
+  await expect(row).toContainText("3 верно");
+  await expect(row).not.toContainText("4 верно");
 
   // Nothing the page received held a key: the gap's other accepted answer never came.
   expect(received.join("\n")).not.toContain("'re");

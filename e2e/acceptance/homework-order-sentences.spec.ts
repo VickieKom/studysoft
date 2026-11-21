@@ -82,7 +82,7 @@ test("three sentences on one screen, each its own point; the review marks the wr
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
 
   // One task, three points: 2 right, 1 wrong.
-  await expect(student.getByText(/2\s+верно,\s+1\s+неверно/)).toBeVisible();
+  await expect(student.getByText("Домашка сдана")).toBeVisible();
   await student.context().close();
 
   // «Проверка домашек»: the wrong sentence is marked, with its right order.
