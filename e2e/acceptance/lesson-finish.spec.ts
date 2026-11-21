@@ -7,8 +7,9 @@
 // next lesson's date by default) and the words. Afterwards the panel goes to
 // the student's card and the stage says the lesson is over (product owner,
 // 2026-11-19). The card's «Словарь» has the book lesson's words and the
-// panel's; the assistant's student context has them; the student does not
-// see them. The next preparation proposes the next book lesson.
+// panel's; the assistant's student context has them; the student sees them
+// in «Тренировка слов», not on the homework page (#236). The next preparation
+// proposes the next book lesson.
 //
 // A form that fails halfway applies nothing: that is an integration test.
 //
@@ -256,7 +257,7 @@ test("«Завершить урок» holds the lesson, publishes its homework a
   const context = await studentContext(assistant, token, studentId);
   for (const word of ["lantern", "pebble", "orange", "kettle", "апельсин"]) expect(context).toContain(word);
 
-  // The student has the lesson's homework by the link, due on the next lesson's day, and no vocabulary.
+  // The student has the lesson's homework by the link, due on the next lesson's day; the words are not on the homework page.
   // The student's page names a homework by its deadline and size, not its title.
   const student = await (await browser.newContext({ storageState: NO_SESSION })).newPage();
   await student.goto(link);
@@ -265,6 +266,12 @@ test("«Завершить урок» holds the lesson, publishes its homework a
   await expect(control(student, "Начать")).toBeVisible();
   const seen = await student.locator("body").innerText();
   for (const hidden of ["Словарь", "lantern", "orange", "kettle", NOTE]) expect(seen).not.toContain(hidden);
+  // They are in «Тренировка слов» (#236), the translation with its word; never the note.
+  await student.getByRole("navigation", { name: "Разделы" }).getByRole("link", { name: "Тренировка слов", exact: true }).click();
+  const mine = student.getByRole("list", { name: "Мои слова" });
+  for (const word of ["lantern", "pebble", "orange", "kettle"]) await expect(mine.getByRole("listitem").filter({ hasText: word })).toHaveCount(1);
+  await expect(mine.getByRole("listitem").filter({ hasText: "orange" })).toContainText("апельсин");
+  expect(await student.locator("body").innerText()).not.toContain(NOTE);
   await student.context().close();
 
   // The next preparation proposes the next lesson of the book.
