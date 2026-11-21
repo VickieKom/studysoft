@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthLabel, skillsByMonth, trendLabel, unitsPassed } from "./progress";
+import { monthLabel, skillsByMonth, slips, trendLabel, unitsPassed } from "./progress";
 
 describe("«Прогресс» (#255)", () => {
   it("puts each assessed skill by month, the latest result of a month as its point, with the trend against the point before", () => {
@@ -38,5 +38,23 @@ describe("«Прогресс» (#255)", () => {
     expect(unitsPassed(structure, "b")).toEqual({ passed: 1, total: 2 });
     expect(unitsPassed(structure, "d")).toEqual({ passed: 2, total: 2 });
     expect(unitsPassed(null, "x")).toEqual({ passed: 0, total: 0 });
+  });
+
+  it("counts a fall of 10 points or more as a slip, a smaller one or growth not (#257)", () => {
+    const { rows } = skillsByMonth([
+      { skill: "reading", percent: 70, measuredOn: "2026-10-15" },
+      { skill: "reading", percent: 50, measuredOn: "2026-11-15" },
+      { skill: "grammar", percent: 60, measuredOn: "2026-10-15" },
+      { skill: "grammar", percent: 51, measuredOn: "2026-11-15" },
+      { skill: "listening", percent: 60, measuredOn: "2026-10-15" },
+      { skill: "listening", percent: 50, measuredOn: "2026-11-15" },
+      { skill: "writing", percent: 40, measuredOn: "2026-10-15" },
+      { skill: "writing", percent: 80, measuredOn: "2026-11-15" },
+      { skill: "speaking", percent: 30, measuredOn: "2026-11-15" },
+    ]);
+    expect(slips(rows)).toEqual([
+      { skill: "reading", trend: -20 },
+      { skill: "listening", trend: -10 },
+    ]);
   });
 });

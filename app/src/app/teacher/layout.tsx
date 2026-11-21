@@ -12,6 +12,9 @@ export default async function TeacherLayout({ children }: { children: ReactNode 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-8 py-10">
       <nav aria-label="Разделы" className="mb-8 flex flex-wrap gap-2 border-b border-border pb-3">
+        <Link href="/teacher" className={item}>
+          Главная
+        </Link>
         <Link href="/teacher/students" className={item}>
           Ученики
         </Link>

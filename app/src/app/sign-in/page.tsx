@@ -17,7 +17,7 @@ async function isSignedIn(): Promise<boolean> {
 
 export default async function SignInPage() {
   if (await isSignedIn()) {
-    redirect("/teacher/students");
+    redirect("/teacher");
   }
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface p-4">

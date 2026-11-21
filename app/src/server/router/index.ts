@@ -31,6 +31,7 @@ import { notesRouter } from "./teacher/notes";
 import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 import { textbooksRouter } from "./teacher/textbooks";
+import { homeRouter } from "./teacher/home";
 import { prepRouter } from "./teacher/prep";
 import { progressRouter } from "./teacher/progress";
 import { lessonModeRouter } from "./teacher/lesson-mode";
@@ -46,6 +47,7 @@ export const appRouter = router({
   agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
   teacher: router({
     session: sessionRouter,
+    home: homeRouter,
     students: studentsRouter,
     assistant: assistantRouter,
     notes: notesRouter,
