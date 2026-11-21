@@ -14,6 +14,7 @@ const tile = "min-h-12 rounded-task border-2 border-border bg-bg px-4 py-2 text-
 const QUESTION: Record<ExerciseType, (prompt: string) => string> = {
   choose_translation: (prompt) => `Как переводится «${prompt}»?`,
   choose_word: (prompt) => `Какое слово значит «${prompt}»?`,
+  fill_gap: () => "Вставь слово в предложение",
   type_word: (prompt) => `Напиши по-английски: «${prompt}»`,
 };
 
@@ -81,6 +82,8 @@ export function WordTraining({ dueCount }: { dueCount: number }) {
             {session!.index + 1} / {session!.exercises.length}
           </span>
           <h2 className="text-task-title font-bold text-accent-900">{QUESTION[exercise.type](exercise.prompt)}</h2>
+          {/* The word's example with the word as a gap (#239). */}
+          {exercise.type === "fill_gap" && <p className="text-answer text-text">{exercise.prompt}</p>}
           <ExerciseBody key={`${session!.index}:${exercise.wordId}`} exercise={exercise} disabled={busy || result !== null} onAnswer={(value) => answer(exercise, value)} />
           {result && (
             <>

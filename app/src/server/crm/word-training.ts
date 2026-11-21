@@ -12,6 +12,7 @@ import {
   CHOICE_OPTIONS,
   type ExerciseType,
   exerciseFor,
+  gapSentence,
   isDue,
   SESSION_WORDS,
 } from "../../domain/word-training";
@@ -59,7 +60,14 @@ export async function trainingSession(db: Database, teacherId: string, studentId
   const today = await studentToday(db, teacherId, studentId, now);
   if (!today) return [];
   const all = await db
-    .select({ id: vocabularyWord.id, word: vocabularyWord.word, translation: vocabularyWord.translation, step: vocabularyWord.trainStep, dueOn: vocabularyWord.dueOn })
+    .select({
+      id: vocabularyWord.id,
+      word: vocabularyWord.word,
+      translation: vocabularyWord.translation,
+      example: vocabularyWord.example,
+      step: vocabularyWord.trainStep,
+      dueOn: vocabularyWord.dueOn,
+    })
     .from(vocabularyWord)
     .where(own(teacherId, studentId))
     .orderBy(asc(vocabularyWord.dueOn), asc(vocabularyWord.createdAt));
@@ -69,23 +77,32 @@ export async function trainingSession(db: Database, teacherId: string, studentId
   return words.map((w) => {
     const others = all.filter((o) => o.id !== w.id);
     const canChoose = others.length >= CHOICE_OPTIONS - 1;
-    const type = exerciseFor(w.step, canChoose);
+    // Only the confirmed example: the assistant's draft is not the student's until the teacher confirms it (#237).
+    const gapped = gapSentence(w.example, w.word);
+    const type = exerciseFor(w.step, canChoose, gapped !== null, extra);
     const pick = (field: "word" | "translation") =>
       shuffled([w[field]!, ...shuffled([...new Set(others.map((o) => o[field]!).filter((v) => normalize(v) !== normalize(w[field]!)))]).slice(0, CHOICE_OPTIONS - 1)]);
     if (type === "choose_translation") return { wordId: w.id, type, prompt: w.word, options: pick("translation") };
     if (type === "choose_word") return { wordId: w.id, type, prompt: w.translation!, options: pick("word") };
+    if (type === "fill_gap") return { wordId: w.id, type, prompt: gapped!, options: canChoose ? pick("word") : null };
     return { wordId: w.id, type, prompt: w.translation!, options: null };
   });
 }
 
 export type Checked = { right: boolean; correct: string };
 type Answer = { wordId: string; type: ExerciseType; answer: string; extra: boolean };
-export type SeenWord = { word: string; translation: string | null; step: number; dueOn: string | null };
+export type SeenWord = { word: string; translation: string | null; example: string | null; step: number; dueOn: string | null };
 
 /** The word as an answer is checked against, or null when it is not this student's or has no translation. */
 export async function readWord(db: Database, teacherId: string, studentId: string, wordId: string): Promise<SeenWord | null> {
   const [w] = await db
-    .select({ word: vocabularyWord.word, translation: vocabularyWord.translation, step: vocabularyWord.trainStep, dueOn: vocabularyWord.dueOn })
+    .select({
+      word: vocabularyWord.word,
+      translation: vocabularyWord.translation,
+      example: vocabularyWord.example,
+      step: vocabularyWord.trainStep,
+      dueOn: vocabularyWord.dueOn,
+    })
     .from(vocabularyWord)
     .where(and(eq(vocabularyWord.id, wordId), own(teacherId, studentId)));
   return w ?? null;
@@ -104,8 +121,10 @@ export async function applyAnswer(
   today: string,
   now: Date,
 ): Promise<Checked | "changed"> {
-  const correct = input.type === "choose_translation" ? seen.translation! : seen.word;
-  const right = normalize(input.answer) === normalize(correct);
+  const expected = input.type === "choose_translation" ? seen.translation! : seen.word;
+  const right = normalize(input.answer) === normalize(expected);
+  // A gap is answered with the word; the child is shown the sentence whole (#239).
+  const correct = input.type === "fill_gap" && gapSentence(seen.example, seen.word) !== null ? seen.example! : expected;
   const next = afterAnswer({ step: seen.step, dueOn: seen.dueOn }, right, today, !input.extra && isDue(seen.dueOn, today));
   const rows = await db
     .update(vocabularyWord)

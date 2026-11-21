@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { todayIn } from "./homework";
-import { addDays, afterAnswer, exerciseFor, isDue, isMastered, MASTERED_STEP, wordMark } from "./word-training";
+import { addDays, afterAnswer, exerciseFor, GAP_STEP, gapSentence, isDue, isMastered, MASTERED_STEP, wordMark } from "./word-training";
 
 describe("the word training's schedule (#238)", () => {
   it("moves a right answer on through 1, 2, 4, 8 and 16 days, learnt after five on different days", () => {
@@ -63,5 +63,33 @@ describe("a word's mark for the teacher (#240)", () => {
     expect(wordMark({ step: 1, rightCount: 1, wrongCount: 1, trained: true })).toBe("learning");
     expect(wordMark({ step: 2, rightCount: 2, wrongCount: 0, trained: true })).toBe("learning");
     expect(wordMark({ step: MASTERED_STEP, rightCount: 5, wrongCount: 9, trained: true })).toBe("learnt");
+  });
+});
+
+describe("«Вставь слово в предложение» (#239)", () => {
+  it("makes the word a gap in its example: its first use as it is, case aside, never inside a longer word", () => {
+    expect(gapSentence("The teapot is hot.", "teapot")).toBe("The ___ is hot.");
+    expect(gapSentence("Teapot first, then the teapot again.", "teapot")).toBe("___ first, then the teapot again.");
+    expect(gapSentence("Mind the ladder!", " Ladder ")).toBe("Mind the ___!");
+    expect(gapSentence("She will look  after the cat.", "look after")).toBe("She will ___ the cat.");
+    expect(gapSentence("Don't run (fast).", "(fast)")).toBe("Don't run ___.");
+  });
+
+  it("gives no gap when the example does not use the word as it is, or there is no example", () => {
+    expect(gapSentence("She went home.", "go")).toBeNull();
+    expect(gapSentence("The teapots are hot.", "teapot")).toBeNull();
+    expect(gapSentence("A carpet.", "car")).toBeNull();
+    expect(gapSentence(null, "teapot")).toBeNull();
+    expect(gapSentence("", "teapot")).toBeNull();
+  });
+
+  it("comes at the third right answer in a row, and always in «Ещё разок»; never without a gap", () => {
+    expect([0, 1, 2, 3, 5].map((step) => exerciseFor(step, true, true))).toEqual(["choose_translation", "choose_word", "fill_gap", "type_word", "type_word"]);
+    expect(GAP_STEP).toBe(2);
+    expect([0, 1, 3].map((step) => exerciseFor(step, true, true, true))).toEqual(["fill_gap", "fill_gap", "fill_gap"]);
+    // Too few words to choose from: still a gap, typed.
+    expect(exerciseFor(2, false, true)).toBe("fill_gap");
+    expect([0, 1, 2, 3].map((step) => exerciseFor(step, true, false, true))).toEqual(["choose_translation", "choose_word", "type_word", "type_word"]);
+    expect(exerciseFor(2, false, false)).toBe("type_word");
   });
 });

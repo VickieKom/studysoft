@@ -20,15 +20,42 @@ export const CHOICE_OPTIONS = 4;
  * The exercises, easiest first. A new type goes here and in exerciseFor();
  * the schedule does not change.
  */
-export const EXERCISE_TYPES = ["choose_translation", "choose_word", "type_word"] as const;
+export const EXERCISE_TYPES = ["choose_translation", "choose_word", "fill_gap", "type_word"] as const;
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 
-/** A new word starts with choosing its translation, then its word, then typing it; typing when there is nothing to choose from. */
-export function exerciseFor(step: number, canChoose: boolean): ExerciseType {
+/** The step at which a word with an example comes as «Вставь слово в предложение» (#239). */
+export const GAP_STEP = 2;
+/** What stands for the word in its example. */
+export const GAP = "___";
+
+/**
+ * A new word starts with choosing its translation, then its word, then typing
+ * it; typing when there is nothing to choose from. A word that can be a gap
+ * in its example comes as one at `GAP_STEP`, and always in «Ещё разок»
+ * (`extra`) — out of four words, or typed when there are too few (product
+ * owner, 2026-11-21).
+ */
+export function exerciseFor(step: number, canChoose: boolean, canGap = false, extra = false): ExerciseType {
+  if (canGap && (extra || step === GAP_STEP)) return "fill_gap";
   if (!canChoose) return "type_word";
   if (step <= 0) return "choose_translation";
   if (step === 1) return "choose_word";
   return "type_word";
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The example with the word as a gap: its first use as it is, case aside, and
+ * not inside a longer word. Null when the example does not use the word so —
+ * «go» in «She went home» — and then the word gets no gap (product owner,
+ * 2026-11-21).
+ */
+export function gapSentence(example: string | null, word: string): string | null {
+  const target = word.trim();
+  if (!example || target === "") return null;
+  const use = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(target).replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`, "iu");
+  return use.test(example) ? example.replace(use, GAP) : null;
 }
 
 /** A word with no date is new: due now. */
