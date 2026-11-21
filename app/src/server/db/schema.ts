@@ -891,6 +891,14 @@ export const vocabularyWord = pgTable(
     draftExample: text("draft_example"),
     // The lesson the word came from.
     lessonId: uuid("lesson_id").references(() => lesson.id, { onDelete: "set null" }),
+    // The daily training (#238, domain/word-training.ts): how many right answers
+    // in a row, on different days; the student's date it is due again (none:
+    // new, due now); the answers so far; the last one.
+    trainStep: bigint("train_step", { mode: "number" }).notNull().default(0),
+    dueOn: date("due_on"),
+    rightCount: bigint("right_count", { mode: "number" }).notNull().default(0),
+    wrongCount: bigint("wrong_count", { mode: "number" }).notNull().default(0),
+    trainedAt: timestamp("trained_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
