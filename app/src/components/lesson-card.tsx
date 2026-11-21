@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import { dateIn, dayMonthIn, LESSON_STATUS_LABELS, timeIn } from "@/domain/schedule";
+import { measureField } from "@/domain/student";
 import { Button } from "./button";
 import { useOverlapWarning } from "./overlap-warning";
 import { routerClient } from "./router-client";
@@ -23,6 +24,9 @@ type Lesson = {
   needsMark: boolean;
   movedFrom: string | null;
   meetingLink: string | null;
+  measure: number | null;
+  measureName: string | null;
+  measureUnit: string | null;
 };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
@@ -58,6 +62,7 @@ export function LessonCard({
   const [chargeTouched, setChargeTouched] = useState(false);
   const [unit, setUnit] = useState(lesson.unit ?? "");
   const [note, setNote] = useState(lesson.note ?? "");
+  const [measure, setMeasure] = useState(lesson.measure === null ? "" : String(lesson.measure));
   const [error, setError] = useState<string | null>(null);
   const free = lesson.kind === "intro";
   const [mode, setMode] = useState<"none" | "move" | "cancel">("none");
@@ -137,7 +142,14 @@ export function LessonCard({
     if (!status) return setError("Отметьте, проведён урок или пропущен");
     setError(null);
     try {
-      await routerClient.teacher.schedule.mark.mutate({ lessonId: lesson.id, status, charged: !free && charged, unit, note });
+      await routerClient.teacher.schedule.mark.mutate({
+        lessonId: lesson.id,
+        status,
+        charged: !free && charged,
+        unit,
+        note,
+        measure: lesson.measureName && status === "held" && measure.trim() !== "" ? Number(measure.replace(",", ".")) : null,
+      });
       dialog.current?.close();
       router.refresh();
     } catch {
@@ -340,6 +352,25 @@ export function LessonCard({
                     />
                     <label htmlFor={`charge-${lesson.id}`}>Списать</label>
                   </div>
+                )}
+                {/* The student's personal measure (#266): a number for a held lesson. */}
+                {lesson.measureName && status === "held" && (
+                  <>
+                    <label htmlFor={`measure-${lesson.id}`} className="text-small text-text-secondary">
+                      {measureField(lesson.measureName, lesson.measureUnit)}
+                    </label>
+                    <input
+                      id={`measure-${lesson.id}`}
+                      type="number"
+                      min={0}
+                      max={100000}
+                      step="any"
+                      inputMode="decimal"
+                      value={measure}
+                      onChange={(e) => setMeasure(e.target.value)}
+                      className={field}
+                    />
+                  </>
                 )}
                 <label htmlFor={`unit-${lesson.id}`} className="text-small text-text-secondary">
                   Юнит

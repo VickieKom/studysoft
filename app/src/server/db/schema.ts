@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, bigint, boolean, date, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, bigint, boolean, date, doublePrecision, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -107,6 +107,12 @@ export const student = pgTable(
     textbookId: uuid("textbook_id").references((): AnyPgColumn => textbook.id),
     passedLessonId: text("passed_lesson_id"),
     passedLessonSetAt: timestamp("passed_lesson_set_at", { withTimezone: true }),
+    // The family's goal and a personal measure of the teacher's own (#266): a
+    // name and a unit, counted when a lesson is marked. Teacher only, like the
+    // profile; the assistant does not see them yet.
+    familyGoal: text("family_goal"),
+    measureName: text("measure_name"),
+    measureUnit: text("measure_unit"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -617,6 +623,8 @@ export const lesson = pgTable(
     // assistant reads.
     unit: text("unit"),
     note: text("note"),
+    // The student's personal measure for this lesson, entered when marking it (#266).
+    measure: doublePrecision("measure"),
     // When the lesson was first planned, if it has been moved since (#81):
     // the week says «перенесён с …», and a slot change leaves it alone.
     movedFrom: timestamp("moved_from", { withTimezone: true }),
