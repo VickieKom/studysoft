@@ -10,6 +10,7 @@ import {
   goToStage,
   type HomeworkStage,
   homeworkStageLabel,
+  type MaterialStage,
   type KeptState,
   type LessonBook,
   type BookLesson,
@@ -27,12 +28,15 @@ import {
   pageIn,
   removeStage,
   type StageHomework,
+  type StageVideo,
   stageKey,
   STATE_SAVE_MS,
   toggleShown,
   turnPage,
   visibleTasks,
+  visibleVideoTasks,
 } from "@/domain/lesson-state";
+import { useLessonVideos } from "./lesson-videos";
 import { BOOK_LABELS } from "@/domain/textbook";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
@@ -180,6 +184,8 @@ export function LessonPanel({
 
   const { state } = kept;
   const current = state.stages[state.current];
+  // A video stage's tasks with the student's answers (#328), asked again while it is on.
+  const videos = useLessonVideos(lessonId, current?.type === "material" && resources.materials.find((m) => m.id === current.materialId)?.kind === "video");
   const lessonOf = (id: string) => resources.lessons.find((l) => l.id === id);
   const materialOf = (id: string) => resources.materials.find((m) => m.id === id);
   const homeworkOf = (id: string) => resources.homework.find((h) => h.id === id);
@@ -273,7 +279,7 @@ export function LessonPanel({
             <Button
               variant="secondary"
               disabled={!adding}
-              onClick={() => change((s) => ({ ...s, stages: [...s.stages, { type: "material", materialId: adding, minutes: 0, done: false }] }))}
+              onClick={() => change((s) => ({ ...s, stages: [...s.stages, { type: "material", materialId: adding, minutes: 0, done: false, filter: "all", shown: [] }] }))}
             >
               Добавить этап
             </Button>
@@ -302,6 +308,13 @@ export function LessonPanel({
         />
       )}
       {current?.type === "material" && <MaterialNote material={materialOf(current.materialId)} gameResult={gameResult} />}
+      {current?.type === "material" && materialOf(current.materialId)?.kind === "video" && (
+        <VideoControls
+          stage={current}
+          video={videos.find((v) => v.id === current.materialId)}
+          onStage={(next) => change((s) => ({ ...s, stages: s.stages.map((x, i) => (i === s.current ? next : x)) }))}
+        />
+      )}
       {current?.type === "homework" && (
         <HomeworkControls
           stage={current}
@@ -507,6 +520,53 @@ function HomeworkControls({
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/**
+ * A video's tasks on the stage (#328): «Все задания» or «Только ошибки», and
+ * «Показать ответ» for a task — the stage shows a key only then. The
+ * student's answers come in while the lesson goes on.
+ */
+function VideoControls({ stage, video, onStage }: { stage: MaterialStage; video: StageVideo | undefined; onStage: (next: MaterialStage) => void }) {
+  const pressed = (on: boolean) => `rounded-control border px-3 py-1.5 text-small ${on ? "border-green-600 bg-green-50 font-semibold" : "border-border"}`;
+  if (!video) return <p className="rounded-card border border-border p-4 text-small text-text-secondary">У этого видео нет подтверждённых заданий</p>;
+  const tasks = visibleVideoTasks(stage, video);
+  return (
+    <section aria-label="Видео на сцене" className="flex flex-col gap-3 rounded-card border border-border p-4">
+      <h2 className="text-h3 font-semibold">Видео на сцене</h2>
+      <p className="text-small text-text-secondary">
+        {video.title} · {video.answered ? "ученик ответил" : "ученик ещё не ответил"}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" aria-pressed={stage.filter === "all"} onClick={() => onStage({ ...stage, filter: "all" })} className={pressed(stage.filter === "all")}>
+          Все задания
+        </button>
+        <button type="button" aria-pressed={stage.filter === "wrong"} onClick={() => onStage({ ...stage, filter: "wrong" })} className={pressed(stage.filter === "wrong")}>
+          Только ошибки
+        </button>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {tasks.map((task) => {
+          const shown = stage.shown.includes(task.index);
+          return (
+            <li key={task.index} className="flex items-center gap-3 rounded-control border border-border px-3 py-2">
+              <span className="flex-1 text-small">
+                {task.index + 1}. {task.prompt}
+                {video.answered && (
+                  <span className="ml-2 text-text-secondary">{task.verdict === null ? "ждёт проверки" : task.verdict ? "верно" : "неверно"}</span>
+                )}
+              </span>
+              {task.key !== null && (
+                <button type="button" aria-pressed={shown} onClick={() => onStage(toggleShown(stage, task.index))} className={pressed(shown)}>
+                  {shown ? "Скрыть ответ" : "Показать ответ"}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -748,7 +808,7 @@ function MaterialNote({ material, gameResult }: { material: Material | undefined
     material.kind === "warmup"
       ? `На сцене разминка «${material.title}»`
       : material.kind === "video"
-        ? `Видео «${material.title}» на сцене не показывается: при демонстрации оно тормозит. Открыть его ученику по ссылке можно будет отсюда`
+        ? `Видео «${material.title}» на сцене не играет: при демонстрации оно тормозит. Ученик смотрит его у себя, а на сцене — задания к нему и его ответы`
         : `На сцене игра «${material.title}»: играйте в окне сцены, итог сохранится ученику этого урока`;
   return (
     <div className="flex flex-col gap-1 rounded-card border border-border p-4 text-small">

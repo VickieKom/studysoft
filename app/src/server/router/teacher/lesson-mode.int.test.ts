@@ -109,7 +109,7 @@ describe("lesson mode", () => {
     expect(opened.kept.revision).toBe(0);
     expect(opened.kept.state.current).toBe(0);
     expect(opened.kept.state.stages).toEqual([
-      { type: "material", materialId: warmupId, minutes: 5, done: false },
+      { type: "material", materialId: warmupId, minutes: 5, done: false, filter: "all", shown: [] },
       { type: "book", lessonId: lessonIds["1.2"], skip: "", minutes: 30, done: false, kind: "students_book", pages: { students_book: 4 } },
     ]);
     expect(opened.resources.books).toEqual([expect.objectContaining({ kind: "students_book", pageCount: 8 })]);
@@ -150,7 +150,7 @@ describe("lesson mode", () => {
     const { kept } = await teacher.teacher.lessonMode.open({ lessonId });
     const withMaterial = (materialId: string): LessonState => ({
       ...kept.state,
-      stages: [...kept.state.stages, { type: "material", materialId, minutes: 0, done: false }],
+      stages: [...kept.state.stages, { type: "material", materialId, minutes: 0, done: false, filter: "all", shown: [] }],
     });
     expect(await codeOf(teacher.teacher.lessonMode.saveState({ lessonId, revision: 1, state: withMaterial(otherWarmupId) }))).toBe("BAD_REQUEST");
     expect(
