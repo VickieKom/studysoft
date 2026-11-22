@@ -36,6 +36,8 @@ const unit = z
 export const structureSchema = z.object({ units: z.array(unit).min(1).max(MAX_UNITS) }).strict();
 export type TextbookStructure = z.infer<typeof structureSchema>;
 export type StructureLesson = z.infer<typeof lesson>;
+/** One lesson of a structure, for outputs that add to it (#291). */
+export const structureLessonSchema = lesson;
 
 /** Who wrote a draft: the assistant, or the teacher saving her own edits. */
 export const DRAFT_AUTHORS = ["assistant", "teacher"] as const;

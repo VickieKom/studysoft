@@ -1,3 +1,5 @@
+import type { Database } from "../../db/client";
+import { checkLink, type LinkableTextbook, linkableTextbooks, linkLabel } from "../../library/lesson-links";
 import { gameWordsOutput } from "../../../domain/game-words-format";
 import { templateWords } from "../../library/game-words";
 import { TRPCError } from "@trpc/server";
@@ -28,6 +30,7 @@ import {
   findMaterial,
   listDrafts,
   listMaterials,
+  type LessonLink,
   type Material,
   materialTopics,
   updateMaterial,
@@ -87,6 +90,8 @@ const material = z
     warmup: z.boolean(),
     // A game template that gets a student's words (#282).
     vocabulary: z.boolean(),
+    // A game's textbook lesson (#291); null when none, or the lesson is no longer in the structure.
+    textbookLesson: z.object({ textbookId: z.uuid(), lessonId: z.uuid(), label: z.string() }).strict().nullable(),
     // A video link's address; null for every other material.
     url: z.string().nullable(),
     /** Saved by the assistant and not yet in the library (#120). */
@@ -94,7 +99,7 @@ const material = z
   })
   .strict();
 
-const output = (m: Material) => ({
+const output = (books: LinkableTextbook[]) => (m: Material) => ({
   id: m.id,
   kind: m.kind,
   title: m.title,
@@ -105,9 +110,34 @@ const output = (m: Material) => ({
   questions: m.questions,
   warmup: m.warmup,
   vocabulary: m.vocabulary,
+  textbookLesson: lessonOf(books, m),
   url: m.url,
   draft: m.draft,
 });
+
+// A game's textbook lesson (#291): both ids, null for «Без учебника»; left out, an edit keeps the link.
+export const linkInput = { textbookId: z.uuid().nullable().optional(), textbookLessonId: z.uuid().nullable().optional() };
+
+/** The link as sent, checked: undefined when not sent, null when removed. A missing lesson is refused with a message. */
+export async function checkedLink(
+  ctx: { db: Database; teacherId: string },
+  textbookId: string | null | undefined,
+  lessonId: string | null | undefined,
+): Promise<LessonLink | null | undefined> {
+  if (textbookId === undefined && lessonId === undefined) return undefined;
+  if (!textbookId) return null;
+  if (!lessonId) throw new TRPCError({ code: "BAD_REQUEST", message: "Выберите урок учебника" });
+  const checked = await checkLink(ctx.db, ctx.teacherId, textbookId.toLowerCase(), lessonId.toLowerCase());
+  if (checked === "not_found") throw notFound();
+  if (checked === "no_lesson") throw new TRPCError({ code: "BAD_REQUEST", message: "Такого урока нет в учебнике" });
+  return { textbookId: textbookId.toLowerCase(), lessonId: lessonId.toLowerCase() };
+}
+
+/** A material's link as its page names it, or null. */
+function lessonOf(books: LinkableTextbook[], m: Material) {
+  const label = linkLabel(books, m.textbookId, m.textbookLessonId);
+  return label && m.textbookId && m.textbookLessonId ? { textbookId: m.textbookId, lessonId: m.textbookLessonId, label } : null;
+}
 
 /** «Библиотека» (#115): the teacher's games, warm-ups (#116) and videos (#117). */
 export const libraryRouter = router({
@@ -118,17 +148,27 @@ export const libraryRouter = router({
         level: z.enum(LEVELS).optional(),
         topic: z.string().max(MAX_TOPIC_LENGTH).optional(),
         ageGroup: z.enum(AGE_GROUPS).optional(),
+        // «Учебник» and «Урок» (#291).
+        textbookId: z.uuid().optional(),
+        lessonId: z.uuid().optional(),
       }),
     )
     .output(z.object({ materials: z.array(material), topics: z.array(z.string()), total: z.number().int() }).strict())
     .query(async ({ ctx, input }) => ({
-      materials: (await listMaterials(ctx.db, ctx.teacherId, input)).map(output),
+      materials: (await listMaterials(ctx.db, ctx.teacherId, input)).map(output(await linkableTextbooks(ctx.db, ctx.teacherId))),
       topics: await materialTopics(ctx.db, ctx.teacherId),
       total: (await listMaterials(ctx.db, ctx.teacherId, {})).length,
     })),
 
   /** «От ассистента» (#120): the assistant's drafts, not yet in the library. */
-  drafts: teacherProcedure.output(z.array(material)).query(async ({ ctx }) => (await listDrafts(ctx.db, ctx.teacherId)).map(output)),
+  drafts: teacherProcedure
+    .output(z.array(material))
+    .query(async ({ ctx }) => (await listDrafts(ctx.db, ctx.teacherId)).map(output(await linkableTextbooks(ctx.db, ctx.teacherId)))),
+
+  /** Her textbooks with a confirmed structure and their lessons, for «Учебник» and «Урок» (#291). */
+  textbooks: teacherProcedure
+    .output(z.array(z.object({ id: z.uuid(), title: z.string(), lessons: z.array(z.object({ id: z.uuid(), label: z.string() }).strict()) }).strict()))
+    .query(({ ctx }) => linkableTextbooks(ctx.db, ctx.teacherId)),
 
   /** «Добавить в библиотеку» on a draft's page (#120). Teacher only: no agent procedure adds a draft. */
   addToLibrary: teacherProcedure
@@ -145,16 +185,17 @@ export const libraryRouter = router({
     .query(async ({ ctx, input }) => {
       const found = await findMaterial(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();
-      return output(found);
+      return output(await linkableTextbooks(ctx.db, ctx.teacherId))(found);
     }),
 
   /** A game: one HTML file as text, at most 5 MB. */
   addGame: teacherProcedure
-    .input(tags.extend({ html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false) }))
+    .input(tags.extend({ html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false), ...linkInput }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { html, vocabulary, ...rest } = input;
-      const created = await createGame(ctx.db, ctx.teacherId, rest, new TextEncoder().encode(html), vocabulary);
+      const { html, vocabulary, textbookId, textbookLessonId, ...rest } = input;
+      const link = (await checkedLink(ctx, textbookId, textbookLessonId)) ?? null;
+      const created = await createGame(ctx.db, ctx.teacherId, rest, new TextEncoder().encode(html), vocabulary, link);
       if (created === "too_big") throw new TRPCError({ code: "BAD_REQUEST", message: "Файл больше 5 МБ" });
       if (created === "not_html")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Это не HTML-страница: нужна игра одним файлом .html" });
@@ -280,11 +321,12 @@ export const libraryRouter = router({
 
   /** Title and tags; a game's warm-up mark; a questions warm-up's questions. */
   update: teacherProcedure
-    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional() }))
+    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional(), ...linkInput }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { id, questions: lines, ...rest } = input;
-      const changes = { ...rest, ...(lines ? { questions: checkQuestions(lines) } : {}) };
+      const { id, questions: lines, textbookId, textbookLessonId, ...rest } = input;
+      const link = await checkedLink(ctx, textbookId, textbookLessonId);
+      const changes = { ...rest, ...(lines ? { questions: checkQuestions(lines) } : {}), ...(link !== undefined ? { link } : {}) };
       if (!(await updateMaterial(ctx.db, ctx.teacherId, id, changes))) throw notFound();
       return { id };
     }),

@@ -185,7 +185,9 @@ server.registerTool(
   "read_textbook_structure",
   {
     title: "Read a textbook's structure",
-    description: "The confirmed units and lessons of a textbook and the draft waiting for the teacher, to revise it.",
+    description:
+      "The confirmed units and lessons of a textbook, each lesson with the library games already made for it, and the draft " +
+      "waiting for the teacher, to revise it.",
     inputSchema: textbookIdInput,
   },
   (input) => tools.readTextbookStructure(input),

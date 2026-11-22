@@ -13,6 +13,12 @@ import { blob, libraryMaterial } from "../db/schema";
 /** The tags a material is saved with; `topic` is the list typed into «Тема» (#290), stored as `topics`. */
 export type MaterialTags = { title: string; level: Level; topic: string[]; ageGroup: AgeGroup };
 
+/** A game's textbook lesson (#291); the caller checks it with `checkLink`. */
+export type LessonLink = { textbookId: string; lessonId: string };
+
+/** The link as the table's columns; null removes it. */
+const linkColumns = (link: LessonLink | null) => ({ textbookId: link?.textbookId ?? null, textbookLessonId: link?.lessonId ?? null });
+
 /** The tags as the table's columns. */
 const tagColumns = ({ topic, ...rest }: MaterialTags) => ({ ...rest, topics: topic });
 
@@ -27,6 +33,9 @@ export type Material = Omit<MaterialTags, "topic"> & {
   warmup: boolean;
   /** A game template (#282): it gets a student's words when it opens. */
   vocabulary: boolean;
+  /** A game's textbook lesson (#291), as saved; whether the lesson is still there is read with the structure. */
+  textbookId: string | null;
+  textbookLessonId: string | null;
   /** A video link's address; null for every other material. */
   url: string | null;
   /** Whether a file is served for it: a game's page, a warm-up's picture or an own video. */
@@ -46,6 +55,8 @@ const columns = {
   questions: libraryMaterial.questions,
   warmup: libraryMaterial.warmup,
   vocabulary: libraryMaterial.vocabulary,
+  textbookId: libraryMaterial.textbookId,
+  textbookLessonId: libraryMaterial.textbookLessonId,
   url: libraryMaterial.url,
   draft: libraryMaterial.draft,
   blobId: libraryMaterial.blobId,
@@ -83,12 +94,13 @@ export async function createGame(
   tags: MaterialTags,
   html: Uint8Array,
   vocabulary = false,
+  link: LessonLink | null = null,
 ): Promise<{ id: string } | "too_big" | "not_html"> {
   const blobId = await storeGame(db, teacherId, html);
   if (blobId === "too_big" || blobId === "not_html") return blobId;
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "game", ...tagColumns(tags), blobId, vocabulary })
+    .values({ teacherId, kind: "game", ...tagColumns(tags), blobId, vocabulary, ...linkColumns(link) })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createGame: insert returned no row");
   return row;
@@ -218,7 +230,7 @@ export async function createVideoFile(
   return row;
 }
 
-export type MaterialFilter = { kind?: MaterialKind; level?: Level; topic?: string; ageGroup?: AgeGroup };
+export type MaterialFilter = { kind?: MaterialKind; level?: Level; topic?: string; ageGroup?: AgeGroup; textbookId?: string; lessonId?: string };
 
 /** This teacher's materials in the library matching the filter, newest first; drafts are not in it. */
 export async function listMaterials(db: Database, teacherId: string, filter: MaterialFilter): Promise<Material[]> {
@@ -238,6 +250,8 @@ export async function listMaterials(db: Database, teacherId: string, filter: Mat
         filter.level ? eq(libraryMaterial.level, filter.level) : undefined,
         filter.topic ? arrayContains(libraryMaterial.topics, [filter.topic]) : undefined,
         filter.ageGroup ? eq(libraryMaterial.ageGroup, filter.ageGroup) : undefined,
+        filter.textbookId ? eq(libraryMaterial.textbookId, filter.textbookId) : undefined,
+        filter.lessonId ? eq(libraryMaterial.textbookLessonId, filter.lessonId) : undefined,
       ),
     )
     .orderBy(desc(libraryMaterial.createdAt));
@@ -266,7 +280,7 @@ export async function listDrafts(db: Database, teacherId: string): Promise<Mater
 
 /** What the assistant saves: a game's file, a picture warm-up's picture, or a questions warm-up's questions. */
 export type DraftContent =
-  | { kind: "game"; blobId: string; vocabulary?: boolean }
+  | { kind: "game"; blobId: string; vocabulary?: boolean; link?: LessonLink | null }
   | { kind: "warmup"; blobId: string }
   | { kind: "warmup"; questions: string[] };
 
@@ -288,7 +302,7 @@ export async function saveDraft(
     ...tagColumns(tags),
     blobId: "blobId" in content ? content.blobId : null,
     questions: "questions" in content ? content.questions : null,
-    ...(content.kind === "game" ? { vocabulary: content.vocabulary ?? false } : {}),
+    ...(content.kind === "game" ? { vocabulary: content.vocabulary ?? false, ...linkColumns(content.link ?? null) } : {}),
   };
   if (replace) {
     const [replaced] = await db
@@ -337,7 +351,7 @@ export async function findMaterial(db: Database, teacherId: string, id: string):
  * What an edit may change besides the tags: whether a game is also a
  * warm-up, and a questions warm-up's questions (#116).
  */
-export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: boolean; questions?: string[] };
+export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: boolean; link?: LessonLink | null; questions?: string[] };
 
 /**
  * Renames and retags a material of this teacher; false when there is none.
@@ -346,17 +360,17 @@ export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: bo
  * does not fit the material is not applied to it.
  */
 export async function updateMaterial(db: Database, teacherId: string, id: string, changes: MaterialChanges): Promise<boolean> {
-  const { warmup, vocabulary, questions, ...tags } = changes;
+  const { warmup, vocabulary, link, questions, ...tags } = changes;
   const own = and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId));
   return db.transaction(async (tx) => {
     // Her edit of a draft keeps the assistant from replacing it (#120).
     const edited = { teacherEditedAt: sql`CASE WHEN ${libraryMaterial.draft} THEN now() ELSE ${libraryMaterial.teacherEditedAt} END` };
     const rows = await tx.update(libraryMaterial).set({ ...tagColumns(tags), ...edited }).where(own).returning({ id: libraryMaterial.id });
     if (rows.length === 0) return false;
-    if (warmup !== undefined || vocabulary !== undefined) {
+    if (warmup !== undefined || vocabulary !== undefined || link !== undefined) {
       await tx
         .update(libraryMaterial)
-        .set({ ...(warmup !== undefined ? { warmup } : {}), ...(vocabulary !== undefined ? { vocabulary } : {}) })
+        .set({ ...(warmup !== undefined ? { warmup } : {}), ...(vocabulary !== undefined ? { vocabulary } : {}), ...(link !== undefined ? linkColumns(link) : {}) })
         .where(and(own, eq(libraryMaterial.kind, "game")));
     }
     if (questions !== undefined) {

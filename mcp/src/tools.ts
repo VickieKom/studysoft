@@ -73,6 +73,12 @@ export const gameDraftInput = {
       "true for a game template with no words of its own: the platform sends it a student's words in the game words format " +
         "(see get_homework_format)",
     ),
+  textbookId: z.string().uuid().optional().describe("The teacher's textbook the game is for (list_textbooks); with textbookLessonId"),
+  textbookLessonId: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("The lesson of that textbook's confirmed structure the game is for (read_textbook_structure); a lesson not in it is refused"),
 };
 
 export const warmupDraftInput = {
@@ -301,7 +307,7 @@ export function createTools(platform: Platform) {
         return failure(error);
       }
     },
-    async saveGameDraft(input: LibraryTags & { html: string; vocabulary?: boolean }): Promise<ToolResult> {
+    async saveGameDraft(input: LibraryTags & { html: string; vocabulary?: boolean; textbookId?: string; textbookLessonId?: string }): Promise<ToolResult> {
       try {
         return savedToLibrary((await platform.agent.saveGameDraft.mutate(input)).id);
       } catch (error) {

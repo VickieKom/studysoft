@@ -106,6 +106,7 @@ describe("teacher.library", () => {
       questions: null,
       warmup: false,
       vocabulary: false,
+      textbookLesson: null,
       // Uploaded by the teacher: in the library at once, not a draft (#120).
       draft: false,
     });
@@ -185,6 +186,7 @@ describe("teacher.library", () => {
       questions: null,
       warmup: false,
       vocabulary: false,
+      textbookLesson: null,
     });
     expect(await teacher.teacher.library.get({ id: questions.id })).toMatchObject({
       kind: "warmup",
@@ -288,6 +290,7 @@ describe("teacher.library", () => {
       questions: null,
       warmup: false,
       vocabulary: false,
+      textbookLesson: null,
       // The teacher's own material, not the assistant's draft (#120).
       draft: false,
     });

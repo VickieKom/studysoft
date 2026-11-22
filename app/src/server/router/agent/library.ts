@@ -3,7 +3,7 @@ import { z } from "zod";
 import { MAX_GAME_BYTES } from "../../../domain/library";
 import { saveDraft, storeGame, storePicture } from "../../library/library";
 import { agentProcedure, router } from "../core/trpc";
-import { checkQuestions, MAX_PICTURE_BASE64, questions, tags } from "../teacher/library";
+import { checkedLink, checkQuestions, linkInput, MAX_PICTURE_BASE64, questions, tags } from "../teacher/library";
 
 // The assistant's library tools (#120): it saves games and warm-ups as
 // drafts with the same checks as an upload. Drafts only: there is no agent
@@ -18,14 +18,16 @@ const saved = z.object({ id: z.uuid() }).strict();
 export const agentLibraryRouter = router({
   /** A game: one HTML file as text, at most 5 MB; `vocabulary` marks a game template that gets a student's words (#282). */
   saveGameDraft: agentProcedure
-    .input(tags.extend({ id: replace, html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false) }))
+    .input(tags.extend({ id: replace, html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false), ...linkInput }))
     .output(saved)
     .mutation(async ({ ctx, input }) => {
-      const { id, html, vocabulary, ...rest } = input;
+      const { id, html, vocabulary, textbookId, textbookLessonId, ...rest } = input;
+      // A textbook lesson (#291), checked like the teacher's: a lesson not in the confirmed structure is refused.
+      const link = (await checkedLink(ctx, textbookId, textbookLessonId)) ?? null;
       const blobId = await storeGame(ctx.db, ctx.teacherId, new TextEncoder().encode(html));
       if (blobId === "too_big") throw refuse("Файл больше 5 МБ");
       if (blobId === "not_html") throw refuse("Это не HTML-страница: нужна игра одним файлом .html");
-      return { id: await saveDraft(ctx.db, ctx.teacherId, rest, { kind: "game", blobId, vocabulary }, id?.toLowerCase()) };
+      return { id: await saveDraft(ctx.db, ctx.teacherId, rest, { kind: "game", blobId, vocabulary, link }, id?.toLowerCase()) };
     }),
 
   /** A warm-up: a picture (base64, PNG, JPEG or WebP, at most 2 MB) or a list of questions. */
