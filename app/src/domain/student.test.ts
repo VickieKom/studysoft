@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { measureField, measureLabel } from "./student";
+import { measureField, measureLabel, sameMeasure } from "./student";
 
 describe("the personal measure on the card (#266)", () => {
   it("shows first → last, one number alone, nothing without numbers", () => {
@@ -13,5 +13,14 @@ describe("the personal measure on the card (#266)", () => {
   it("labels the number when a lesson is marked", () => {
     expect(measureField("на английском", "мин")).toBe("на английском, мин");
     expect(measureField("книги", null)).toBe("книги");
+  });
+});
+
+describe("one measure (#279)", () => {
+  it("is the same name and unit; anything else is another measure", () => {
+    expect(sameMeasure({ measureName: "книги", measureUnit: "шт." }, { measureName: "книги", measureUnit: "шт." })).toBe(true);
+    expect(sameMeasure({ measureName: "книги", measureUnit: null }, { measureName: "книги", measureUnit: "шт." })).toBe(false);
+    expect(sameMeasure({ measureName: "книги", measureUnit: "шт." }, { measureName: null, measureUnit: null })).toBe(false);
+    expect(sameMeasure({ measureName: null, measureUnit: null }, { measureName: null, measureUnit: null })).toBe(true);
   });
 });

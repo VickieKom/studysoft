@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { measureField, measureLabel } from "@/domain/student";
+import { MEASURE_RESET_WARNING, measureField, measureLabel, sameMeasure } from "@/domain/student";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
@@ -37,9 +37,11 @@ export function FamilyGoal({ studentId, goal, values }: { studentId: string; goa
     }
   }
 
-  // Numbers of another measure are not this one's: after a change, the card counts again on the next load.
-  const sameMeasure = saved.measureName === goal.measureName && saved.measureUnit === goal.measureUnit;
-  const shown = saved.measureName && sameMeasure ? measureLabel(saved.measureName, saved.measureUnit, values) : null;
+  // Another measure starts from zero (#279): the server erased the numbers, the card shows none until the next load counts again.
+  const shown = saved.measureName && sameMeasure(saved, goal) ? measureLabel(saved.measureName, saved.measureUnit, values) : null;
+  // The measure as the form would save it, to warn before its numbers are erased.
+  const draftName = draft.measureName.trim() || null;
+  const changing = saved.measureName !== null && !sameMeasure(saved, { measureName: draftName, measureUnit: draftName ? draft.measureUnit.trim() || null : null });
 
   return (
     <section aria-label="Цель и показатель" className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
@@ -67,6 +69,11 @@ export function FamilyGoal({ studentId, goal, values }: { studentId: string; goa
             </label>
           </div>
           <p className="text-small text-text-secondary">Число по показателю вносится при отметке урока «Проведён»</p>
+          {changing && (
+            <p role="status" className="text-small text-danger">
+              {MEASURE_RESET_WARNING}
+            </p>
+          )}
           <div className="flex gap-2">
             <Button type="submit" disabled={busy}>
               Сохранить

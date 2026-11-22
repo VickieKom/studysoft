@@ -106,6 +106,14 @@ export function measureLabel(name: string, unit: string | null, values: readonly
   return `${name}: ${shown}${unit ? ` ${unit}` : ""}`;
 }
 
+/** Whether two settings are one measure (#279): the same name and unit; anything else starts from zero. */
+export function sameMeasure(a: { measureName: string | null; measureUnit: string | null }, b: { measureName: string | null; measureUnit: string | null }): boolean {
+  return (a.measureName ?? null) === (b.measureName ?? null) && (a.measureUnit ?? null) === (b.measureUnit ?? null);
+}
+
+/** What the form says when the measure is about to change (#279). */
+export const MEASURE_RESET_WARNING = "Числа прежнего показателя сотрутся";
+
 /** The label of the number when a lesson is marked: «на английском, мин». */
 export function measureField(name: string, unit: string | null): string {
   return unit ? `${name}, ${unit}` : name;
