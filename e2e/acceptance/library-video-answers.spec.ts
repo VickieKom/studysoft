@@ -3,7 +3,9 @@
 // on a video opens it together with its confirmed tasks (#326), during a
 // lesson and an hour after. Under the video the student answers: one
 // attempt, «Готово», then praise only — no score, no right answers — as in
-// homework (#227; product owner, 2026-11-23). The teacher keeps the score.
+// homework (#227; product owner, 2026-11-23). The score is shown nowhere in
+// this slice, to the teacher neither: she sees the mistakes on the card, and
+// reviews the answers on the stage with #328.
 // The answers are checked on the server; the mistakes join «Ошибки по темам»
 // on the card, marked «Видео: <title>». A video without confirmed tasks shows
 // the video only. That no key reaches the student before «Готово», and that
