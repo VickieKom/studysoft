@@ -36,6 +36,7 @@ import { goalRouter } from "./teacher/goal";
 import { homeRouter } from "./teacher/home";
 import { prepRouter } from "./teacher/prep";
 import { reportsRouter } from "./teacher/reports";
+import { assessmentsRouter } from "./teacher/assessments";
 import { progressRouter } from "./teacher/progress";
 import { lessonModeRouter } from "./teacher/lesson-mode";
 
@@ -57,6 +58,7 @@ export const appRouter = router({
     progress: progressRouter,
     goal: goalRouter,
     reports: reportsRouter,
+    assessments: assessmentsRouter,
     links: linksTeacherRouter,
     homework: homeworkRouter,
     review: reviewRouter,
@@ -100,6 +102,8 @@ export { handleLibraryFileRequest, handleLibraryVideoUpload } from "../library/f
 export { handleTextbookFileRequest, handleTextbookUpload } from "../library/textbook-files";
 /** Pictures and recordings of the task bank's tasks, served to their teacher only (#224). */
 export { handleBankFileRequest } from "../library/task-bank";
+/** The recording for «Аудирование» and the picture for «Говорение» of an assessment, the teacher's (#252). */
+export { handleAssessmentFileRemove, handleAssessmentFileRequest, handleAssessmentFileUpload } from "../assessment/files";
 
 /** The recordings «было» and «стало» of a parent's report (#269): the teacher's, and the parent's once published. */
 export { handleReportRecordingRemove, handleReportRecordingRequest, handleReportRecordingUpload } from "../crm/report-recordings";
