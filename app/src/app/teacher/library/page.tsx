@@ -6,7 +6,7 @@ import { teacherCaller } from "../caller";
 
 export const metadata = { title: "Библиотека — StudySoft" };
 
-type Props = { searchParams: Promise<{ type?: string; level?: string; topic?: string; age?: string; book?: string; lesson?: string }> };
+type Props = { searchParams: Promise<{ type?: string; level?: string; topic?: string; age?: string; book?: string; lesson?: string; student?: string }> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuidOf = (value: string | undefined) => (value && UUID.test(value) ? value : undefined);
@@ -31,11 +31,14 @@ export default async function LibraryPage({ searchParams }: Props) {
     // «Учебник» and «Урок» (#291).
     textbookId: uuidOf(params.book),
     lessonId: uuidOf(params.book) ? uuidOf(params.lesson) : undefined,
+    // «Ученик» (#292).
+    studentId: uuidOf(params.student),
   };
   const { caller } = await teacherCaller();
   const { materials, topics, total } = await caller.teacher.library.list(filter);
   const drafts = await caller.teacher.library.drafts();
   const textbooks = await caller.teacher.library.textbooks();
+  const students = (await caller.teacher.students.list()).map((s) => ({ id: s.id, name: s.lastName ? `${s.firstName} ${s.lastName}` : s.firstName }));
   const tabs: { label: string; href: string; current: boolean }[] = [
     { label: "Все", href: "/teacher/library", current: !filter.kind },
     ...MATERIAL_KINDS.map((kind) => ({
@@ -98,9 +101,10 @@ export default async function LibraryPage({ searchParams }: Props) {
             ))}
           </nav>
           <LibraryFilters
-            filter={{ type: filter.kind, level: filter.level, topic: filter.topic, age: filter.ageGroup, book: filter.textbookId, lesson: filter.lessonId }}
+            filter={{ type: filter.kind, level: filter.level, topic: filter.topic, age: filter.ageGroup, book: filter.textbookId, lesson: filter.lessonId, student: filter.studentId }}
             topics={topics}
             textbooks={textbooks}
+            students={students}
           />
           {materials.length === 0 ? (
             <p className="text-text-secondary">Ничего не нашлось</p>
