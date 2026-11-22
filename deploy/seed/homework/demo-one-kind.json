@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "title": "Demo: one kind of task",
+  "tasks": [
+    {
+      "type": "single_choice",
+      "prompt": "Pick the colour of grass.",
+      "options": ["green", "purple"],
+      "answer": 0
+    },
+    {
+      "type": "single_choice",
+      "prompt": "Pick the number after two.",
+      "options": ["five", "three"],
+      "answer": 1
+    }
+  ]
+}
