@@ -76,7 +76,12 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   }
 
   const openFailed = "Не получилось открыть отчёт. Проверьте интернет и попробуйте ещё раз";
-  const open = () => run(openFailed, async () => show(await routerClient.teacher.reports.open.mutate({ studentId })));
+  // «Новый отчёт»: the draft joins the list at once, so «Открыть» can come back to it.
+  const open = () =>
+    run(openFailed, async () => {
+      show(await routerClient.teacher.reports.open.mutate({ studentId }));
+      await refresh();
+    });
   const openReport = (reportId: string) => run(openFailed, async () => show(await routerClient.teacher.reports.get.query({ reportId })));
 
   function change(next: Block[]) {
