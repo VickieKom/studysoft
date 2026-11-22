@@ -18,6 +18,18 @@ type Assessment = {
   picture: string | null;
   /** The version the page shows, sent back by «Убрать» and «Утвердить» (#313). */
   revision: string;
+  /** Taken in a lesson (#253). */
+  taking: "not_opened" | "open" | "closed" | "submitted" | "finished";
+  speakingRecording: string | null;
+};
+
+/** How far the child is, as the teacher reads it on the card (#253). */
+const TAKING_LABELS: Record<Assessment["taking"], string | null> = {
+  not_opened: null,
+  open: "Открыт ученику",
+  closed: "Закрыт до следующего урока",
+  submitted: "Сдан",
+  finished: "Завершён",
 };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
@@ -34,7 +46,9 @@ function message(cause: unknown): string {
  * JSON, shown by section as the child will see it, without keys. On a draft
  * the teacher removes questions, uploads the recording for «Аудирование» and
  * the picture for «Говорение», and approves it; an approved one does not
- * change.
+ * change. While a lesson with the student is going on she opens it to them
+ * (#253) and may end it with «Завершить замер»; the speaking recording made
+ * on the lesson panel plays here.
  */
 export function StudentAssessments({ studentId, assessments }: { studentId: string; assessments: Assessment[] }) {
   const router = useRouter();
@@ -116,6 +130,8 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const draft = assessment.status === "draft";
+  const takeable = assessment.status === "approved" && assessment.taking !== "submitted" && assessment.taking !== "finished";
+  const taking = TAKING_LABELS[assessment.taking];
 
   async function run(change: () => Promise<unknown>) {
     setBusy(true);
@@ -150,6 +166,7 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
         <span className="flex items-center gap-2">
           {assessment.fromAssistant && <span className="text-small text-text-secondary">от ассистента</span>}
           <span className="rounded-full bg-green-50 px-2 py-0.5 text-caption text-green-700">{ASSESSMENT_STATUS_LABELS[assessment.status]}</span>
+          {taking && <span className="rounded-full bg-accent-50 px-2 py-0.5 text-caption text-accent-900">{taking}</span>}
         </span>
       </div>
       {assessment.sections.map((section) => (
@@ -178,6 +195,9 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
               {/* eslint-disable-next-line @next/next/no-img-element -- a stored file behind a permission check, not an optimisable asset */}
               {assessment.picture && <img src={assessment.picture} alt="Картинка для говорения" className="max-h-64 self-start rounded-control" />}
             </MediaControl>
+          )}
+          {section.skill === "speaking" && assessment.speakingRecording && (
+            <audio controls preload="none" src={assessment.speakingRecording} aria-label="Запись говорения" />
           )}
           <SectionBody section={section} />
           {section.questions.length > 0 && (
@@ -211,6 +231,22 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
           <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.approve.mutate({ assessmentId: assessment.id, revision: assessment.revision }))}>
             Утвердить
           </Button>
+        </div>
+      )}
+      {takeable && (
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.open.mutate({ assessmentId: assessment.id }))}>
+            Открыть ученику
+          </Button>
+          {assessment.taking !== "not_opened" && (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void run(() => routerClient.teacher.assessments.finish.mutate({ assessmentId: assessment.id }))}
+            >
+              Завершить замер
+            </Button>
+          )}
         </div>
       )}
     </div>

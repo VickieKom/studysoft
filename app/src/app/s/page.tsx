@@ -18,9 +18,9 @@ export default async function StudentPage() {
     throw error;
   }
   const homework = await caller.student.homework.current();
-  // The games and videos the teacher opened in a lesson (#118, #158) are in «Материалы урока» (#241); the menu marks them.
-  const [games, videos] = await Promise.all([caller.student.games.list(), caller.student.videos.list()]);
-  const nav = <StudentNav current="homework" lessonOpen={games.length + videos.length > 0} />;
+  // The games, videos (#118, #158) and the assessment (#253) the teacher opened in a lesson are in «Материалы урока» (#241); the menu marks them.
+  const [games, videos, assessments] = await Promise.all([caller.student.games.list(), caller.student.videos.list(), caller.student.assessments.list()]);
+  const nav = <StudentNav current="homework" lessonOpen={games.length + videos.length + assessments.length > 0} />;
 
   if (homework?.result) {
     return (

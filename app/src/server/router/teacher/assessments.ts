@@ -3,6 +3,7 @@ import { z } from "zod";
 import { assessmentFileUrl } from "../../../domain/assessment";
 import { ASSESSMENT_SECTIONS, assessmentSectionViewSchema, assessmentView, parseAssessment } from "../../../domain/assessment-format";
 import { approveAssessment, type AssessmentRow, importAssessment, listAssessments, MAX_ASSESSMENT_LENGTH, removeQuestion } from "../../assessment/assessments";
+import { finishAssessment, lessonStudent, openAssessmentToStudent, TAKING_STATUSES, takingStatus } from "../../assessment/taking";
 import { findStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -26,6 +27,10 @@ const assessmentViewSchema = z
     recording: z.string().nullable(),
     picture: z.string().nullable(),
     revision,
+    // Taken in a lesson (#253): how far the child is, and the speaking recording from the panel.
+    taking: z.enum(TAKING_STATUSES),
+    openUntil: z.iso.datetime().nullable(),
+    speakingRecording: z.string().nullable(),
   })
   .strict();
 
@@ -38,6 +43,9 @@ const view = (row: AssessmentRow) => ({
   recording: row.listeningRecording ? assessmentFileUrl(row.id, "listening") : null,
   picture: row.speakingPicture ? assessmentFileUrl(row.id, "picture") : null,
   revision: row.revision,
+  taking: takingStatus(row),
+  openUntil: row.openUntil?.toISOString() ?? null,
+  speakingRecording: row.speakingRecording ? assessmentFileUrl(row.id, "speaking") : null,
 });
 
 const ok = z.object({ ok: z.literal(true) }).strict();
@@ -88,5 +96,41 @@ export const assessmentsRouter = router({
       if (result === "changed") throw changed();
       if (result === "no_recording") throw new TRPCError({ code: "BAD_REQUEST", message: "Нет записи для аудирования. Загрузите её и утвердите снова" });
       return { ok: true as const };
+    }),
+
+  /** «Открыть ученику» (#253): while a lesson with the student is going on, until its end. */
+  open: teacherProcedure
+    .input(z.object({ assessmentId: z.uuid() }))
+    .output(z.object({ until: z.iso.datetime() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const result = await openAssessmentToStudent(ctx.db, ctx.teacherId, input.assessmentId);
+      if (result === "not_found") throw notFound();
+      if (result === "not_approved") throw new TRPCError({ code: "BAD_REQUEST", message: "Сначала утвердите замер" });
+      if (result === "ended") throw new TRPCError({ code: "BAD_REQUEST", message: "Замер уже сдан" });
+      if (result === "no_lesson") throw new TRPCError({ code: "BAD_REQUEST", message: "Открыть можно, пока идёт урок с учеником" });
+      return { until: result.until.toISOString() };
+    }),
+
+  /** «Завершить замер» (#253): unanswered questions count as wrong, a section not started is not scored. */
+  finish: teacherProcedure
+    .input(z.object({ assessmentId: z.uuid() }))
+    .output(ok)
+    .mutation(async ({ ctx, input }) => {
+      const result = await finishAssessment(ctx.db, ctx.teacherId, input.assessmentId);
+      if (result === "not_found") throw notFound();
+      if (result === "ended") throw new TRPCError({ code: "BAD_REQUEST", message: "Замер уже сдан" });
+      return { ok: true as const };
+    }),
+
+  /** «Замер» on the lesson panel (#253): the lesson's student's approved assessments still to be taken. */
+  forLesson: teacherProcedure
+    .input(z.object({ lessonId: z.uuid() }))
+    .output(z.array(assessmentViewSchema))
+    .query(async ({ ctx, input }) => {
+      const studentId = await lessonStudent(ctx.db, ctx.teacherId, input.lessonId);
+      if (!studentId) throw notFound();
+      return (await listAssessments(ctx.db, ctx.teacherId, studentId))
+        .filter((row) => row.status === "approved" && !row.submittedAt && !row.finishedAt)
+        .map(view);
     }),
 });

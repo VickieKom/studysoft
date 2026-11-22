@@ -266,9 +266,10 @@ describe("an assessment's files", () => {
 });
 
 describe("students and parents", () => {
-  it("have no procedure that returns an assessment, and theirs carry none of its keys", async () => {
+  it("have no procedure that returns an assessment not opened to the child, and theirs carry none of its keys", async () => {
+    // The child's own procedures arrive with #253 (taking.int.test.ts); the parent has none.
     const procedures = Object.keys(appRouter._def.procedures).filter((p) => /^(student|parent)\./.test(p));
-    expect(procedures.filter((p) => /assess/i.test(p))).toEqual([]);
+    expect(procedures.filter((p) => /assess/i.test(p) && !p.startsWith("student.assessments."))).toEqual([]);
 
     const { studentId, id } = await imported("Замер и ссылки");
     await put(id, "listening", teacherHeaders, silence(800));
@@ -281,6 +282,7 @@ describe("students and parents", () => {
       await student.student.games.list(),
       await student.student.videos.list(),
       await student.student.vocabulary.words(),
+      await student.student.assessments.list(),
       await parent.parent.me(),
       await parent.parent.progress(),
     ]);
