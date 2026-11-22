@@ -4,7 +4,8 @@
 // самым интересным?» with the kinds of this homework's tasks and «Все
 // классные», always with «Пропустить», then «Спасибо!». The answer counts
 // for nothing. «Фидбэк» on the student card lists the answers with the
-// homework and the date. The question is asked after the first «Сдать»
+// homework and the date. The kinds are named in the child's words, not the
+// editor's, and «Фидбэк» shows the same words. The question is asked after the first «Сдать»
 // only, not after a homework reopened for the student; a homework whose
 // tasks are all of one kind asks nothing, and the draft says so by the box
 // (product owner, 2026-11-23). That no student or parent procedure returns
@@ -96,8 +97,8 @@ test("with the box ticked the child picks the most interesting kind of task afte
   const question = student.getByRole("region", { name: QUESTION });
   await expect(question).toBeVisible();
   // The kinds of this homework's tasks, «Все классные» and «Пропустить»: nothing else.
-  await expect(question.getByRole("button")).toHaveText(["Выбор одного ответа", "Письменный ответ", "Все классные", "Пропустить"]);
-  await question.getByRole("button", { name: "Письменный ответ", exact: true }).click();
+  await expect(question.getByRole("button")).toHaveText(["Выбрать ответ", "Написать", "Все классные", "Пропустить"]);
+  await question.getByRole("button", { name: "Написать", exact: true }).click();
   await expect(student.getByText("Спасибо!")).toBeVisible();
   await expect(student.getByRole("region", { name: QUESTION })).toHaveCount(0);
   // The answer changes nothing of the praise.
@@ -108,7 +109,7 @@ test("with the box ticked the child picks the most interesting kind of task afte
   const answers = (await feedback(page, "Любознательный")).getByRole("listitem");
   await expect(answers).toHaveCount(1);
   await expect(answers.first()).toContainText(short.title);
-  await expect(answers.first()).toContainText("Письменный ответ");
+  await expect(answers.first()).toContainText("Написать");
   await expect(answers.first()).toContainText(/\d{1,2} [а-я]+/);
 
   // Reopened for the student, the next «Сдать» asks nothing.
