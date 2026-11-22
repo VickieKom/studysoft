@@ -4,7 +4,7 @@ import { LibraryAddDraft } from "@/components/library-add-draft";
 import { LibraryDelete } from "@/components/library-delete";
 import { LibraryGameFrame } from "@/components/library-game-frame";
 import { LibraryOpenToStudent } from "@/components/library-open-to-student";
-import { AGE_GROUP_LABELS, MATERIAL_KIND_FILTERS } from "@/domain/library";
+import { AGE_GROUP_LABELS, likedLabel, MATERIAL_KIND_FILTERS } from "@/domain/library";
 import { timeIn } from "@/domain/schedule";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
@@ -69,6 +69,7 @@ export default async function MaterialPage({ params }: Props) {
               <span key={topic}>{topic}</span>
             ))}
             <span>{AGE_GROUP_LABELS[material.ageGroup]}</span>
+            {likedLabel(material.likedBy) && <span className="font-semibold text-green-700">{likedLabel(material.likedBy)}</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">

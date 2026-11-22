@@ -58,3 +58,11 @@ export const topicsText = (topics: string[]) => topics.join(", ");
  */
 // shortcut: games may load scripts from the network (AI-made games often use a CDN); whether to forbid it is decided with the maintainer (#125)
 export const GAME_SANDBOX = "allow-scripts allow-forms allow-modals allow-pointer-lock";
+
+/** «нравится 1 ребёнку», «нравится 2 детям» (#334); nothing for none. */
+export function likedLabel(children: number): string | null {
+  if (children <= 0) return null;
+  const mod10 = children % 10;
+  const mod100 = children % 100;
+  return `нравится ${children} ${mod10 === 1 && mod100 !== 11 ? "ребёнку" : "детям"}`;
+}
