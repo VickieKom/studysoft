@@ -7,6 +7,7 @@ import { env } from "../env";
 import { appRouter, createServerCaller, handleAssessmentFileRequest, handleAssessmentFileUpload, handleRouterRequest } from "../router/index";
 import { webmRecording } from "../testing/media";
 import { seedTeachers, signedInHeaders } from "../testing/requests";
+import { findAssessment } from "./assessments";
 import { finishAssessment, openAssessmentToStudent, saveAnswer, studentAssessment, studentAssessments, submitAssessment } from "./taking";
 
 // The monthly assessment taken in a lesson (#253): opened only while a
@@ -100,7 +101,7 @@ async function approved(firstName: string, options: { word?: boolean } = {}) {
   }
   const { id } = await teacher.teacher.assessments.import({ studentId, json: JSON.stringify(document(wordId)) });
   expect((await put(id, "listening", teacherHeaders, silence(800))).status).toBe(200);
-  await teacher.teacher.assessments.approve({ assessmentId: id });
+  await teacher.teacher.assessments.approve({ assessmentId: id, revision: (await findAssessment(db(), teacherId, id))!.revision });
   await lessonAt(studentId, new Date(Date.now() - 5 * MINUTE));
   return { studentId, id, wordId };
 }
@@ -121,7 +122,7 @@ describe("opening an assessment in a lesson", () => {
     const { id: studentId } = await teacher.teacher.students.create({ firstName: "Без урока", lastName: "", level: "A2", timeZone: "Europe/Moscow" });
     const { id: draft } = await teacher.teacher.assessments.import({ studentId, json: JSON.stringify({ ...document(), sections: document().sections.slice(1) }) });
     expect(await openAssessmentToStudent(db(), teacherId, draft)).toBe("not_approved");
-    await teacher.teacher.assessments.approve({ assessmentId: draft });
+    await teacher.teacher.assessments.approve({ assessmentId: draft, revision: (await findAssessment(db(), teacherId, draft))!.revision });
     expect(await openAssessmentToStudent(db(), teacherId, draft)).toBe("no_lesson");
     // A cancelled or a missed lesson is not going on; a lesson tomorrow is not either.
     await lessonAt(studentId, new Date(Date.now() - 5 * MINUTE), 60, "cancelled");

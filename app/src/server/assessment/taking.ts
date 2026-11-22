@@ -7,13 +7,12 @@
 // the auto-checked sections; a wrong «Лексика» answer brings its word back
 // into the word training. The child never gets a key, a score or the
 // speaking recording: what they read is `childView`.
-import { and, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { MAX_LISTENING_PLAYS, type AssessmentAnswers, validAnswer, withAnswer } from "../../domain/assessment-answers";
 import type { AssessmentDocument, AssessmentSkill } from "../../domain/assessment-format";
-import { todayIn } from "../../domain/homework";
-import { addDays } from "../../domain/word-training";
 import type { Database } from "../db/client";
-import { assessment, lesson, student, vocabularyWord } from "../db/schema";
+import { assessment, lesson } from "../db/schema";
+import { missedOutsideTraining } from "../crm/word-training";
 import { LIVE_LESSON } from "../library/student-games";
 import { autoScores, missedWords } from "./scoring";
 
@@ -199,39 +198,14 @@ export async function listeningOpenToChild(db: Database, teacherId: string, stud
   return row?.blob ?? null;
 }
 
-/**
- * The words the child missed in «Лексика» come back into the training, as a
- * mistake in homework does: one mistake more towards «часто ошибается»,
- * from the first interval again, due tomorrow in the student's time zone —
- * unless due by then already, or new.
- */
-// shortcut: the same write as homework's `missedInHomework` (#284), which is not on main yet; use it once #284 lands (#253)
-async function missedInAssessment(tx: Tx, teacherId: string, studentId: string, ids: string[], now: Date) {
-  if (ids.length === 0) return;
-  const [row] = await tx
-    .select({ timeZone: student.timeZone })
-    .from(student)
-    .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId)));
-  if (!row) return;
-  const tomorrow = addDays(todayIn(row.timeZone, now), 1);
-  await tx
-    .update(vocabularyWord)
-    .set({
-      wrongCount: sql`${vocabularyWord.wrongCount} + 1`,
-      trainStep: 0,
-      dueOn: sql`CASE WHEN ${vocabularyWord.dueOn} IS NULL OR ${vocabularyWord.dueOn} <= ${tomorrow} THEN ${vocabularyWord.dueOn} ELSE ${tomorrow}::date END`,
-      updatedAt: now,
-    })
-    .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId), inArray(vocabularyWord.id, ids)));
-}
-
 /** «Сдать»: the child hands it in. The answers are fixed and scored; nothing of it goes back to the child. */
 export async function submitAssessment(db: Database, teacherId: string, studentId: string, id: string, now: Date = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {
     const open = await lockedOpen(tx, teacherId, studentId, id, now);
     if (!open) return false;
     await tx.update(assessment).set({ submittedAt: now, scores: autoScores(open.document, open.answers), updatedAt: now }).where(eq(assessment.id, id));
-    await missedInAssessment(tx, teacherId, studentId, missedWords(open.document, open.answers), now);
+    // The words missed in «Лексика» come back into the training, as a mistake in homework does (#284).
+    await missedOutsideTraining(tx, teacherId, studentId, missedWords(open.document, open.answers), now);
     return true;
   });
 }
@@ -263,7 +237,7 @@ export async function finishAssessment(db: Database, teacherId: string, id: stri
       .update(assessment)
       .set({ finishedAt: now, openUntil: null, scores: autoScores(document, answers), updatedAt: now })
       .where(eq(assessment.id, id));
-    await missedInAssessment(tx, teacherId, row.studentId, missedWords(document, answers), now);
+    await missedOutsideTraining(tx, teacherId, row.studentId, missedWords(document, answers), now);
     return "ok";
   });
 }
