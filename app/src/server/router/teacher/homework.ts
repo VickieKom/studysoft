@@ -3,6 +3,8 @@ import { z } from "zod";
 import { HOMEWORK_FORMAT_VERSION, parseHomework, taskSchema, validateHomework } from "../../../domain/homework-format";
 import { taskFileRefs, storeTaskFiles } from "../../homework/images";
 import { findStudent } from "../../crm/students";
+import { studentWordIds, wordsToPick } from "../../crm/vocabulary-homework";
+import { taskWordIds, withKnownWords } from "../../../domain/vocabulary-homework";
 import {
   findHomework,
   HOMEWORK_STATUSES,
@@ -93,12 +95,25 @@ export const homeworkRouter = router({
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
       // New pictures come as data URLs; a stored one may stay only if this draft already has it.
       const keep = taskFileRefs({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: draft.tasks });
-      const stored = await storeTaskFiles(ctx.db, ctx.teacherId, checked.homework, keep);
+      // A task keeps only words of this student's vocabulary (#281).
+      const known = await studentWordIds(ctx.db, ctx.teacherId, draft.studentId, taskWordIds(checked.homework.tasks));
+      const homework = { ...checked.homework, tasks: withKnownWords(checked.homework.tasks, known) };
+      const stored = await storeTaskFiles(ctx.db, ctx.teacherId, homework, keep);
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
       const saved = await updateDraftTasks(ctx.db, ctx.teacherId, input.id, input.revision, stored.homework);
       if (saved === "not_found") throw notFound();
       if (saved === "changed") throw changed();
       return { tasks: stored.homework.tasks, revision: saved.revision };
+    }),
+
+  /** «Из словаря» (#281): the draft's student's words with a confirmed translation, the ones to start with ticked. */
+  vocabulary: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.array(z.object({ id: z.uuid(), word: z.string(), translation: z.string(), ticked: z.boolean() }).strict()))
+    .query(async ({ ctx, input }) => {
+      const draft = await findHomework(ctx.db, ctx.teacherId, input.id);
+      if (!draft || draft.status !== "draft") throw notFound();
+      return wordsToPick(ctx.db, ctx.teacherId, draft.studentId);
     }),
 
   /** Publishes the version of the draft the teacher's page has seen, and no other (#99). */
