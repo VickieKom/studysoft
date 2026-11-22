@@ -31,7 +31,8 @@ const field = "rounded-control border border-border bg-bg px-3 py-2";
  * report as text for a messenger with the parent's link; «Показать оплаты»
  * adds the balance line to that text only. «Опубликовать» puts it on the
  * parent's page; a published report opens with «Открыть», is edited there
- * and taken down with «Снять с публикации» (#268).
+ * and taken down with «Снять с публикации» (#268). «Открыть» on another
+ * report while this one has unsaved edits asks first (#280).
  */
 export function StudentReports({ studentId, reports }: { studentId: string; reports: Listed[] }) {
   const [list, setList] = useState(reports);
@@ -42,6 +43,9 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextKey, setNextKey] = useState(0);
+  // Edits not saved yet (#280): «Открыть» on another report asks before dropping them.
+  const [dirty, setDirty] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
 
   /** Runs a request with the buttons off; a failure shows `failed`, or the server's own message for a refusal. */
   async function run(failed: string, action: () => Promise<void>) {
@@ -63,6 +67,8 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
     setNextKey(opened.blocks.length);
     setShowPayments(opened.showPayments);
     setState("idle");
+    setDirty(false);
+    setAsking(null);
   }
 
   async function refresh() {
@@ -70,13 +76,22 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   }
 
   const openFailed = "Не получилось открыть отчёт. Проверьте интернет и попробуйте ещё раз";
-  const open = () => run(openFailed, async () => show(await routerClient.teacher.reports.open.mutate({ studentId })));
+  // «Новый отчёт»: the draft joins the list at once, so «Открыть» can come back to it.
+  const open = () =>
+    run(openFailed, async () => {
+      show(await routerClient.teacher.reports.open.mutate({ studentId }));
+      await refresh();
+    });
   const openReport = (reportId: string) => run(openFailed, async () => show(await routerClient.teacher.reports.get.query({ reportId })));
 
   function change(next: Block[]) {
     setBlocks(next);
     setState("idle");
+    setDirty(true);
   }
+
+  /** «Открыть»: at once with nothing unsaved; otherwise the teacher is asked first. */
+  const openOther = (reportId: string) => (dirty ? setAsking(reportId) : void openReport(reportId));
 
   const kept = () => blocks.filter((b) => b.title.trim() !== "").map(({ title, text }) => ({ title: title.trim(), text }));
   /** A section of her own with text but no title would be dropped, its text with it. */
@@ -93,6 +108,7 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
       }
       await routerClient.teacher.reports.save.mutate({ reportId: draft.id, blocks: kept(), showPayments });
       setState("saved");
+      setDirty(false);
     });
 
   /** «Опубликовать»: saves what is on screen, then publishes. */
@@ -106,6 +122,7 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
       await routerClient.teacher.reports.save.mutate({ reportId: draft.id, blocks: kept(), showPayments });
       await routerClient.teacher.reports.publish.mutate({ reportId: draft.id });
       setDraft(null);
+      setDirty(false);
       await refresh();
     });
 
@@ -114,6 +131,7 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
       if (!draft) return;
       await routerClient.teacher.reports.unpublish.mutate({ reportId: draft.id });
       setDraft(null);
+      setDirty(false);
       await refresh();
     });
 
@@ -144,13 +162,27 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
                 <span className="font-semibold">{STATUS_LABELS[r.status]}</span> · {periodLabel(r.periodFrom, r.periodTo)}
               </span>
               {draft?.id !== r.id && (
-                <button type="button" disabled={busy} onClick={() => void openReport(r.id)} className="text-green-600 hover:text-green-700">
+                <button type="button" disabled={busy} onClick={() => openOther(r.id)} className="text-green-600 hover:text-green-700">
                   Открыть
                 </button>
               )}
             </li>
           ))}
         </ul>
+      )}
+      {asking && (
+        <div role="alertdialog" aria-label="Изменения не сохранены" className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3">
+          <p className="font-semibold">Изменения не сохранены</p>
+          <p className="text-small text-text-secondary">Если открыть другой отчёт, правки в этом пропадут</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setAsking(null)}>
+              Остаться
+            </Button>
+            <Button variant="secondary" onClick={() => void openReport(asking)}>
+              Открыть без сохранения
+            </Button>
+          </div>
+        </div>
       )}
       {!draft && (
         <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void open()}>
@@ -199,6 +231,7 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
                   onChange={(e) => {
                     setShowPayments(e.target.checked);
                     setState("idle");
+                    setDirty(true);
                   }}
                 />
                 Показать оплаты
