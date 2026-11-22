@@ -211,7 +211,8 @@ export const BLOB_GRACE_HOURS = 24;
 /**
  * Removes the files nothing refers to (#73): no homework document and no
  * task of the task bank (#224) of any teacher names it as "blob:<id>" (a picture), no answer as its file (a
- * recording or a photo), no library material as its file (a game or a warm-up picture, #115, #116), no textbook as a book, a track or a page (#156), and
+ * recording or a photo), no library material as its file (a game or a warm-up picture, #115, #116), no textbook as a book, a track or a page (#156),
+ * no parent's report as a recording «было» or «стало» (#269), and
  * it is older than the grace period. A file can
  * belong to more than one homework — a new assistant draft keeps the old
  * one's pictures — so every reference counts. The rows go in one statement,
@@ -258,6 +259,11 @@ export async function removeUnreferencedBlobs(
       AND NOT EXISTS (
         SELECT 1 FROM textbook_page AS p
         WHERE p.blob_id = b.id
+      )
+      -- A report's recordings (#269).
+      AND NOT EXISTS (
+        SELECT 1 FROM report AS r
+        WHERE r.recording_before = b.id OR r.recording_after = b.id
       )
     RETURNING b.id, b.size
   `);

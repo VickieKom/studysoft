@@ -101,6 +101,9 @@ export { handleTextbookFileRequest, handleTextbookUpload } from "../library/text
 /** Pictures and recordings of the task bank's tasks, served to their teacher only (#224). */
 export { handleBankFileRequest } from "../library/task-bank";
 
+/** The recordings «было» and «стало» of a parent's report (#269): the teacher's, and the parent's once published. */
+export { handleReportRecordingRemove, handleReportRecordingRequest, handleReportRecordingUpload } from "../crm/report-recordings";
+
 /** True when a procedure refused because there is no valid session. */
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof TRPCError && error.code === "UNAUTHORIZED";

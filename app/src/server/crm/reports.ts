@@ -8,7 +8,15 @@
 // which turns it back into a draft. The teacher's only until published.
 import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { balanceLabel, computeBalance } from "../../domain/payments";
-import { DEFAULT_BLOCKS, filledBlocks, FIRST_PERIOD_DAYS, type ReportBlock, type ReportNumbers, skillsInPeriod } from "../../domain/report";
+import {
+  DEFAULT_BLOCKS,
+  filledBlocks,
+  FIRST_PERIOD_DAYS,
+  type ReportBlock,
+  type ReportNumbers,
+  reportRecordingUrl,
+  skillsInPeriod,
+} from "../../domain/report";
 import { addDays, dateIn, zonedMoment } from "../../domain/schedule";
 import { measureLabel } from "../../domain/student";
 import { MASTERED_STEP } from "../../domain/word-training";
@@ -29,6 +37,8 @@ export type ReportRow = {
   showPayments: boolean;
   publishedAt: Date | null;
   numbers: ReportNumbers | null;
+  recordingBefore: string | null;
+  recordingAfter: string | null;
 };
 
 const columns = {
@@ -40,6 +50,8 @@ const columns = {
   showPayments: report.showPayments,
   publishedAt: report.publishedAt,
   numbers: report.numbers,
+  recordingBefore: report.recordingBefore,
+  recordingAfter: report.recordingAfter,
 };
 
 const toRow = (r: Omit<ReportRow, "blocks" | "numbers"> & { blocks: unknown; numbers: unknown }): ReportRow => ({
@@ -153,6 +165,14 @@ export async function unpublishReport(db: Database, teacherId: string, reportId:
   }
 }
 
+/** The addresses of a report's recordings «было» and «стало» (#269), none for one not uploaded. */
+export function recordingUrls(r: Pick<ReportRow, "id" | "recordingBefore" | "recordingAfter">) {
+  return {
+    before: r.recordingBefore ? reportRecordingUrl(r.id, "before") : null,
+    after: r.recordingAfter ? reportRecordingUrl(r.id, "after") : null,
+  };
+}
+
 /** The published reports of the student for the parent's page, newest first: the frozen numbers and the filled blocks, nothing else. */
 export async function publishedReports(db: Database, teacherId: string, studentId: string) {
   const rows = await db
@@ -166,6 +186,7 @@ export async function publishedReports(db: Database, teacherId: string, studentI
     periodTo: r.periodTo,
     numbers: r.numbers!,
     blocks: filledBlocks(r.blocks),
+    recordings: recordingUrls(r),
   }));
 }
 
