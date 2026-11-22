@@ -295,6 +295,13 @@
       "when": 1795341926846,
       "tag": "0041_material_topics",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795341963367,
+      "tag": "0042_game_lesson",
+      "breakpoints": true
     }
   ]
 }
