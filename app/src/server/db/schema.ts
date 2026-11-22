@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, bigint, boolean, date, doublePrecision, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, bigint, boolean, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -1047,4 +1047,35 @@ export const assessment = pgTable(
     }),
     index("assessment_student_id_idx").on(t.studentId),
   ],
+);
+
+/**
+ * A request of a family that may become a student (#337), in «Привлечение
+ * клиентов»: the child's first name, age and school year, the parent's
+ * contact, the source and the date, and the stage the teacher moved it to;
+ * «Отказ» keeps its reason and comment. «Удалить заявку» erases everything
+ * personal and keeps the row as an anonymous count of its stage, source and
+ * reason for the metrics (#341): `deleted_at` set, the personal fields null.
+ */
+export const clientRequest = pgTable(
+  "client_request",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    firstName: text("first_name"),
+    age: integer("age"),
+    schoolYear: text("school_year"),
+    contact: text("contact"),
+    source: text("source").notNull(),
+    requestedOn: date("requested_on").notNull(),
+    stage: text("stage").notNull().default("request"),
+    declineReason: text("decline_reason"),
+    declineComment: text("decline_comment"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("client_request_teacher_id_idx").on(t.teacherId)],
 );
