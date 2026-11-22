@@ -40,7 +40,10 @@ export function checkVideoTasks(document: unknown): { ok: true; tasks: Task[] } 
   const errors = tasks.flatMap((task, index) =>
     task.image || task.audio || partPictures(task).length > 0
       ? [`Задание ${index + 1}: в заданиях к видео пока нет картинок и записей — только текст`]
-      : [],
+      : // The child answers under the video in text (#327): no recording or file to upload there.
+        task.type === "voice" || task.type === "file"
+        ? [`Задание ${index + 1}: в заданиях к видео ответ только текстом, без голоса и файла`]
+        : [],
   );
   return errors.length > 0 ? { ok: false, errors: errors.slice(0, 10) } : { ok: true, tasks };
 }

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { StudentVideoTasks } from "@/components/student-video-tasks";
 import { createServerCaller, isNotFound, isUnauthorized } from "@/server/router";
 
 export const metadata = { title: "Видео — StudySoft" };
@@ -12,7 +13,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * A video the teacher opened to the student (#158). An own file plays here,
  * served in byte ranges as for the teacher; the student plays, pauses and
- * seeks it. A link opens in a new tab. A video not open to this student, a
+ * seeks it. A link opens in a new tab. Its confirmed tasks are answered
+ * under it (#327). A video not open to this student, a
  * closed one, a missing one and no session all end in the same 404 page.
  */
 export default async function StudentVideoPage({ params }: Props) {
@@ -20,8 +22,10 @@ export default async function StudentVideoPage({ params }: Props) {
   if (!UUID.test(id)) notFound();
   const caller = createServerCaller(await headers());
   let video;
+  let tasks;
   try {
     video = await caller.student.videos.get({ id });
+    tasks = video.hasTasks ? await caller.student.videos.tasks({ id }) : null;
   } catch (error) {
     if (isNotFound(error) || isUnauthorized(error)) notFound();
     throw error;
@@ -48,6 +52,7 @@ export default async function StudentVideoPage({ params }: Props) {
           Смотреть
         </a>
       ) : null}
+      {tasks && <StudentVideoTasks id={video.id} tasks={tasks.tasks} done={tasks.done} />}
     </main>
   );
 }
