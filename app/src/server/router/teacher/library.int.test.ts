@@ -99,7 +99,7 @@ describe("teacher.library", () => {
       kind: "game",
       title: "Colour hunt",
       level: "A2",
-      topic,
+      topics: [topic],
       ageGroup: "younger",
       url: null,
       fileUrl: `/api/files/library/${id}`,
@@ -159,7 +159,7 @@ describe("teacher.library", () => {
     await expect(otherTeacher.teacher.library.remove({ id })).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     await teacher.teacher.library.update({ id, title: "Food bingo", level: "A1", topic: "  ", ageGroup: "teens" });
-    expect(await teacher.teacher.library.get({ id })).toMatchObject({ title: "Food bingo", level: "A1", topic: null, ageGroup: "teens" });
+    expect(await teacher.teacher.library.get({ id })).toMatchObject({ title: "Food bingo", level: "A1", topics: [], ageGroup: "teens" });
 
     await teacher.teacher.library.remove({ id });
     await expect(teacher.teacher.library.get({ id })).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -280,7 +280,7 @@ describe("teacher.library", () => {
       kind: "video",
       title: "Explained",
       level: "B1",
-      topic,
+      topics: [topic],
       ageGroup: "teens",
       url,
       fileUrl: null,
