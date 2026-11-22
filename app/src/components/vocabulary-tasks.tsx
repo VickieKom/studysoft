@@ -5,7 +5,9 @@ import type { Task } from "@/domain/homework-format";
 import {
   canChooseTranslation,
   canMatch,
+  gapOf,
   TOO_FEW_FOR_CHOICE,
+  withoutExample,
   VOCABULARY_TASK_LABELS,
   VOCABULARY_TASK_TYPES,
   type VocabularyTaskType,
@@ -13,7 +15,7 @@ import {
 } from "@/domain/vocabulary-homework";
 import { routerClient } from "./router-client";
 
-type Word = { id: string; word: string; translation: string; ticked: boolean };
+type Word = { id: string; word: string; translation: string; example: string | null; ticked: boolean };
 
 const control =
   "inline-flex h-9 items-center rounded-control border border-border px-3 text-small font-semibold hover:bg-surface disabled:opacity-60";
@@ -58,7 +60,13 @@ export function VocabularyTasks({ homeworkId, disabled, onAdd }: { homeworkId: s
   }
 
   const picked = words.filter((w) => chosen.has(w.id));
-  const available: Record<VocabularyTaskType, boolean> = { match: canMatch(picked), choose_translation: canChooseTranslation(words) };
+  const gapped = picked.filter((w) => gapOf(w) !== null).length;
+  const available: Record<VocabularyTaskType, boolean> = {
+    match: canMatch(picked),
+    choose_translation: canChooseTranslation(words),
+    fill_gap: gapped > 0,
+    type_word: picked.length > 0,
+  };
   const toggle = <T,>(set: Set<T>, value: T) => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
@@ -98,6 +106,9 @@ export function VocabularyTasks({ homeworkId, disabled, onAdd }: { homeworkId: s
               {VOCABULARY_TASK_LABELS[type]}
             </label>
             {type === "choose_translation" && !available[type] && <span className="text-small text-text-secondary">{TOO_FEW_FOR_CHOICE}</span>}
+            {type === "fill_gap" && types.has(type) && gapped < picked.length && (
+              <span className="text-small text-text-secondary">{withoutExample(picked.length - gapped, picked.length)}</span>
+            )}
           </div>
         ))}
       </fieldset>

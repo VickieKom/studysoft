@@ -9,7 +9,7 @@ import { wordMark } from "../../domain/word-training";
 import type { Database } from "../db/client";
 import { lesson, vocabularyWord } from "../db/schema";
 
-export type WordToPick = { id: string; word: string; translation: string; ticked: boolean };
+export type WordToPick = { id: string; word: string; translation: string; example: string | null; ticked: boolean };
 
 export async function wordsToPick(db: Database, teacherId: string, studentId: string): Promise<WordToPick[]> {
   const mine = and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId));
@@ -18,6 +18,8 @@ export async function wordsToPick(db: Database, teacherId: string, studentId: st
       id: vocabularyWord.id,
       word: vocabularyWord.word,
       translation: vocabularyWord.translation,
+      // The confirmed example only: the assistant's draft is not the student's until the teacher confirms it (#237).
+      example: vocabularyWord.example,
       lessonId: vocabularyWord.lessonId,
       step: vocabularyWord.trainStep,
       rightCount: vocabularyWord.rightCount,
@@ -38,7 +40,7 @@ export async function wordsToPick(db: Database, teacherId: string, studentId: st
   const weak = (r: (typeof rows)[number]) => wordMark({ step: r.step, rightCount: r.rightCount, wrongCount: r.wrongCount, trained: r.trainedAt !== null }) === "often_wrong";
   const first = [...new Set([...rows.filter((r) => last && r.lessonId === last.id), ...rows.filter(weak)].map((r) => r.id))];
   const ticked = new Set(first.slice(0, PICKED_WORDS));
-  return rows.map((r) => ({ id: r.id, word: r.word, translation: r.translation!, ticked: ticked.has(r.id) }));
+  return rows.map((r) => ({ id: r.id, word: r.word, translation: r.translation!, example: r.example, ticked: ticked.has(r.id) }));
 }
 
 /** Which of `ids` are words of this student's vocabulary. */

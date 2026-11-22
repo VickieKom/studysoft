@@ -80,7 +80,7 @@ describe("«Из словаря» in a homework draft", () => {
     const offered = await teacher.teacher.homework.vocabulary({ id });
     expect(offered.map((w) => w.word).sort()).toEqual(["bee", "elk", "fox", "owl"]);
     expect(offered.filter((w) => w.ticked).map((w) => w.word).sort()).toEqual(["elk", "owl"]);
-    expect(offered.find((w) => w.word === "owl")).toEqual({ id: ids.owl, word: "owl", translation: "сова", ticked: true });
+    expect(offered.find((w) => w.word === "owl")).toEqual({ id: ids.owl, word: "owl", translation: "сова", example: null, ticked: true });
 
     // Many words of the last lesson: only the first 12 are ticked.
     const many = await words(studentId, Array.from({ length: 14 }, (_, i) => [`word${i}`, `слово${i}`] as [string, string]));
@@ -115,6 +115,16 @@ describe("«Из словаря» in a homework draft", () => {
     await teacher.teacher.homework.publish({ id, revision: saved.revision, dueDate: inDays(3) });
     const opened = await (await studentCaller(studentId)).student.homework.open({ id });
     expect(JSON.stringify(opened)).not.toMatch(/vocabularyWords|[0-9a-f]{8}-[0-9a-f]{4}-/);
+  });
+
+  it("offers a word's confirmed example only, never the assistant's draft (#283)", async () => {
+    const { studentId } = await newStudent("Словарь примеры");
+    await teacher.teacher.students.addWord({ studentId, word: "owl", translation: "сова", example: "The owl is awake." });
+    await teacher.teacher.students.addWord({ studentId, word: "fox", translation: "лиса", example: "" });
+    await db().update(vocabularyWord).set({ draftExample: "The fox is red." }).where(and(eq(vocabularyWord.studentId, studentId), eq(vocabularyWord.word, "fox")));
+    const { id } = await teacher.teacher.homework.import({ studentId, json: JSON.stringify(draft) });
+    const offered = Object.fromEntries((await teacher.teacher.homework.vocabulary({ id })).map((w) => [w.word, w.example]));
+    expect(offered).toEqual({ owl: "The owl is awake.", fox: null });
   });
 
   it("is the teacher's own: another teacher, and a published homework, get not found", async () => {

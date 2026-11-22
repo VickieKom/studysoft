@@ -109,7 +109,7 @@ export const homeworkRouter = router({
   /** «Из словаря» (#281): the draft's student's words with a confirmed translation, the ones to start with ticked. */
   vocabulary: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(z.array(z.object({ id: z.uuid(), word: z.string(), translation: z.string(), ticked: z.boolean() }).strict()))
+    .output(z.array(z.object({ id: z.uuid(), word: z.string(), translation: z.string(), example: z.string().nullable(), ticked: z.boolean() }).strict()))
     .query(async ({ ctx, input }) => {
       const draft = await findHomework(ctx.db, ctx.teacherId, input.id);
       if (!draft || draft.status !== "draft") throw notFound();
