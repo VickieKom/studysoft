@@ -91,3 +91,22 @@ export type Contacts = Record<ContactKey, string | null>;
 export type ProfileKey = (typeof PROFILE_FIELDS)[number]["key"];
 export type Profile = Record<ProfileKey, string | null>;
 export const PROFILE_KEYS = PROFILE_FIELDS.map((field) => field.key) as ProfileKey[];
+
+/** A number of the personal measure as the card shows it: «12», «7,5» (#266). */
+export function measureNumber(value: number): string {
+  return value.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+}
+
+/** «на английском: 5 → 12 мин»; one number alone, «на английском: 12 мин». */
+export function measureLabel(name: string, unit: string | null, values: readonly number[]): string | null {
+  if (values.length === 0) return null;
+  const first = measureNumber(values[0]!);
+  const last = measureNumber(values.at(-1)!);
+  const shown = values.length === 1 ? last : `${first} → ${last}`;
+  return `${name}: ${shown}${unit ? ` ${unit}` : ""}`;
+}
+
+/** The label of the number when a lesson is marked: «на английском, мин». */
+export function measureField(name: string, unit: string | null): string {
+  return unit ? `${name}, ${unit}` : name;
+}
