@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
 import { homework, lesson, student, vocabularyWord } from "../../db/schema";
+import { todayIn } from "../../../domain/homework";
+import { addDays } from "../../../domain/word-training";
 import { env } from "../../env";
 import { pdf } from "../../testing/files";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
@@ -23,7 +25,8 @@ let textbookId: string;
 let lessons: Record<string, string>;
 
 const json = (value: unknown) => JSON.stringify(value);
-const isoIn = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+// Days in the students' time zone, as the platform counts them: a UTC day differs from Moscow's between 21:00 and 24:00 UTC (#357).
+const isoIn = (days: number) => addDays(todayIn("Europe/Moscow"), days);
 const HOMEWORK = { version: 1, title: "Finish int homework", tasks: [{ type: "single_choice", prompt: "Pick a.", options: ["a", "b"], answer: 0 }] };
 
 async function codeOf(call: Promise<unknown>) {
