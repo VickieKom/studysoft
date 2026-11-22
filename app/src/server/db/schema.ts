@@ -1016,3 +1016,35 @@ export const report = pgTable(
       .where(sql`${t.status} = 'draft'`),
   ],
 );
+
+// The monthly skills assessment (#252): the document in the assessment format
+// (`docs/assessment-format.md`) with its keys, the teacher's recording for
+// «Аудирование» and picture for «Говорение» as blobs, and the status: a draft
+// the teacher corrects, or approved and fixed. The teacher's only; a student
+// never receives its keys.
+export const assessment = pgTable(
+  "assessment",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    title: text("title").notNull(),
+    document: jsonb("document").notNull(),
+    status: text("status").notNull().default("draft"),
+    listeningRecording: uuid("listening_recording").references(() => blob.id),
+    speakingPicture: uuid("speaking_picture").references(() => blob.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "assessment_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    index("assessment_student_id_idx").on(t.studentId),
+  ],
+);

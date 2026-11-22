@@ -6,6 +6,7 @@ import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
 import { StudentMistakes } from "@/components/student-mistakes";
+import { StudentAssessments } from "@/components/student-assessments";
 import { StudentProgress } from "@/components/student-progress";
 import { StudentReports } from "@/components/student-reports";
 import { StudentVocabulary } from "@/components/student-vocabulary";
@@ -39,6 +40,7 @@ export default async function StudentCardPage({ params }: Props) {
   const [nextLesson] = await caller.teacher.prep.list({ studentId: student.id });
   const { values: measureValues, ...goal } = await caller.teacher.goal.get({ studentId: student.id });
   const reports = await caller.teacher.reports.list({ studentId: student.id });
+  const assessments = await caller.teacher.assessments.list({ studentId: student.id });
 
   return (
     <main>
@@ -139,6 +141,7 @@ export default async function StudentCardPage({ params }: Props) {
         </section>
       </div>
       <StudentProgress studentId={student.id} results={results} totals={totals} />
+      <StudentAssessments studentId={student.id} assessments={assessments} />
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
