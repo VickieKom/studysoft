@@ -42,6 +42,7 @@ export default async function EditMaterialPage({ params }: Props) {
           warmup: material.warmup,
           vocabulary: material.vocabulary,
           textbookLesson: material.textbookLesson,
+          students: material.students,
           questions: material.questions,
         }}
       />

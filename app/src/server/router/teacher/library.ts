@@ -1,3 +1,4 @@
+import { MAX_MATERIAL_STUDENTS, materialStudents, ownStudents, setMaterialStudents } from "../../library/material-students";
 import type { Database } from "../../db/client";
 import { checkLink, type LinkableTextbook, linkableTextbooks, linkLabel } from "../../library/lesson-links";
 import { gameWordsOutput } from "../../../domain/game-words-format";
@@ -92,6 +93,8 @@ const material = z
     vocabulary: z.boolean(),
     // A game's textbook lesson (#291); null when none, or the lesson is no longer in the structure.
     textbookLesson: z.object({ textbookId: z.uuid(), lessonId: z.uuid(), label: z.string() }).strict().nullable(),
+    // The students a game is made for (#292), by name.
+    students: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
     // A video link's address; null for every other material.
     url: z.string().nullable(),
     /** Saved by the assistant and not yet in the library (#120). */
@@ -99,7 +102,7 @@ const material = z
   })
   .strict();
 
-const output = (books: LinkableTextbook[]) => (m: Material) => ({
+const output = (books: LinkableTextbook[], marked: Map<string, { id: string; name: string }[]>) => (m: Material) => ({
   id: m.id,
   kind: m.kind,
   title: m.title,
@@ -111,6 +114,7 @@ const output = (books: LinkableTextbook[]) => (m: Material) => ({
   warmup: m.warmup,
   vocabulary: m.vocabulary,
   textbookLesson: lessonOf(books, m),
+  students: marked.get(m.id) ?? [],
   url: m.url,
   draft: m.draft,
 });
@@ -133,6 +137,24 @@ export async function checkedLink(
   return { textbookId: textbookId.toLowerCase(), lessonId: lessonId.toLowerCase() };
 }
 
+// The students a game is made for (#292); left out, an edit keeps them.
+export const studentIds = z.array(z.uuid()).max(MAX_MATERIAL_STUDENTS).optional();
+
+/** The students as sent, all hers or NOT_FOUND; undefined when not sent. */
+export async function checkedStudents(ctx: { db: Database; teacherId: string }, ids: string[] | undefined): Promise<string[] | undefined> {
+  if (ids === undefined) return undefined;
+  const lower = ids.map((id) => id.toLowerCase());
+  if (!(await ownStudents(ctx.db, ctx.teacherId, lower))) throw notFound();
+  return lower;
+}
+
+/** Materials as the procedures return them, with their links and students. */
+async function outputs(ctx: { db: Database; teacherId: string }, materials: Material[]) {
+  const books = await linkableTextbooks(ctx.db, ctx.teacherId);
+  const marked = await materialStudents(ctx.db, ctx.teacherId, materials.map((m) => m.id));
+  return materials.map(output(books, marked));
+}
+
 /** A material's link as its page names it, or null. */
 function lessonOf(books: LinkableTextbook[], m: Material) {
   const label = linkLabel(books, m.textbookId, m.textbookLessonId);
@@ -151,11 +173,13 @@ export const libraryRouter = router({
         // «Учебник» and «Урок» (#291).
         textbookId: z.uuid().optional(),
         lessonId: z.uuid().optional(),
+        // «Ученик» (#292).
+        studentId: z.uuid().optional(),
       }),
     )
     .output(z.object({ materials: z.array(material), topics: z.array(z.string()), total: z.number().int() }).strict())
     .query(async ({ ctx, input }) => ({
-      materials: (await listMaterials(ctx.db, ctx.teacherId, input)).map(output(await linkableTextbooks(ctx.db, ctx.teacherId))),
+      materials: await outputs(ctx, await listMaterials(ctx.db, ctx.teacherId, input)),
       topics: await materialTopics(ctx.db, ctx.teacherId),
       total: (await listMaterials(ctx.db, ctx.teacherId, {})).length,
     })),
@@ -163,7 +187,7 @@ export const libraryRouter = router({
   /** «От ассистента» (#120): the assistant's drafts, not yet in the library. */
   drafts: teacherProcedure
     .output(z.array(material))
-    .query(async ({ ctx }) => (await listDrafts(ctx.db, ctx.teacherId)).map(output(await linkableTextbooks(ctx.db, ctx.teacherId)))),
+    .query(async ({ ctx }) => outputs(ctx, await listDrafts(ctx.db, ctx.teacherId))),
 
   /** Her textbooks with a confirmed structure and their lessons, for «Учебник» and «Урок» (#291). */
   textbooks: teacherProcedure
@@ -185,17 +209,19 @@ export const libraryRouter = router({
     .query(async ({ ctx, input }) => {
       const found = await findMaterial(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();
-      return output(await linkableTextbooks(ctx.db, ctx.teacherId))(found);
+      return (await outputs(ctx, [found]))[0]!;
     }),
 
   /** A game: one HTML file as text, at most 5 MB. */
   addGame: teacherProcedure
-    .input(tags.extend({ html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false), ...linkInput }))
+    .input(tags.extend({ html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false), ...linkInput, studentIds }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { html, vocabulary, textbookId, textbookLessonId, ...rest } = input;
+      const { html, vocabulary, textbookId, textbookLessonId, studentIds: marked, ...rest } = input;
       const link = (await checkedLink(ctx, textbookId, textbookLessonId)) ?? null;
+      const forStudents = await checkedStudents(ctx, marked);
       const created = await createGame(ctx.db, ctx.teacherId, rest, new TextEncoder().encode(html), vocabulary, link);
+      if (typeof created === "object" && forStudents) await setMaterialStudents(ctx.db, ctx.teacherId, created.id, forStudents);
       if (created === "too_big") throw new TRPCError({ code: "BAD_REQUEST", message: "Файл больше 5 МБ" });
       if (created === "not_html")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Это не HTML-страница: нужна игра одним файлом .html" });
@@ -321,13 +347,16 @@ export const libraryRouter = router({
 
   /** Title and tags; a game's warm-up mark; a questions warm-up's questions. */
   update: teacherProcedure
-    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional(), ...linkInput }))
+    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional(), ...linkInput, studentIds }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { id, questions: lines, textbookId, textbookLessonId, ...rest } = input;
+      const { id, questions: lines, textbookId, textbookLessonId, studentIds: marked, ...rest } = input;
       const link = await checkedLink(ctx, textbookId, textbookLessonId);
+      const forStudents = await checkedStudents(ctx, marked);
       const changes = { ...rest, ...(lines ? { questions: checkQuestions(lines) } : {}), ...(link !== undefined ? { link } : {}) };
       if (!(await updateMaterial(ctx.db, ctx.teacherId, id, changes))) throw notFound();
+      // The mark is a game's only (#292).
+      if (forStudents && (await findMaterial(ctx.db, ctx.teacherId, id))?.kind === "game") await setMaterialStudents(ctx.db, ctx.teacherId, id, forStudents);
       return { id };
     }),
 

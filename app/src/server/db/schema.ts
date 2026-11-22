@@ -483,6 +483,25 @@ export const libraryMaterial = pgTable(
   (t) => [index("library_material_teacher_id_idx").on(t.teacherId)],
 );
 
+// A game made for students (#292): the students a game is marked for. The
+// game stays in the library for everyone; the mark only finds it. A deleted
+// student's mark is not read; an archived student keeps it.
+export const libraryMaterialStudent = pgTable(
+  "library_material_student",
+  {
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => libraryMaterial.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => student.id, { onDelete: "cascade" }),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+  },
+  (t) => [primaryKey({ columns: [t.materialId, t.studentId] }), index("library_material_student_student_id_idx").on(t.studentId)],
+);
+
 // A textbook set (#156): the books (PDF) and the folder of tracks the
 // teacher uploads to «Библиотека». Its files are the teacher's only
 // (architecture, section 3): no student, parent or link ever reaches them.

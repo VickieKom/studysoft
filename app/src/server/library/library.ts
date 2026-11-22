@@ -3,12 +3,12 @@
 // another teacher's material is the same as a missing one. The assistant saves
 // games and warm-ups as drafts, which stay out of the library until the
 // teacher adds them (#120; AGENTS.md, rule 5).
-import { and, arrayContains, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, arrayContains, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { type AgeGroup, MAX_GAME_BYTES, MAX_PICTURE_BYTES, MAX_URL_LENGTH, type MaterialKind } from "../../domain/library";
 import type { Level } from "../../domain/student";
 import { type BlobReader, openBlob, saveBlob } from "../blob/store";
 import type { Database } from "../db/client";
-import { blob, libraryMaterial } from "../db/schema";
+import { blob, libraryMaterial, libraryMaterialStudent } from "../db/schema";
 
 /** The tags a material is saved with; `topic` is the list typed into «Тема» (#290), stored as `topics`. */
 export type MaterialTags = { title: string; level: Level; topic: string[]; ageGroup: AgeGroup };
@@ -230,7 +230,16 @@ export async function createVideoFile(
   return row;
 }
 
-export type MaterialFilter = { kind?: MaterialKind; level?: Level; topic?: string; ageGroup?: AgeGroup; textbookId?: string; lessonId?: string };
+export type MaterialFilter = {
+  kind?: MaterialKind;
+  level?: Level;
+  topic?: string;
+  ageGroup?: AgeGroup;
+  textbookId?: string;
+  lessonId?: string;
+  /** Made for this student (#292). */
+  studentId?: string;
+};
 
 /** This teacher's materials in the library matching the filter, newest first; drafts are not in it. */
 export async function listMaterials(db: Database, teacherId: string, filter: MaterialFilter): Promise<Material[]> {
@@ -252,6 +261,12 @@ export async function listMaterials(db: Database, teacherId: string, filter: Mat
         filter.ageGroup ? eq(libraryMaterial.ageGroup, filter.ageGroup) : undefined,
         filter.textbookId ? eq(libraryMaterial.textbookId, filter.textbookId) : undefined,
         filter.lessonId ? eq(libraryMaterial.textbookLessonId, filter.lessonId) : undefined,
+        filter.studentId
+          ? inArray(
+              libraryMaterial.id,
+              db.select({ id: libraryMaterialStudent.materialId }).from(libraryMaterialStudent).where(eq(libraryMaterialStudent.studentId, filter.studentId)),
+            )
+          : undefined,
       ),
     )
     .orderBy(desc(libraryMaterial.createdAt));

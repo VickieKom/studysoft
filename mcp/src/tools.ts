@@ -79,6 +79,10 @@ export const gameDraftInput = {
     .uuid()
     .optional()
     .describe("The lesson of that textbook's confirmed structure the game is for (read_textbook_structure); a lesson not in it is refused"),
+  studentIds: z
+    .array(z.string().uuid())
+    .optional()
+    .describe("The students the game is made for (list_students), up to 30; it stays in the library for every student"),
 };
 
 export const warmupDraftInput = {
@@ -307,7 +311,7 @@ export function createTools(platform: Platform) {
         return failure(error);
       }
     },
-    async saveGameDraft(input: LibraryTags & { html: string; vocabulary?: boolean; textbookId?: string; textbookLessonId?: string }): Promise<ToolResult> {
+    async saveGameDraft(input: LibraryTags & { html: string; vocabulary?: boolean; textbookId?: string; textbookLessonId?: string; studentIds?: string[] }): Promise<ToolResult> {
       try {
         return savedToLibrary((await platform.agent.saveGameDraft.mutate(input)).id);
       } catch (error) {

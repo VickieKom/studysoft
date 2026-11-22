@@ -63,6 +63,7 @@ export default async function MaterialPage({ params }: Props) {
             {material.kind === "game" && material.warmup && <span>{MATERIAL_KIND_FILTERS.warmup}</span>}
             {material.kind === "game" && material.vocabulary && <span>Со словами словаря</span>}
             {material.textbookLesson && <span>{material.textbookLesson.label}</span>}
+            {material.students.length > 0 && <span>Для учеников: {material.students.map((s) => s.name).join(", ")}</span>}
             <span>{material.level}</span>
             {material.topics.map((topic) => (
               <span key={topic}>{topic}</span>

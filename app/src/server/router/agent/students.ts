@@ -75,6 +75,8 @@ const studentContext = z
     vocabulary: z.array(z.object({ word: z.string(), translation: z.string().nullable() }).strict()),
     // The words missed more often than not in the student's training (#240).
     weakWords: z.array(z.object({ word: z.string(), translation: z.string().nullable() }).strict()),
+    // The library games made for the student (#292).
+    gamesForStudent: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
   })
   .strict();
 

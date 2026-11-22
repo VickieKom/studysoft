@@ -49,6 +49,8 @@ export type EditedMaterial = Tags & {
   vocabulary: boolean;
   /** A game's textbook lesson (#291). */
   textbookLesson: { textbookId: string; lessonId: string } | null;
+  /** The students a game is made for (#292). */
+  students: { id: string; name: string }[];
   questions: string[] | null;
 };
 type LinkableTextbook = { id: string; title: string; lessons: { id: string; label: string }[] };
@@ -106,8 +108,19 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
   const [textbooks, setTextbooks] = useState<LinkableTextbook[]>([]);
   const [book, setBook] = useState(material?.textbookLesson?.textbookId ?? "");
   const [lesson, setLesson] = useState(material?.textbookLesson?.lessonId ?? "");
+  // The students a game is made for (#292): her active students, and those already marked even if archived since.
+  const [students, setStudents] = useState<{ id: string; name: string }[]>(material?.students ?? []);
+  const [marked, setMarked] = useState<Set<string>>(new Set((material?.students ?? []).map((s) => s.id)));
   useEffect(() => {
     routerClient.teacher.library.textbooks.query().then(setTextbooks, () => setTextbooks([]));
+    routerClient.teacher.students.list.query().then(
+      (active) =>
+        setStudents((known) => [
+          ...active.map((s) => ({ id: s.id, name: s.lastName ? `${s.firstName} ${s.lastName}` : s.firstName })),
+          ...known.filter((k) => !active.some((s) => s.id === k.id)),
+        ]),
+      () => undefined,
+    );
   }, []);
   const isGame = material ? material.kind === "game" : kind === "game";
   const link = { textbookId: book || null, textbookLessonId: book ? lesson || null : null };
@@ -137,13 +150,13 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
         await routerClient.teacher.library.update.mutate({
           id: material.id,
           ...tags,
-          ...(material.kind === "game" ? { warmup, vocabulary, ...link } : {}),
+          ...(material.kind === "game" ? { warmup, vocabulary, ...link, studentIds: [...marked] } : {}),
           ...(material.questions !== null ? { questions: toQuestions(questions) } : {}),
         });
         router.push(`/teacher/library/${material.id}`);
       } else if (kind === "game") {
         if (!file) throw new Error("no file");
-        await routerClient.teacher.library.addGame.mutate({ ...tags, html: await file.text(), vocabulary, ...link });
+        await routerClient.teacher.library.addGame.mutate({ ...tags, html: await file.text(), vocabulary, ...link, studentIds: [...marked] });
         router.push("/teacher/library?type=game");
       } else if (kind === "video" && source === "link") {
         await routerClient.teacher.library.addVideoLink.mutate({ ...tags, url });
@@ -383,6 +396,30 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
             </Labelled>
           )}
         </>
+      )}
+      {isGame && students.length > 0 && (
+        <fieldset aria-label="Для учеников" className="flex flex-col gap-1">
+          <legend className="text-small text-text-secondary">Для учеников</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {students.map((s) => (
+              <label key={s.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={marked.has(s.id)}
+                  onChange={() =>
+                    setMarked((current) => {
+                      const next = new Set(current);
+                      if (next.has(s.id)) next.delete(s.id);
+                      else next.add(s.id);
+                      return next;
+                    })
+                  }
+                />
+                {s.name}
+              </label>
+            ))}
+          </div>
+        </fieldset>
       )}
       {isGame && (
         <div className="flex flex-col gap-1">
