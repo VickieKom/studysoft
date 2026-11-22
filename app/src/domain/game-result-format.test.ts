@@ -24,3 +24,15 @@ describe("the game result format", () => {
     for (const other of [null, "studysoft.game-result", { type: "resize" }, [], 1]) expect(looksLikeGameResult(other)).toBe(false);
   });
 });
+
+describe("version 2 of the game result format (#285)", () => {
+  const answer = { task: "What is «чайник»?", answer: "cup", correct: false };
+  it("takes an answer's word, and version 1 still has none", () => {
+    expect(gameResultSchema.safeParse({ type: "studysoft.game-result", version: 2, answers: [{ ...answer, word: "teapot" }] }).success).toBe(true);
+    expect(gameResultSchema.safeParse({ type: "studysoft.game-result", version: 2, answers: [answer] }).success).toBe(true);
+    expect(gameResultSchema.safeParse({ type: "studysoft.game-result", version: 1, answers: [answer] }).success).toBe(true);
+    expect(gameResultSchema.safeParse({ type: "studysoft.game-result", version: 1, answers: [{ ...answer, word: "teapot" }] }).success).toBe(false);
+    expect(gameResultSchema.safeParse({ type: "studysoft.game-result", version: 3, answers: [answer] }).success).toBe(false);
+    expect(gameResultSchema.safeParse({ type: "studysoft.game-result", version: 2, answers: [{ ...answer, word: "x".repeat(201) }] }).success).toBe(false);
+  });
+});

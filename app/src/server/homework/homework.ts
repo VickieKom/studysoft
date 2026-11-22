@@ -21,7 +21,7 @@ import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
 import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, todayIn } from "../../domain/homework";
-import { missedInHomework } from "../crm/word-training";
+import { missedOutsideTraining } from "../crm/word-training";
 import { studentWords } from "../crm/vocabulary-homework";
 import { taskWordIds } from "../../domain/vocabulary-homework";
 import { checkAnswer, checkSentences, fitsTask, missedWords } from "./check";
@@ -533,7 +533,7 @@ export async function submitHomework(
       pendingCount: pending,
     });
     await tx.update(homework).set({ status: "submitted" }).where(eq(homework.id, id));
-    await missedInHomework(tx, teacherId, studentId, [...missed]);
+    await missedOutsideTraining(tx, teacherId, studentId, [...missed]);
     return { correct, wrong, pending };
   });
 }
