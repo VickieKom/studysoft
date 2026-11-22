@@ -86,12 +86,12 @@ export const gapOf = (word: PickWord) => gapSentence(word.example ?? null, word.
 
 /** The word typed into its example's gap; the check ignores letter case and extra spaces. */
 function gapTask(word: PickWord, sentence: string): Task {
-  return { type: "gap", prompt: GAP_PROMPT, text: sentence, answers: [[word.word]], skill: "vocabulary", words: [word.id] };
+  return { type: "gap", prompt: GAP_PROMPT, text: sentence, answers: [[word.word]], skill: "vocabulary", vocabularyWords: [word.id] };
 }
 
 /** The word typed from its translation. */
 function typeTask(word: PickWord): Task {
-  return { type: "gap", prompt: typePrompt(word.translation), text: GAP, answers: [[word.word]], skill: "vocabulary", words: [word.id] };
+  return { type: "gap", prompt: typePrompt(word.translation), text: GAP, answers: [[word.word]], skill: "vocabulary", vocabularyWords: [word.id] };
 }
 
 /**

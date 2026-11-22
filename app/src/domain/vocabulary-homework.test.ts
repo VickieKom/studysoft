@@ -68,15 +68,15 @@ describe("tasks from the vocabulary", () => {
     ];
     const tasks = vocabularyTasks(chosen, chosen, ["fill_gap"]);
     expect(tasks).toEqual([
-      { type: "gap", prompt: GAP_PROMPT, text: "The ___ is hot.", answers: [["teapot"]], skill: "vocabulary", words: [chosen[0]!.id] },
-      { type: "gap", prompt: GAP_PROMPT, text: "I like ___.", answers: [["ice cream"]], skill: "vocabulary", words: [chosen[3]!.id] },
+      { type: "gap", prompt: GAP_PROMPT, text: "The ___ is hot.", answers: [["teapot"]], skill: "vocabulary", vocabularyWords: [chosen[0]!.id] },
+      { type: "gap", prompt: GAP_PROMPT, text: "I like ___.", answers: [["ice cream"]], skill: "vocabulary", vocabularyWords: [chosen[3]!.id] },
     ]);
     for (const task of tasks) expect(taskSchema.safeParse(task).success).toBe(true);
   });
 
   it("asks each word written from its translation (#283)", () => {
     const tasks = vocabularyTasks(words(2), words(2), ["type_word"]);
-    expect(tasks).toEqual([1, 2].map((n) => ({ type: "gap", prompt: typePrompt(`перевод${n}`), text: "___", answers: [[`word${n}`]], skill: "vocabulary", words: [word(n).id] })));
+    expect(tasks).toEqual([1, 2].map((n) => ({ type: "gap", prompt: typePrompt(`перевод${n}`), text: "___", answers: [[`word${n}`]], skill: "vocabulary", vocabularyWords: [word(n).id] })));
     for (const task of tasks) expect(taskSchema.safeParse(task).success).toBe(true);
   });
 });
