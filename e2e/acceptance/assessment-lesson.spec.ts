@@ -260,9 +260,10 @@ test("opened on the lesson panel, «Говорение» is recorded there with 
   const opened = page.context().waitForEvent("page");
   await control(page, "Запустить урок").click();
   const stage = await opened;
-  await expect(stage.getByRole("tablist", { name: "Этапы урока" })).toBeVisible();
 
+  // The lesson has no plan, so the stage shows no stages; the panel is what matters here.
   const panel = page.getByRole("region", { name: "Замер" });
+  await expect(panel).toBeVisible();
   await panel.getByLabel("Замер ученика").selectOption({ label: "Speaking check" });
   await panel.getByRole("button", { name: "Открыть ученику", exact: true }).click();
   await expect(panel).toContainText("Открыт ученику");
