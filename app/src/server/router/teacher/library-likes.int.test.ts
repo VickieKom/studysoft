@@ -20,9 +20,15 @@ async function game(as: ReturnType<typeof createServerCaller>, title: string) {
 }
 
 /** An answered survey of a new student of this teacher, with «Что было веселее» on the pair and the child's picks. */
-async function answered(as: ReturnType<typeof createServerCaller>, owner: string, pairs: { a: { id: string; title: string }; b: { id: string; title: string }; pick: string }[]) {
-  const { id: studentId } = await as.teacher.students.create({ firstName: `Лайк ${run}`, lastName: "", level: "A2", timeZone: "Europe/Moscow" });
-  const [hw] = await db().insert(homework).values({ teacherId: owner, studentId, title: "Survey carrier", document: { version: 1, title: "x", tasks: [] }, status: "published" }).returning({ id: homework.id });
+async function answered(
+  as: ReturnType<typeof createServerCaller>,
+  owner: string,
+  pairs: { a: { id: string; title: string }; b: { id: string; title: string }; pick: string }[],
+  existing?: string,
+) {
+  // Another teacher's seeded student is used as is: other tests count her students.
+  const studentId = existing ?? (await as.teacher.students.create({ firstName: `Лайк ${run}`, lastName: "", level: "A2", timeZone: "Europe/Moscow" })).id;
+  const [hw] = await db().insert(homework).values({ teacherId: owner, studentId, title: "Survey carrier", document: { version: 1, title: "x", tasks: [] }, status: "draft" }).returning({ id: homework.id });
   await db()
     .insert(homeworkSurvey)
     .values({
@@ -75,7 +81,8 @@ describe("liked materials", () => {
     const mine = { id: await game(teacher, `Mine ${run}`), title: `Mine ${run}` };
     const theirs = { id: await game(other, `Theirs ${run}`), title: `Theirs ${run}` };
     // Another teacher's survey naming her material counts for neither.
-    await answered(other, otherId, [{ a: mine, b: theirs, pick: "Оба классные" }]);
+    const [seeded] = await other.teacher.students.list();
+    await answered(other, otherId, [{ a: mine, b: theirs, pick: "Оба классные" }], seeded!.id);
     expect(await likedBy(mine.id)).toBe(0);
     expect(await likedBy(theirs.id, other)).toBe(1);
   });
