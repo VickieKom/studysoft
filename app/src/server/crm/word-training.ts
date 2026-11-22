@@ -23,7 +23,7 @@ import { normalize } from "../homework/check";
 
 export type Exercise = { wordId: string; type: ExerciseType; prompt: string; options: string[] | null };
 
-async function studentToday(db: Database, teacherId: string, studentId: string, now: Date): Promise<string | null> {
+async function studentToday(db: Pick<Database, "select">, teacherId: string, studentId: string, now: Date): Promise<string | null> {
   const [row] = await db
     .select({ timeZone: student.timeZone })
     .from(student)
@@ -174,7 +174,7 @@ export async function answerExercise(db: Database, teacherId: string, studentId:
  * A right answer in homework moves nothing: «закрепилось» comes from the
  * training only.
  */
-export async function missedInHomework(db: Database, teacherId: string, studentId: string, ids: string[], now: Date = new Date()): Promise<void> {
+export async function missedInHomework(db: Pick<Database, "select" | "update">, teacherId: string, studentId: string, ids: string[], now: Date = new Date()): Promise<void> {
   if (ids.length === 0) return;
   const today = await studentToday(db, teacherId, studentId, now);
   if (!today) return;

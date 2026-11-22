@@ -44,7 +44,7 @@ export async function wordsToPick(db: Database, teacherId: string, studentId: st
 }
 
 /** Which of `ids` are words of this student's vocabulary, with the word and its translation. */
-export async function studentWords(db: Database, teacherId: string, studentId: string, ids: string[]): Promise<Map<string, KnownWord>> {
+export async function studentWords(db: Pick<Database, "select">, teacherId: string, studentId: string, ids: string[]): Promise<Map<string, KnownWord>> {
   if (ids.length === 0) return new Map();
   const rows = await db
     .select({ id: vocabularyWord.id, word: vocabularyWord.word, translation: vocabularyWord.translation })

@@ -499,7 +499,9 @@ export async function submitHomework(
     for (const [taskIndex, task] of tasks.entries()) {
       const parsed = byIndex.get(taskIndex);
       const answer = parsed?.success ? parsed.data : null;
-      for (const wordId of missedWords(task, answer, known)) missed.add(wordId);
+      // A recording or a file is no answer to a vocabulary task.
+      const given = answer && answer.type !== "voice" && answer.type !== "file" ? answer : null;
+      for (const wordId of missedWords(task, given, known)) missed.add(wordId);
       // Written, voice and file answers are kept as they are, for the teacher to mark (#36).
       const isCorrect = isAutoChecked(task) ? answer !== null && answer.type !== "voice" && answer.type !== "file" && checkAnswer(task, answer) : null;
       // An order task of several sentences: each sentence is its own point (#161).
