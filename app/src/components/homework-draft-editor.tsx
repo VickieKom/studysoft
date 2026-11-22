@@ -6,6 +6,10 @@ import { TASK_TYPES, type Task, type TaskType } from "@/domain/homework-format";
 import { HomeworkTaskForm } from "./homework-task-form";
 import { HomeworkTaskPreview } from "./homework-task-preview";
 import { routerClient } from "./router-client";
+import { VocabularyTasks } from "./vocabulary-tasks";
+
+/** The most tasks a homework holds, as the format says. */
+const MAX_TASKS = 50;
 
 const control =
   "inline-flex h-9 items-center rounded-control border border-border px-3 text-small font-semibold hover:bg-surface disabled:opacity-60";
@@ -58,6 +62,15 @@ export function HomeworkDraftEditor({
   async function saveTask(task: Task) {
     const next = editing === "new" ? [...tasks, task] : tasks.map((t, i) => (i === editing ? task : t));
     if (await save(next)) setEditing(null);
+  }
+
+  /** «Из словаря» (#281): the new tasks go after the others, within the 50 a homework holds. */
+  async function addTasks(added: Task[]): Promise<boolean> {
+    if (tasks.length + added.length > MAX_TASKS) {
+      setError(`В домашке не больше ${MAX_TASKS} заданий: выберите меньше слов или заданий`);
+      return false;
+    }
+    return save([...tasks, ...added]);
   }
 
   function move(from: number, to: number) {
@@ -151,11 +164,12 @@ export function HomeworkDraftEditor({
               ))}
             </select>
           </div>
-          <button type="button" className={control} disabled={pending || tasks.length >= 50} onClick={() => openForm("new")}>
+          <button type="button" className={control} disabled={pending || tasks.length >= MAX_TASKS} onClick={() => openForm("new")}>
             Добавить задание
           </button>
         </div>
       )}
+      {editing === null && <VocabularyTasks homeworkId={homeworkId} disabled={pending} onAdd={addTasks} />}
 
       {error && editing === null && (
         <p role="alert" className="whitespace-pre-line rounded-control bg-danger-bg px-3 py-2 text-small text-danger">

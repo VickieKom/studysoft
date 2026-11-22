@@ -107,6 +107,8 @@ const common = {
   skill: z.enum(SKILLS).optional(),
   source: source.optional(),
   image: image.optional(),
+  // The vocabulary words the task asks (#281), set by «Из словаря»; never in the student's view.
+  vocabularyWords: z.array(z.uuid()).min(1).max(10).optional(),
 };
 
 /** The most pictures one answer option holds (#129). */

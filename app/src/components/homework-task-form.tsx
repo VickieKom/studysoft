@@ -142,6 +142,8 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
       ...(topic.trim() ? { topic: topic.trim() } : {}),
       ...(skill ? { skill: skill as (typeof SKILLS)[number] } : {}),
       ...(task?.source ? { source: task.source } : {}),
+      // The vocabulary words of a task from «Из словаря» (#281) stay with it.
+      ...(task?.vocabularyWords ? { vocabularyWords: task.vocabularyWords } : {}),
       ...(image ? { image } : {}),
       ...(audio ? { audio } : {}),
     };
