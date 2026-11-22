@@ -105,8 +105,8 @@ server.registerTool(
     title: "Save an assessment draft",
     description:
       "Saves the month's skills assessment for a student as a draft in «Замеры» on their card, marked «от ассистента», " +
-      "in the assessment format (get_homework_format). Draft it from assessmentPeriod in get_student_context: the units " +
-      "held and the words added since the last approved assessment, at the student's level. Saving again replaces your " +
+      "in the assessment format (get_homework_format). Draft it from assessmentPeriod in get_student_context: the textbook " +
+      "lessons finished and the words added since the last approved assessment, at the student's level. Saving again replaces your " +
       "draft until the teacher acts on it; after that a new draft is made and hers is kept. Only the teacher uploads the " +
       "recording and the picture, and approves. An invalid assessment is refused with the section, question and field to fix.",
     inputSchema: assessmentDraftInput,

@@ -6,6 +6,7 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, max, or, sql } from "drizzle-orm";
 import { type AssessmentDocument, type AssessmentSkill, needsRecording, withoutQuestion } from "../../domain/assessment-format";
 import type { Database } from "../db/client";
+import { orderedLessons, studentWithTextbook } from "../lesson/prep";
 import { assessment, lesson, vocabularyWord } from "../db/schema";
 
 export type AssessmentRow = {
@@ -216,8 +217,13 @@ export type AssessmentPeriod = {
 /**
  * What the assistant drafts the next assessment from (#313): the period
  * since the student's last approved assessment, or the last 30 days without
- * one; the textbook units of the lessons held in it, oldest first; and the
- * words added to the vocabulary in it.
+ * one; the lessons of the student's textbook covered in it, oldest first;
+ * and the words added to the vocabulary in it.
+ *
+ * A covered lesson is a held lesson whose unit is a lesson of the student's
+ * textbook, as «Завершить урок» writes it (#154). What the teacher typed in
+ * «Юнит» when marking a lesson by hand is hers alone and never reaches the
+ * assistant (#82), so any other text there is left out.
  */
 export async function assessmentPeriod(db: Database, teacherId: string, studentId: string, now: Date = new Date()): Promise<AssessmentPeriod> {
   const [last] = await db
@@ -239,10 +245,12 @@ export async function assessmentPeriod(db: Database, teacherId: string, studentI
       ),
     )
     .orderBy(asc(lesson.startsAt));
+  const book = await studentWithTextbook(db, teacherId, studentId);
+  const bookLessons = new Set(orderedLessons(book?.structure ?? null).map((l) => l.label));
   const words = await db
     .select({ id: vocabularyWord.id, word: vocabularyWord.word, translation: vocabularyWord.translation })
     .from(vocabularyWord)
     .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId), gte(vocabularyWord.createdAt, since)))
     .orderBy(asc(vocabularyWord.createdAt), asc(vocabularyWord.word));
-  return { lastAssessmentAt, since, coveredUnits: units.map((u) => ({ unit: u.unit!, heldAt: u.heldAt })), words };
+  return { lastAssessmentAt, since, coveredUnits: units.filter((u) => bookLessons.has(u.unit!)).map((u) => ({ unit: u.unit!, heldAt: u.heldAt })), words };
 }

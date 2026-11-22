@@ -5,8 +5,9 @@ import { saveAssistantAssessment } from "../../assessment/assessments";
 import { closeDb, db } from "../../db/client";
 import { assessment, lesson, vocabularyWord } from "../../db/schema";
 import { env } from "../../env";
+import { pdf } from "../../testing/files";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
-import { createServerCaller, handleAssessmentFileUpload } from "../index";
+import { createServerCaller, handleAssessmentFileUpload, handleTextbookUpload } from "../index";
 
 // The assistant drafts the month's assessment (#313): the format, a draft
 // «от ассистента» validated like an import, replaced while the teacher has
@@ -192,32 +193,74 @@ describe("the assistant's assessment draft", () => {
 });
 
 describe("the assessment period in the student context", () => {
+  let textbookId: string;
+  let bookLessons: Record<string, string>;
+
+  beforeAll(async () => {
+    const response = await handleTextbookUpload(
+      new Request(`${env().APP_URL}/api/files/textbooks?kind=book`, { method: "PUT", headers: teacherHeaders, body: new Uint8Array(pdf(6)) }),
+    );
+    const file = ((await response.json()) as { file: string }).file;
+    ({ id: textbookId } = await teacher.teacher.textbooks.create({
+      title: "Period set",
+      level: "A2",
+      books: [{ kind: "students_book", name: "book.pdf", file }],
+      tracks: [],
+    }));
+    for (let i = 0; i < 100 && (await teacher.teacher.textbooks.get({ id: textbookId })).books[0]!.status !== "done"; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const bookLesson = (title: string, from: number) => ({ title, pages: { students_book: { from, to: from } }, tracks: [], words: [] });
+    const { revision } = await teacher.teacher.textbooks.structure({ id: textbookId });
+    await teacher.teacher.textbooks.saveStructure({
+      id: textbookId,
+      structure: { units: [{ title: "Unit 1", lessons: [bookLesson("1.1", 1), bookLesson("1.2", 2)] }, { title: "Unit 2", lessons: [bookLesson("2.1", 3), bookLesson("2.2", 4)] }] },
+      revision,
+      confirm: true,
+    });
+    const structure = (await teacher.teacher.textbooks.structure({ id: textbookId })).structure!;
+    bookLessons = Object.fromEntries(structure.units.flatMap((u) => u.lessons).map((l) => [l.title, l.id!]));
+  });
+
+  async function onTextbook(firstName: string) {
+    const studentId = await newStudent(firstName);
+    await teacher.teacher.prep.setStudentTextbook({ studentId, textbookId, passedLessonId: bookLessons["1.1"]! });
+    return studentId;
+  }
+
   async function held(studentId: string, unit: string | null, startsAt: Date, status = "held") {
     await db().insert(lesson).values({ teacherId, studentId, startsAt, durationMinutes: 60, status, unit });
   }
 
-  it("is the last 30 days without an approved assessment: the units held and the words added in it", async () => {
-    const studentId = await newStudent("Период без замера");
+  it("is the last 30 days without an approved assessment: the textbook lessons finished and the words added in it", async () => {
+    const studentId = await onTextbook("Период без замера");
     const now = Date.now();
-    await held(studentId, "Unit 1 · Lesson 1", new Date(now - 40 * DAY));
-    await held(studentId, "Unit 2 · Lesson 1", new Date(now - 20 * DAY));
-    await held(studentId, "Unit 2 · Lesson 2", new Date(now - 5 * DAY));
+    await held(studentId, "Unit 1 · 1.2", new Date(now - 40 * DAY));
+    await held(studentId, "Unit 2 · 2.1", new Date(now - 20 * DAY));
+    await held(studentId, "Unit 2 · 2.2", new Date(now - 5 * DAY));
     await held(studentId, null, new Date(now - 4 * DAY));
-    await held(studentId, "Unit 3 · Lesson 1", new Date(now - 3 * DAY), "missed");
+    // What the teacher typed in «Юнит» when marking by hand is hers alone (#82).
+    await held(studentId, "Юнит 731, повторяли дома", new Date(now - 4 * DAY));
+    await held(studentId, "Unit 1 · 1.1", new Date(now - 3 * DAY), "missed");
     for (const word of ["lantern", "compass", "pebble"]) await teacher.teacher.students.addWord({ studentId, word, translation: "", example: "" });
-    await db().update(vocabularyWord).set({ createdAt: new Date(now - 45 * DAY) }).where(and(eq(vocabularyWord.studentId, studentId), eq(vocabularyWord.word, "lantern")));
+    await db()
+      .update(vocabularyWord)
+      .set({ createdAt: new Date(now - 45 * DAY) })
+      .where(and(eq(vocabularyWord.studentId, studentId), eq(vocabularyWord.word, "lantern")));
 
-    const { assessmentPeriod: period } = await assistant.agent.studentContext({ studentId });
+    const context = await assistant.agent.studentContext({ studentId });
+    const period = context.assessmentPeriod;
     expect(period.lastAssessmentAt).toBeNull();
     expect(Math.round((now - new Date(period.since).getTime()) / DAY)).toBe(30);
-    expect(period.coveredUnits.map((u) => u.unit)).toEqual(["Unit 2 · Lesson 1", "Unit 2 · Lesson 2"]);
+    expect(period.coveredUnits.map((u) => u.unit)).toEqual(["Unit 2 · 2.1", "Unit 2 · 2.2"]);
+    expect(JSON.stringify(context)).not.toContain("Юнит 731");
     expect(period.words.map((w) => w.word).sort()).toEqual(["compass", "pebble"]);
     const ids = new Set((await assistant.agent.studentWords({ studentId })).map((w) => w.id));
     for (const word of period.words) expect(ids.has(word.id)).toBe(true);
   });
 
   it("starts at the latest approval, and a draft does not move it", async () => {
-    const studentId = await newStudent("Период после замера");
+    const studentId = await onTextbook("Период после замера");
     const now = Date.now();
     for (const [title, daysAgo] of [
       ["Older", 50],
@@ -228,12 +271,18 @@ describe("the assessment period in the student context", () => {
       await db().update(assessment).set({ approvedAt: new Date(now - daysAgo * DAY) }).where(eq(assessment.id, id));
     }
     await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft("Still a draft") });
-    await held(studentId, "Unit 4 · Lesson 1", new Date(now - 20 * DAY));
-    await held(studentId, "Unit 4 · Lesson 2", new Date(now - 2 * DAY));
+    await held(studentId, "Unit 1 · 1.2", new Date(now - 20 * DAY));
+    await held(studentId, "Unit 2 · 2.1", new Date(now - 2 * DAY));
 
     const { assessmentPeriod: period } = await assistant.agent.studentContext({ studentId });
     expect(Math.round((now - new Date(period.lastAssessmentAt!).getTime()) / DAY)).toBe(10);
     expect(period.since).toBe(period.lastAssessmentAt);
-    expect(period.coveredUnits.map((u) => u.unit)).toEqual(["Unit 4 · Lesson 2"]);
+    expect(period.coveredUnits.map((u) => u.unit)).toEqual(["Unit 2 · 2.1"]);
+  });
+
+  it("has no covered lessons without a textbook", async () => {
+    const studentId = await newStudent("Период без учебника");
+    await held(studentId, "Unit 2 · 2.1", new Date(Date.now() - 2 * DAY));
+    expect((await assistant.agent.studentContext({ studentId })).assessmentPeriod.coveredUnits).toEqual([]);
   });
 });
