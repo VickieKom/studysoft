@@ -1,5 +1,6 @@
 "use client";
 
+import { PREP_GROUP_LABELS, prepMaterialGroups } from "@/domain/prep-materials";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { HOMEWORK_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
@@ -9,7 +10,7 @@ import { type PrepBankLesson, PrepBankTasks } from "./prep-bank-tasks";
 import { routerClient } from "./router-client";
 
 type Choice = { id: string; label: string; title: string };
-type Material = { id: string; kind: MaterialKind; title: string };
+type Material = { id: string; kind: MaterialKind; title: string; forStudent: boolean; textbookLessonId: string | null };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
 const KIND_ONE: Record<MaterialKind, string> = { warmup: "Разминка", game: "Игра", video: "Видео" };
@@ -54,6 +55,18 @@ export function LessonPlanEditor({
   const [homework, setHomework] = useState<string>(homeworkId ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
+
+  // The student's games first, then the plan's book lessons', then the rest (#293).
+  const groups = prepMaterialGroups(
+    materials,
+    stages.flatMap((s) => (s.type === "book" ? [s.lessonId] : [])),
+  );
+  const options = (list: Material[]) =>
+    list.map((m) => (
+      <option key={m.id} value={m.id}>
+        {m.title}
+      </option>
+    ));
 
   const change = (next: PlanStage[]) => {
     setStages(next);
@@ -174,11 +187,16 @@ export function LessonPlanEditor({
             <label className="flex flex-col gap-1">
               <span className="text-small text-text-secondary">Добавить из библиотеки</span>
               <select value={adding} onChange={(e) => setAdding(e.target.value)} className={`${field} h-10`}>
-                {materials.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.title}
-                  </option>
-                ))}
+                {groups.forStudent.length + groups.forLessons.length === 0
+                  ? options(materials)
+                  : (["forStudent", "forLessons", "rest"] as const).map(
+                      (key) =>
+                        groups[key].length > 0 && (
+                          <optgroup key={key} label={PREP_GROUP_LABELS[key]}>
+                            {options(groups[key])}
+                          </optgroup>
+                        ),
+                    )}
               </select>
             </label>
             <Button variant="secondary" onClick={() => adding && change([...stages, { type: "material", materialId: adding, minutes: 5 }])}>
