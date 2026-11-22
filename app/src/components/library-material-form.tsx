@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
   AGE_GROUP_LABELS,
   AGE_GROUPS,
@@ -42,7 +42,16 @@ type VideoSource = "link" | "file";
 /** A refusal written for the teacher, from the upload address or a procedure. */
 class Refused extends Error {}
 
-export type EditedMaterial = Tags & { id: string; kind: MaterialKind; warmup: boolean; vocabulary: boolean; questions: string[] | null };
+export type EditedMaterial = Tags & {
+  id: string;
+  kind: MaterialKind;
+  warmup: boolean;
+  vocabulary: boolean;
+  /** A game's textbook lesson (#291). */
+  textbookLesson: { textbookId: string; lessonId: string } | null;
+  questions: string[] | null;
+};
+type LinkableTextbook = { id: string; title: string; lessons: { id: string; label: string }[] };
 
 /** The questions as typed: one per line; the server trims them and drops empty lines. */
 const toQuestions = (text: string) => text.split("\n");
@@ -93,6 +102,15 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
   const [warmup, setWarmup] = useState(material?.warmup ?? false);
   // A game template (#282): the platform sends it a student's words.
   const [vocabulary, setVocabulary] = useState(material?.vocabulary ?? false);
+  // A game's textbook lesson (#291): her textbooks with a confirmed structure, loaded with the form.
+  const [textbooks, setTextbooks] = useState<LinkableTextbook[]>([]);
+  const [book, setBook] = useState(material?.textbookLesson?.textbookId ?? "");
+  const [lesson, setLesson] = useState(material?.textbookLesson?.lessonId ?? "");
+  useEffect(() => {
+    routerClient.teacher.library.textbooks.query().then(setTextbooks, () => setTextbooks([]));
+  }, []);
+  const isGame = material ? material.kind === "game" : kind === "game";
+  const link = { textbookId: book || null, textbookLessonId: book ? lesson || null : null };
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -119,13 +137,13 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
         await routerClient.teacher.library.update.mutate({
           id: material.id,
           ...tags,
-          ...(material.kind === "game" ? { warmup, vocabulary } : {}),
+          ...(material.kind === "game" ? { warmup, vocabulary, ...link } : {}),
           ...(material.questions !== null ? { questions: toQuestions(questions) } : {}),
         });
         router.push(`/teacher/library/${material.id}`);
       } else if (kind === "game") {
         if (!file) throw new Error("no file");
-        await routerClient.teacher.library.addGame.mutate({ ...tags, html: await file.text(), vocabulary });
+        await routerClient.teacher.library.addGame.mutate({ ...tags, html: await file.text(), vocabulary, ...link });
         router.push("/teacher/library?type=game");
       } else if (kind === "video" && source === "link") {
         await routerClient.teacher.library.addVideoLink.mutate({ ...tags, url });
@@ -332,7 +350,41 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
           Подходит как разминка
         </label>
       )}
-      {(material ? material.kind === "game" : kind === "game") && (
+      {isGame && textbooks.length > 0 && (
+        <>
+          <Labelled id="material-textbook" label="Учебник">
+            <select
+              id="material-textbook"
+              value={book}
+              onChange={(event) => {
+                setBook(event.target.value);
+                setLesson("");
+              }}
+              className={field}
+            >
+              <option value="">Без учебника</option>
+              {textbooks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </Labelled>
+          {book && (
+            <Labelled id="material-lesson" label="Урок">
+              <select id="material-lesson" value={lesson} onChange={(event) => setLesson(event.target.value)} className={field}>
+                <option value="">выберите урок</option>
+                {(textbooks.find((t) => t.id === book)?.lessons ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </Labelled>
+          )}
+        </>
+      )}
+      {isGame && (
         <div className="flex flex-col gap-1">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={vocabulary} onChange={(event) => setVocabulary(event.target.checked)} />

@@ -466,6 +466,10 @@ export const libraryMaterial = pgTable(
     warmup: boolean("warmup").notNull().default(false),
     // A game template (#282): when it opens, the platform sends it the words of a student.
     vocabulary: boolean("vocabulary").notNull().default(false),
+    // A game linked to one lesson of the teacher's textbook (#291): the lesson's id inside
+    // `textbook.structure`. A lesson no longer in the confirmed structure is no link.
+    textbookId: uuid("textbook_id").references(() => textbook.id, { onDelete: "set null" }),
+    textbookLessonId: uuid("textbook_lesson_id"),
     // A video link, http or https (#117).
     url: text("url"),
     // A game or warm-up the assistant saved (#120): not in the library until

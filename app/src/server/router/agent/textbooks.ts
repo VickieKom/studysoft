@@ -1,7 +1,8 @@
+import { lessonGames } from "../../library/lesson-links";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { BOOK_KINDS, RENDER_STATUSES } from "../../../domain/textbook";
-import { DRAFT_AUTHORS, structureSchema } from "../../../domain/textbook-structure";
+import { DRAFT_AUTHORS, structureLessonSchema, structureSchema } from "../../../domain/textbook-structure";
 import { readBlob } from "../../blob/store";
 import { saveAssistantLessonTasks } from "../../library/task-bank";
 import { readStructure, saveAssistantStructure } from "../../library/textbook-structure";
@@ -14,6 +15,21 @@ import { agentProcedure, router } from "../core/trpc";
 // lesson's tasks (AGENTS.md, rule 5): confirming is the teacher's.
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
+// The confirmed structure with the games linked to each lesson (#291).
+const linkedStructure = z
+  .object({
+    units: z.array(
+      z
+        .object({
+          id: z.uuid().optional(),
+          title: z.string(),
+          lessons: z.array(structureLessonSchema.extend({ games: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()) }).strict()),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 
 export const agentTextbooksRouter = router({
   /** The teacher's textbooks with their books (pages, once rendered) and tracks, and whether a structure is confirmed. */
@@ -82,11 +98,16 @@ export const agentTextbooksRouter = router({
   /** The confirmed structure and the draft, to revise. */
   textbookStructure: agentProcedure
     .input(z.object({ textbookId: z.uuid() }))
-    .output(z.object({ structure: structureSchema.nullable(), draft: structureSchema.nullable(), draftBy: z.enum(DRAFT_AUTHORS).nullable() }).strict())
+    .output(z.object({ structure: linkedStructure.nullable(), draft: structureSchema.nullable(), draftBy: z.enum(DRAFT_AUTHORS).nullable() }).strict())
     .query(async ({ ctx, input }) => {
       const view = await readStructure(ctx.db, ctx.teacherId, input.textbookId);
       if (!view) throw notFound();
-      return { structure: view.structure, draft: view.draft, draftBy: view.draftBy };
+      // The games linked to each lesson (#291), so the assistant does not make one a lesson already has.
+      const games = await lessonGames(ctx.db, ctx.teacherId, input.textbookId.toLowerCase());
+      const structure = view.structure && {
+        units: view.structure.units.map((u) => ({ ...u, lessons: u.lessons.map((l) => ({ ...l, games: (l.id && games.get(l.id)) || [] })) })),
+      };
+      return { structure, draft: view.draft, draftBy: view.draftBy };
     }),
 
   /**

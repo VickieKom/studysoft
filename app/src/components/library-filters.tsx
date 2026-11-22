@@ -6,18 +6,21 @@ import { LEVELS } from "@/domain/student";
 
 const field = "h-10 rounded-control border border-border bg-bg px-3";
 
-type Filter = { type?: string; level?: string; topic?: string; age?: string };
+type Filter = { type?: string; level?: string; topic?: string; age?: string; book?: string; lesson?: string };
+type Textbook = { id: string; title: string; lessons: { id: string; label: string }[] };
 
 /**
  * The level, topic and age filters of «Библиотека» (#115): each choice reloads the list.
  * The address is built from what the selects show now, not from the filter the page was
  * rendered with: a second choice made before the first one's page arrives keeps the first.
  */
-export function LibraryFilters({ filter, topics }: { filter: Filter; topics: string[] }) {
+export function LibraryFilters({ filter, topics, textbooks }: { filter: Filter; topics: string[]; textbooks: Textbook[] }) {
   const router = useRouter();
   const go = (form: HTMLFormElement) => {
     const params = new URLSearchParams();
     for (const [key, value] of new FormData(form)) if (typeof value === "string" && value) params.set(key, value);
+    // A lesson belongs to its textbook (#291): another textbook chosen, the lesson goes.
+    if (params.get("book") !== (filter.book ?? null)) params.delete("lesson");
     const query = params.toString();
     router.push(query ? `/teacher/library?${query}` : "/teacher/library");
   };
@@ -36,6 +39,7 @@ export function LibraryFilters({ filter, topics }: { filter: Filter; topics: str
       </select>
     </div>
   );
+  const book = textbooks.find((t) => t.id === filter.book);
   return (
     // Remounted for every filter the page arrives with, so the selects show it.
     <form
@@ -48,6 +52,8 @@ export function LibraryFilters({ filter, topics }: { filter: Filter; topics: str
       {select("filter-level", "Уровень", filter.level, "Все уровни", LEVELS.map((l) => [l, l]), "level")}
       {select("filter-topic", "Тема", filter.topic, "Все темы", topics.map((t) => [t, t]), "topic")}
       {select("filter-age", "Возраст", filter.age, "Любой возраст", AGE_GROUPS.map((a) => [a, AGE_GROUP_LABELS[a]]), "age")}
+      {textbooks.length > 0 && select("filter-book", "Учебник", filter.book, "Все учебники", textbooks.map((t) => [t.id, t.title]), "book")}
+      {book && select("filter-lesson", "Урок", filter.lesson, "Все уроки", book.lessons.map((l) => [l.id, l.label]), "lesson")}
     </form>
   );
 }
