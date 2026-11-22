@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, db } from "../../db/client";
-import { student, textbook } from "../../db/schema";
+import { teacher as teacherTable, textbook } from "../../db/schema";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller } from "../index";
 
@@ -23,9 +23,9 @@ const tags = (title: string) => ({ title, level: "A2" as const, topic: "", ageGr
 const lesson = (id: string, title: string) => ({ id, title, pages: {}, tracks: [], words: [] });
 
 /** A textbook of this teacher with a confirmed Unit 1 of lessons 1.1 and 1.2; returns its id and the lessons' ids. */
-async function textbookFor(as: ReturnType<typeof createServerCaller>, title: string) {
-  const owner = (await as.teacher.students.create({ firstName: `Учебник ${run}`, lastName: "", level: "A2", timeZone: "Europe/Moscow" })).id;
-  const [{ teacherId }] = (await db().select({ teacherId: student.teacherId }).from(student).where(eq(student.id, owner))) as [{ teacherId: string }];
+async function textbookFor(as: (typeof seedTeachers)[number], title: string) {
+  // The teacher by her seed address: no student is made here, other tests count hers.
+  const [{ teacherId }] = (await db().select({ teacherId: teacherTable.id }).from(teacherTable).where(eq(teacherTable.email, as.email))) as [{ teacherId: string }];
   const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
   const [book] = await db()
     .insert(textbook)
@@ -44,7 +44,7 @@ afterAll(closeDb);
 
 describe("a game linked to a textbook lesson", () => {
   it("is checked against the structure, found by it, named, removed by an edit, and unlinked when the lesson goes", async () => {
-    const { textbookId, first, second } = await textbookFor(teacher, `Linked ${run}`);
+    const { textbookId, first, second } = await textbookFor(teacherA, `Linked ${run}`);
     expect((await teacher.teacher.library.textbooks()).find((t) => t.id === textbookId)!.lessons).toEqual([
       { id: first, label: "Unit 1 · 1.1" },
       { id: second, label: "Unit 1 · 1.2" },
@@ -77,7 +77,7 @@ describe("a game linked to a textbook lesson", () => {
   });
 
   it("is refused for another teacher's textbook", async () => {
-    const theirs = await textbookFor(other, `Theirs ${run}`);
+    const theirs = await textbookFor(teacherB, `Theirs ${run}`);
     await expect(
       teacher.teacher.library.addGame({ ...tags("Чужой учебник"), html: html("x"), textbookId: theirs.textbookId, textbookLessonId: theirs.first }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -85,7 +85,7 @@ describe("a game linked to a textbook lesson", () => {
   });
 
   it("is saved by the assistant for its draft, which the structure lists under the lesson", async () => {
-    const { textbookId, first } = await textbookFor(teacher, `Assistant ${run}`);
+    const { textbookId, first } = await textbookFor(teacherA, `Assistant ${run}`);
     const { id } = await assistant.agent.saveGameDraft({ ...tags("Черновик урока"), html: html("Черновик урока"), textbookId, textbookLessonId: first });
     const { structure } = await assistant.agent.textbookStructure({ textbookId });
     const [one, two] = structure!.units[0]!.lessons;
