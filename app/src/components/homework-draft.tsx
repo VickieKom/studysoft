@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import type { Task } from "@/domain/homework-format";
 import { HomeworkDraftEditor } from "./homework-draft-editor";
 import { HomeworkPublish } from "./homework-publish";
+import type { DraftSurveyView } from "./homework-survey-box";
 
 /**
  * A draft's page (#99): the publish form and the editor share the version of
@@ -16,6 +17,7 @@ export function HomeworkDraft({
   tasks,
   revision: loaded,
   askFeedback,
+  survey,
   children,
 }: {
   homeworkId: string;
@@ -23,6 +25,8 @@ export function HomeworkDraft({
   revision: string;
   /** «Мини-вопрос после домашки» (#331). */
   askFeedback: boolean;
+  /** «Опрос по урокам» (#332). */
+  survey: DraftSurveyView;
   /** The heading: the title and the status. */
   children: ReactNode;
 }) {
@@ -37,6 +41,7 @@ export function HomeworkDraft({
           dueDate={null}
           revision={revision}
           askFeedback={askFeedback}
+          survey={survey}
           oneKind={new Set(tasks.map((task) => task.type)).size < 2}
         />
       </header>

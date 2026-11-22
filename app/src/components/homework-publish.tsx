@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { formatDueDate } from "@/domain/homework";
 import { Button } from "./button";
+import { type DraftSurveyView, HomeworkSurveyBox } from "./homework-survey-box";
 import { routerClient } from "./router-client";
 
 type Props = {
@@ -16,6 +17,8 @@ type Props = {
   askFeedback?: boolean;
   /** The draft's tasks are all of one kind: the question would ask nothing. */
   oneKind?: boolean;
+  /** «Опрос по урокам» as the draft has it (#332). */
+  survey?: DraftSurveyView;
 };
 
 /**
@@ -23,7 +26,7 @@ type Props = {
  * The draft's «Мини-вопрос после домашки» (#331), off by default, is set with
  * the deadline and saved by «Опубликовать».
  */
-export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeedback = false, oneKind = false }: Props) {
+export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeedback = false, oneKind = false, survey = null }: Props) {
   const router = useRouter();
   const [date, setDate] = useState("");
   const [ask, setAsk] = useState(askFeedback);
@@ -90,6 +93,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeed
               </span>
             )}
           </div>
+          <HomeworkSurveyBox homeworkId={homeworkId} survey={survey} />
         </form>
       ) : (
         <div className="flex flex-wrap items-center gap-3">

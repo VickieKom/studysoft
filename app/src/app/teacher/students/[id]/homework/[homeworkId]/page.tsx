@@ -32,6 +32,7 @@ export default async function HomeworkPage({ params }: Props) {
     throw error;
   }
   if (homework.studentId !== student.id) notFound();
+  const survey = homework.status === "draft" ? await caller.teacher.homework.survey({ id: homework.id }) : null;
 
   const heading = (
     <div className="flex items-center gap-3">
@@ -50,7 +51,7 @@ export default async function HomeworkPage({ params }: Props) {
         </Link>
       </p>
       {homework.status === "draft" ? (
-        <HomeworkDraft homeworkId={homework.id} tasks={homework.tasks} revision={homework.revision} askFeedback={homework.askFeedback}>
+        <HomeworkDraft homeworkId={homework.id} tasks={homework.tasks} revision={homework.revision} askFeedback={homework.askFeedback} survey={survey}>
           {heading}
         </HomeworkDraft>
       ) : (
