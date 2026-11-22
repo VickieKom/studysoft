@@ -118,15 +118,43 @@ export function vocabularyTasks(chosen: PickWord[], pool: PickWord[], types: Voc
 /** The word ids every task names. */
 export const taskWordIds = (tasks: Task[]) => [...new Set(tasks.flatMap((t) => t.vocabularyWords ?? []))];
 
+/** A word of the student's vocabulary as a task's link to it is checked against (#284). */
+export type KnownWord = { word: string; translation: string | null };
+
+const plain = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en");
+const optionText = (option: string | { text?: string }) => (typeof option === "string" ? option : (option.text ?? ""));
+
+/** A task's right answers as text: the chosen options, a gap's variants, both sides of a match; none for other types. */
+export function taskKeys(task: Task): string[] {
+  switch (task.type) {
+    case "single_choice":
+      return [optionText(task.options[task.answer] ?? "")];
+    case "multiple_choice":
+      return task.answers.map((a) => optionText(task.options[a] ?? ""));
+    case "gap":
+      return task.answers.flat();
+    case "match":
+      return task.pairs.flatMap((p) => [optionText(p.left), p.right]);
+    default:
+      return [];
+  }
+}
+
 /**
- * The tasks with only the words in `known`: a word deleted from the
- * vocabulary, or not this student's, leaves the task, which stays.
+ * The tasks keeping a word only while it is in `known` (this student's, not
+ * deleted) and the task's right answer is still the word or its
+ * translation (#284): an edit to another answer, or a word deleted from the
+ * vocabulary, leaves the task, which stays without that word.
  */
-export function withKnownWords(tasks: Task[], known: Set<string>): Task[] {
+export function withKnownWords(tasks: Task[], known: Map<string, KnownWord>): Task[] {
   return tasks.map((task) => {
     if (!task.vocabularyWords) return task;
     const { vocabularyWords, ...rest } = task;
-    const kept = vocabularyWords.filter((id) => known.has(id));
+    const keys = new Set(taskKeys(task).map(plain));
+    const kept = vocabularyWords.filter((id) => {
+      const w = known.get(id);
+      return w !== undefined && (keys.has(plain(w.word)) || (w.translation !== null && keys.has(plain(w.translation))));
+    });
     return (kept.length > 0 ? { ...rest, vocabularyWords: kept } : rest) as Task;
   });
 }

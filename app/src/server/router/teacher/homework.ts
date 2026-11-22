@@ -3,7 +3,7 @@ import { z } from "zod";
 import { HOMEWORK_FORMAT_VERSION, parseHomework, taskSchema, validateHomework } from "../../../domain/homework-format";
 import { taskFileRefs, storeTaskFiles } from "../../homework/images";
 import { findStudent } from "../../crm/students";
-import { studentWordIds, wordsToPick } from "../../crm/vocabulary-homework";
+import { studentWords, wordsToPick } from "../../crm/vocabulary-homework";
 import { taskWordIds, withKnownWords } from "../../../domain/vocabulary-homework";
 import {
   findHomework,
@@ -95,8 +95,8 @@ export const homeworkRouter = router({
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
       // New pictures come as data URLs; a stored one may stay only if this draft already has it.
       const keep = taskFileRefs({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: draft.tasks });
-      // A task keeps only words of this student's vocabulary (#281).
-      const known = await studentWordIds(ctx.db, ctx.teacherId, draft.studentId, taskWordIds(checked.homework.tasks));
+      // A task keeps only words of this student's vocabulary (#281) that are still its answer (#284).
+      const known = await studentWords(ctx.db, ctx.teacherId, draft.studentId, taskWordIds(checked.homework.tasks));
       const homework = { ...checked.homework, tasks: withKnownWords(checked.homework.tasks, known) };
       const stored = await storeTaskFiles(ctx.db, ctx.teacherId, homework, keep);
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });

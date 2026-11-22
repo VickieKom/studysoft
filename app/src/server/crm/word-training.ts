@@ -5,9 +5,10 @@
 // never on the page, and moves the word with a write conditional on the
 // state it was checked against, so two tabs answering the same word never
 // move it twice.
-import { and, asc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { todayIn } from "../../domain/homework";
 import {
+  addDays,
   afterAnswer,
   CHOICE_OPTIONS,
   type ExerciseType,
@@ -22,7 +23,7 @@ import { normalize } from "../homework/check";
 
 export type Exercise = { wordId: string; type: ExerciseType; prompt: string; options: string[] | null };
 
-async function studentToday(db: Database, teacherId: string, studentId: string, now: Date): Promise<string | null> {
+async function studentToday(db: Pick<Database, "select">, teacherId: string, studentId: string, now: Date): Promise<string | null> {
   const [row] = await db
     .select({ timeZone: student.timeZone })
     .from(student)
@@ -163,4 +164,28 @@ export async function answerExercise(db: Database, teacherId: string, studentId:
     if (applied !== "changed") return applied;
   }
   throw new Error("answerExercise: the word kept changing");
+}
+
+/**
+ * Words the student got wrong in a submitted homework (#284), in the
+ * submission's transaction: each counts one mistake towards «часто
+ * ошибается», starts again from the first interval and is due tomorrow in
+ * the student's time zone — unless it is due by then already, or new.
+ * A right answer in homework moves nothing: «закрепилось» comes from the
+ * training only.
+ */
+export async function missedInHomework(db: Pick<Database, "select" | "update">, teacherId: string, studentId: string, ids: string[], now: Date = new Date()): Promise<void> {
+  if (ids.length === 0) return;
+  const today = await studentToday(db, teacherId, studentId, now);
+  if (!today) return;
+  const tomorrow = addDays(today, 1);
+  await db
+    .update(vocabularyWord)
+    .set({
+      wrongCount: sql`${vocabularyWord.wrongCount} + 1`,
+      trainStep: 0,
+      dueOn: sql`CASE WHEN ${vocabularyWord.dueOn} IS NULL OR ${vocabularyWord.dueOn} <= ${tomorrow} THEN ${vocabularyWord.dueOn} ELSE ${tomorrow}::date END`,
+      updatedAt: sql`now()`,
+    })
+    .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId), inArray(vocabularyWord.id, ids)));
 }

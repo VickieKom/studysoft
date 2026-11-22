@@ -27,7 +27,7 @@ Keep `prompt` to the instruction itself. A workbook exercise is carried over who
 | `example` | no | The exercise's example: `{ "text": "0 She ___ a teacher.", "answer": "is" }`. Shown marked as an example, with `answer` in place of `___` (or after the text when there is no gap); it has no field and is never checked or counted (#131) |
 | `image` | no | A picture next to the task, as a data URL: `data:image/png;base64,…`. PNG, JPEG or WebP, at most 2 MB. One such picture per task; answer options may hold pictures of their own (`single_choice`). The platform keeps the file and serves it only to the teacher and to the student whose published homework it is (#33) |
 | `audio` | no | A recording for the student to listen to, as in a workbook's listening exercise: a data URL `data:audio/mpeg;base64,…` (MP3, M4A, WAV or OGG), at most 10 MB. The student plays it on the task as many times as they like. Tasks that use one recording each carry it; the platform keeps one file. Served like a picture: only to the teacher and to the student whose published homework it is (#127) |
-| `vocabularyWords` | no | The ids of the student's vocabulary words the task asks, set by «Из словаря» in the draft (#281); up to 10. Never shown to the student. An assistant leaves it out |
+| `vocabularyWords` | no | The ids of the student's vocabulary words the task asks, set by «Из словаря» in the draft (#281); up to 10. Never shown to the student. A mistake on the task brings its word back into the student's word training (#284). An assistant leaves it out |
 
 ## Task types
 

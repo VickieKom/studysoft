@@ -136,3 +136,29 @@ export function fitsTask(task: Task, answer: Answer): boolean {
     }
   }
 }
+
+/**
+ * The vocabulary words of a task from «Из словаря» the answer got wrong
+ * (#284). A matching task counts each word by its own pair, found by the
+ * word or its translation on either side; any other task, or a pair not
+ * found, by the whole task. No answer misses them all. Only the words in
+ * `known` count.
+ */
+export function missedWords(task: Task, answer: Answer | null, known: Map<string, { word: string; translation: string | null }>): string[] {
+  const ids = (task.vocabularyWords ?? []).filter((id) => known.has(id));
+  if (ids.length === 0) return [];
+  if (answer === null) return ids;
+  if (task.type === "match" && answer.type === "match") {
+    const given = new Set(answer.pairs.map((p) => `${normalize(p.left)}\u0000${normalize(p.right)}`));
+    const wholeWrong = !checkAnswer(task, answer);
+    return ids.filter((id) => {
+      const w = known.get(id)!;
+      const names = [w.word, w.translation].filter((n): n is string => n !== null).map(normalize);
+      const index = task.pairs.findIndex((p, i) => names.includes(normalize(matchLeftLabel(p.left, i))) || names.includes(normalize(p.right)));
+      if (index < 0) return wholeWrong;
+      const pair = task.pairs[index]!;
+      return !given.has(`${normalize(matchLeftLabel(pair.left, index))}\u0000${normalize(pair.right)}`);
+    });
+  }
+  return checkAnswer(task, answer) ? [] : ids;
+}

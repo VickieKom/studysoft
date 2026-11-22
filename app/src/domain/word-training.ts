@@ -95,7 +95,8 @@ export type WordMark = (typeof WORD_MARKS)[number];
 export const WORD_MARK_LABELS: Record<WordMark, string> = { learnt: "закрепилось", often_wrong: "часто ошибается", learning: "учится" };
 
 export function wordMark(word: { step: number; rightCount: number; wrongCount: number; trained: boolean }): WordMark | null {
-  if (!word.trained) return null;
+  // A word missed in homework (#284) is marked even before its first training.
+  if (!word.trained) return word.wrongCount > word.rightCount ? "often_wrong" : null;
   if (isMastered(word.step)) return "learnt";
   if (word.wrongCount > word.rightCount) return "often_wrong";
   return "learning";

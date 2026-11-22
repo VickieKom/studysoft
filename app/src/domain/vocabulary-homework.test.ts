@@ -53,7 +53,8 @@ describe("tasks from the vocabulary", () => {
 
   it("keeps a task's known words only, and the task without words when none is known", () => {
     const [match, choice] = vocabularyTasks(words(4), words(4), ["match", "choose_translation"]);
-    const [kept, plain] = withKnownWords([match!, choice!], new Set([word(2).id, word(3).id]));
+    const known = new Map([2, 3].map((n) => [word(n).id, { word: `word${n}`, translation: `перевод${n}` }]));
+    const [kept, plain] = withKnownWords([match!, choice!], known);
     expect(kept!.vocabularyWords).toEqual([word(2).id, word(3).id]);
     expect(plain).not.toHaveProperty("vocabularyWords");
     expect(plain!.prompt).toBe(choice!.prompt);
