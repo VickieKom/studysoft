@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssessmentAnswers } from "@/domain/assessment-answers";
 import { type AssessmentSectionView, type AssessmentSkill, GAP, sectionLabel, TRUE_FALSE, TRUE_FALSE_LABELS } from "@/domain/assessment-format";
 import { Button } from "./button";
@@ -19,6 +19,32 @@ type ChildAssessment = {
 const field = "rounded-control border border-border bg-bg px-3 py-2 text-answer";
 /** A typed answer is saved this long after the last keystroke, and at once on «Дальше», «Назад» and «Сдать». */
 const TYPING_DELAY_MS = 500;
+
+type Pending = Record<string, { skill: AssessmentSkill; index: number; value: string | null }>;
+
+/**
+ * Answers given but not yet confirmed by the server, kept in this browser:
+ * a reload or a lost connection right after an answer sends it again when
+ * the page opens. Storage may be unavailable; then nothing is kept.
+ */
+const pendingKey = (id: string) => `studysoft:assessment:${id}`;
+function readPending(id: string): Pending {
+  try {
+    return JSON.parse(localStorage.getItem(pendingKey(id)) ?? "{}") as Pending;
+  } catch {
+    return {};
+  }
+}
+function writePending(id: string, change: (pending: Pending) => void) {
+  try {
+    const pending = readPending(id);
+    change(pending);
+    if (Object.keys(pending).length === 0) localStorage.removeItem(pendingKey(id));
+    else localStorage.setItem(pendingKey(id), JSON.stringify(pending));
+  } catch {
+    // Storage is off: the answer still goes to the server, it is only not kept here.
+  }
+}
 
 /**
  * The assessment on the child's page (#253): section by section in the
@@ -39,15 +65,33 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
 
   const send = useCallback(
     (skill: AssessmentSkill, index: number, value: string | null) => {
+      const key = `${skill}:${index}`;
       queue.current = queue.current
         .then(() => routerClient.student.assessments.answer.mutate({ id: assessment.id, section: skill, index, value }))
         .then(
-          () => setError(null),
+          () => {
+            setError(null);
+            // Kept on the server: no longer pending, unless a newer answer to the same question is.
+            writePending(assessment.id, (pending) => {
+              if (pending[key]?.value === value) delete pending[key];
+            });
+          },
           () => setError("Не получилось сохранить ответ. Проверьте интернет"),
         );
     },
     [assessment.id],
   );
+
+  // Answers left pending by a reload or a lost connection: shown and sent again.
+  useEffect(() => {
+    if (assessment.submitted) return;
+    const pending = Object.values(readPending(assessment.id));
+    if (pending.length === 0) return;
+    void Promise.resolve().then(() => {
+      setAnswers((before) => pending.reduce((next, { skill, index, value }) => withValue(next, skill, index, value), before));
+      for (const { skill, index, value } of pending) send(skill, index, value);
+    });
+  }, [assessment.id, assessment.submitted, send]);
 
   /** Sends the typed answers still waiting, then waits for every save. */
   const flush = useCallback(async () => {
@@ -60,13 +104,11 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
   }, []);
 
   function answer(skill: AssessmentSkill, index: number, value: string | null, typed = false) {
-    setAnswers((before) => {
-      const list = [...(before[skill] ?? [])];
-      while (list.length <= index) list.push(null);
-      list[index] = value;
-      return { ...before, [skill]: list };
-    });
+    setAnswers((before) => withValue(before, skill, index, value));
     const key = `${skill}:${index}`;
+    writePending(assessment.id, (pending) => {
+      pending[key] = { skill, index, value };
+    });
     const waiting = typing.current.get(key);
     if (waiting) clearTimeout(waiting.timer);
     if (!typed) {
@@ -96,6 +138,9 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     try {
       await flush();
       await routerClient.student.assessments.submit.mutate({ id: assessment.id });
+      writePending(assessment.id, (pending) => {
+        for (const key of Object.keys(pending)) delete pending[key];
+      });
       setSubmitted(true);
     } catch {
       setError("Не получилось сдать. Проверьте интернет и попробуйте ещё раз");
@@ -213,6 +258,14 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
       </div>
     </div>
   );
+}
+
+/** The answers with one of them set. */
+function withValue(answers: AssessmentAnswers, skill: AssessmentSkill, index: number, value: string | null): AssessmentAnswers {
+  const list = [...(answers[skill] ?? [])];
+  while (list.length <= index) list.push(null);
+  list[index] = value;
+  return { ...answers, [skill]: list };
 }
 
 function Choice({
