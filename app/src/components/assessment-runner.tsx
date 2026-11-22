@@ -35,6 +35,23 @@ function readPending(id: string): Pending {
     return {};
   }
 }
+/** The section the child is on, kept for this tab: a reload comes back to it. */
+const sectionKey = (id: string) => `studysoft:assessment:${id}:section`;
+function readSection(id: string): number {
+  try {
+    return Number(sessionStorage.getItem(sectionKey(id)) ?? "0") || 0;
+  } catch {
+    return 0;
+  }
+}
+function writeSection(id: string, index: number) {
+  try {
+    sessionStorage.setItem(sectionKey(id), String(index));
+  } catch {
+    // Storage is off: a reload starts from the first section.
+  }
+}
+
 function writePending(id: string, change: (pending: Pending) => void) {
   try {
     const pending = readPending(id);
@@ -81,6 +98,12 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     },
     [assessment.id],
   );
+
+  // After a reload the child comes back to the section they were on.
+  useEffect(() => {
+    const kept = readSection(assessment.id);
+    if (kept > 0 && kept < assessment.sections.length) void Promise.resolve().then(() => setCurrent(kept));
+  }, [assessment.id, assessment.sections.length]);
 
   // Answers left pending by a reload or a lost connection: shown and sent again.
   useEffect(() => {
@@ -131,6 +154,7 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     await flush();
     setBusy(false);
     setCurrent(to);
+    writeSection(assessment.id, to);
   }
 
   async function submit() {
