@@ -81,7 +81,18 @@ describe("a report draft", () => {
     await lessonOn(studentId, -3, "missed");
     await lessonOn(studentId, -2, "cancelled");
     await lessonOn(studentId, -1, "held", 12);
-    for (const [status, due] of [["submitted", moscow(-4)], ["missed", moscow(-6)], ["submitted", moscow(-45)]] as const) {
+    // Due: submitted, or given out and past its deadline. The latest overdue
+    // homework is still "published" (it turns "missed" only when the next one
+    // is published); one closed early by the next, its date today, is not due yet.
+    const given = [
+      ["submitted", moscow(-4)],
+      ["missed", moscow(-6)],
+      ["published", moscow(-2)],
+      ["missed", moscow(0)],
+      ["draft", moscow(-3)],
+      ["submitted", moscow(-45)],
+    ] as const;
+    for (const [status, due] of given) {
       await db().insert(homework).values({ teacherId, studentId, title: `Отчёт ${status}`, document: doc, status, dueDate: due });
     }
     for (const word of ["owl", "fox"]) await teacher.teacher.students.addWord({ studentId, word, translation: "x", example: "" });
@@ -92,7 +103,7 @@ describe("a report draft", () => {
       skills: [{ skill: "reading", percent: 70, trend: 10 }],
       measure: "на английском: 5 → 12 мин",
       lessons: { held: 2, missed: 1, cancelled: 1 },
-      homework: { submitted: 1, due: 2 },
+      homework: { submitted: 1, due: 3 },
       words: { added: 1, learnt: 1, total: 2 },
       textbook: null,
     });

@@ -123,10 +123,15 @@ export async function reportNumbers(db: Database, teacherId: string, studentId: 
     })
     .from(lesson)
     .where(and(eq(lesson.teacherId, teacherId), eq(lesson.studentId, studentId), gte(lesson.startsAt, start), lt(lesson.startsAt, end)));
+  // Due is a homework submitted, or one given out whose deadline has passed
+  // unsubmitted. Not "missed" alone: a homework becomes missed only when the
+  // next one is published, so the latest overdue one is still "published",
+  // and one closed early by the next is not yet due.
+  const today = dateIn(new Date(), timeZone);
   const [work] = await db
     .select({
       submitted: sql<number>`count(*) filter (where ${homework.status} = 'submitted')::int`,
-      missed: sql<number>`count(*) filter (where ${homework.status} = 'missed')::int`,
+      overdue: sql<number>`count(*) filter (where ${homework.status} in ('published', 'missed') and ${homework.dueDate} < ${today})::int`,
     })
     .from(homework)
     .where(and(eq(homework.teacherId, teacherId), eq(homework.studentId, studentId), gte(homework.dueDate, from), sql`${homework.dueDate} <= ${to}`));
@@ -140,7 +145,7 @@ export async function reportNumbers(db: Database, teacherId: string, studentId: 
     .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId)));
   const { textbook } = await progressTotals(db, teacherId, studentId);
   const held = lessons ?? { held: 0, missed: 0, cancelled: 0 };
-  const due = (work?.submitted ?? 0) + (work?.missed ?? 0);
+  const due = (work?.submitted ?? 0) + (work?.overdue ?? 0);
   return {
     skills: skillsInPeriod(await listSkillResults(db, teacherId, studentId), from, to),
     measure: goal?.measureName ? measureLabel(goal.measureName, goal.measureUnit, values) : null,

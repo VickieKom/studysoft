@@ -60,9 +60,15 @@ export function StudentReports({ studentId, reports }: { studentId: string; repo
   }
 
   const kept = () => blocks.filter((b) => b.title.trim() !== "").map(({ title, text }) => ({ title: title.trim(), text }));
+  /** A section of her own with text but no title would be dropped, its text with it. */
+  const untitled = () => blocks.some((b) => b.title.trim() === "" && b.text.trim() !== "");
 
   async function save() {
     if (!draft) return;
+    if (untitled()) {
+      setError("Назовите раздел с текстом или уберите его");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
