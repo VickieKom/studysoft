@@ -107,6 +107,8 @@ test("words picked from the vocabulary become a matching task and a choice of tr
     if (number < total) await student.getByRole("button", { name: "Дальше", exact: true }).click();
   }
   await student.getByRole("button", { name: "Сдать", exact: true }).click();
+  // The two imported tasks are left unanswered on purpose: she submits anyway.
+  await student.getByRole("button", { name: "Всё равно сдать", exact: true }).click();
   await expect(student.getByText("Готово! Домашка сдана, учитель посмотрит")).toBeVisible();
   await student.context().close();
 
