@@ -7,10 +7,11 @@ Connects the teacher's AI assistant to the platform (#3). The assistant runs in 
 | Tool | What it returns |
 |------|-----------------|
 | `list_students` | The teacher's students: id, first name, status |
-| `get_student_context` | For one student: first name, age, school year, CEFR level, textbook and current unit, interests, what works, gaps, the latest 5 notes, and the latest 3 submitted homework (each task with its topic, source, the answer, right or wrong, the teacher's mark and comment) with the mistakes by topic across them, and the student's vocabulary: the newest 300 words with their translations (#154) |
-| `get_homework_format` | The homework format the platform accepts, with its version (the text of `docs/homework-format.md`) |
+| `get_student_context` | For one student: first name, age, school year, CEFR level, textbook and current unit, interests, what works, gaps, the latest 5 notes, and the latest 3 submitted homework (each task with its topic, source, the answer, right or wrong, the teacher's mark and comment) with the mistakes by topic across them, and the student's vocabulary: the newest 300 words with their translations (#154); and the assessment period (#313): the date of the last approved assessment, the units held and the words added since (the last 30 days without one) |
+| `get_homework_format` | The homework format the platform accepts, with its version (the text of `docs/homework-format.md`), with the game result, game words and assessment formats (`docs/assessment-format.md`, #313) |
 | `save_homework_draft` | Saves a homework for a student as a draft marked «от ассистента»; replaces the assistant's draft until the teacher edits it, then makes a new one. Never publishes (#43) |
 | `read_homework_draft` | The assistant's latest draft for a student, as the teacher may have changed it |
+| `save_assessment_draft` | Saves the month's skills assessment for a student as a draft «от ассистента» in «Замеры»; replaces the assistant's draft until the teacher acts on it, then makes a new one. Never approves, never uploads the recording or the picture (#313) |
 | `save_game_draft` | Saves a game (one HTML file, at most 5 MB) to the library as a draft under «От ассистента»; with the id of its earlier draft, replaces it until the teacher edits or adds it. Never adds to the library or deletes (#120) |
 | `save_warmup_draft` | The same for a warm-up: a list of questions or a picture (#120) |
 | `list_textbooks` | The teacher's textbooks: their books (rendering status, page count) and track names, and whether a structure is confirmed or a draft waits (#150) |

@@ -3,16 +3,18 @@
 // recording for «Аудирование» and the picture for «Говорение» uploaded — and
 // approved, after which it does not change. The keys stay in the stored
 // document; screens get `assessmentView` only. The teacher's only.
-import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, max, or, sql } from "drizzle-orm";
 import { type AssessmentDocument, type AssessmentSkill, needsRecording, withoutQuestion } from "../../domain/assessment-format";
 import type { Database } from "../db/client";
-import { assessment, vocabularyWord } from "../db/schema";
+import { assessment, lesson, vocabularyWord } from "../db/schema";
 
 export type AssessmentRow = {
   id: string;
   studentId: string;
   title: string;
   status: "draft" | "approved";
+  /** Saved by the assistant (#313), shown «от ассистента». */
+  fromAssistant: boolean;
   document: AssessmentDocument;
   listeningRecording: string | null;
   speakingPicture: string | null;
@@ -24,17 +26,25 @@ const columns = {
   studentId: assessment.studentId,
   title: assessment.title,
   status: assessment.status,
+  createdBy: assessment.createdBy,
   document: assessment.document,
   listeningRecording: assessment.listeningRecording,
   speakingPicture: assessment.speakingPicture,
   createdAt: assessment.createdAt,
 };
 
-const toRow = (r: Omit<AssessmentRow, "status" | "document"> & { status: string; document: unknown }): AssessmentRow => ({
+const toRow = ({
+  createdBy,
+  ...r
+}: Omit<AssessmentRow, "status" | "document" | "fromAssistant"> & { status: string; createdBy: string; document: unknown }): AssessmentRow => ({
   ...r,
   status: r.status as AssessmentRow["status"],
+  fromAssistant: createdBy === "agent",
   document: r.document as AssessmentDocument,
 });
+
+/** The teacher's first action on a draft (#313): kept once set, so the assistant's next save makes a new draft. */
+export const TEACHER_EDITED = sql`coalesce(${assessment.teacherEditedAt}, now())`;
 
 /** The student's assessments, the newest first. */
 export async function listAssessments(db: Database, teacherId: string, studentId: string): Promise<AssessmentRow[]> {
@@ -112,7 +122,7 @@ export async function removeQuestionFrom(
   if (!next) return "not_removable";
   const rows = await db
     .update(assessment)
-    .set({ document: next, updatedAt: new Date() })
+    .set({ document: next, teacherEditedAt: TEACHER_EDITED, updatedAt: new Date() })
     .where(
       and(
         eq(assessment.id, found.id),
@@ -150,4 +160,89 @@ export async function approveAssessment(db: Database, teacherId: string, assessm
   if (needsRecording(found.document) && !found.listeningRecording) return "no_recording";
   // The recording came between the statement and the read: once more.
   return retry ? approveAssessment(db, teacherId, assessmentId, false) : "no_recording";
+}
+
+/**
+ * The assistant's draft for a student (#313), validated like an import:
+ * replaces the assistant's latest draft while the teacher has done nothing
+ * to it, otherwise a new draft. One conditional statement replaces it: the
+ * teacher's actions set `teacherEditedAt` on the row, and an update that
+ * waited for one of them sees it and replaces nothing. Returns the draft's id.
+ */
+export async function saveAssistantAssessment(
+  db: Database,
+  teacherId: string,
+  studentId: string,
+  document: AssessmentDocument,
+  context: unknown,
+): Promise<string> {
+  const kept = await ownWords(db, teacherId, studentId, document);
+  const untouched = and(
+    eq(assessment.teacherId, teacherId),
+    eq(assessment.studentId, studentId),
+    eq(assessment.status, "draft"),
+    eq(assessment.createdBy, "agent"),
+    isNull(assessment.teacherEditedAt),
+  );
+  const latest = db
+    .select({ id: assessment.id })
+    .from(assessment)
+    .where(untouched)
+    .orderBy(desc(assessment.createdAt), desc(assessment.id))
+    .limit(1);
+  const [replaced] = await db
+    .update(assessment)
+    .set({ title: kept.title, document: kept, context, updatedAt: new Date() })
+    .where(and(inArray(assessment.id, latest), untouched))
+    .returning({ id: assessment.id });
+  if (replaced) return replaced.id;
+  const [created] = await db
+    .insert(assessment)
+    .values({ teacherId, studentId, title: kept.title, document: kept, createdBy: "agent", context })
+    .returning({ id: assessment.id });
+  return created!.id;
+}
+
+/** Without an approved assessment, the period of the next one is the last 30 days. */
+export const FIRST_PERIOD_DAYS = 30;
+
+export type AssessmentPeriod = {
+  lastAssessmentAt: Date | null;
+  since: Date;
+  coveredUnits: { unit: string; heldAt: Date }[];
+  words: { id: string; word: string; translation: string | null }[];
+};
+
+/**
+ * What the assistant drafts the next assessment from (#313): the period
+ * since the student's last approved assessment, or the last 30 days without
+ * one; the textbook units of the lessons held in it, oldest first; and the
+ * words added to the vocabulary in it.
+ */
+export async function assessmentPeriod(db: Database, teacherId: string, studentId: string, now: Date = new Date()): Promise<AssessmentPeriod> {
+  const [last] = await db
+    .select({ at: max(assessment.approvedAt) })
+    .from(assessment)
+    .where(and(eq(assessment.teacherId, teacherId), eq(assessment.studentId, studentId), eq(assessment.status, "approved")));
+  const lastAssessmentAt = last?.at ?? null;
+  const since = lastAssessmentAt ?? new Date(now.getTime() - FIRST_PERIOD_DAYS * 86_400_000);
+  const units = await db
+    .select({ unit: lesson.unit, heldAt: lesson.startsAt })
+    .from(lesson)
+    .where(
+      and(
+        eq(lesson.teacherId, teacherId),
+        eq(lesson.studentId, studentId),
+        eq(lesson.status, "held"),
+        isNotNull(lesson.unit),
+        gte(lesson.startsAt, since),
+      ),
+    )
+    .orderBy(asc(lesson.startsAt));
+  const words = await db
+    .select({ id: vocabularyWord.id, word: vocabularyWord.word, translation: vocabularyWord.translation })
+    .from(vocabularyWord)
+    .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId), gte(vocabularyWord.createdAt, since)))
+    .orderBy(asc(vocabularyWord.createdAt), asc(vocabularyWord.word));
+  return { lastAssessmentAt, since, coveredUnits: units.map((u) => ({ unit: u.unit!, heldAt: u.heldAt })), words };
 }

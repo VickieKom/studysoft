@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { handleAuthRequest } from "../access/auth";
 import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, mergeRouters, router } from "./core/trpc";
+import { agentAssessmentsRouter } from "./agent/assessments";
 import { agentHomeworkRouter } from "./agent/homework";
 import { agentLibraryRouter } from "./agent/library";
 import { agentPrepRouter } from "./agent/prep";
@@ -48,7 +49,7 @@ export const appRouter = router({
     router({ homework: studentHomeworkRouter, games: studentGamesRouter, videos: studentVideosRouter, vocabulary: studentVocabularyRouter }),
   ),
   parent: mergeRouters(parentMeRouter, parentProgressRouter, parentReportsRouter),
-  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
+  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentAssessmentsRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
   teacher: router({
     session: sessionRouter,
     home: homeRouter,
