@@ -6,7 +6,7 @@ CREATE TABLE "client_request" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"teacher_id" uuid NOT NULL,
 	"first_name" text,
-	"age" integer,
+	"age" bigint,
 	"school_year" text,
 	"contact" text,
 	"source" text NOT NULL,

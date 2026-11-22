@@ -1,5 +1,5 @@
 {
-  "id": "cce81046-7d28-45cb-ac18-706ec6eadde7",
+  "id": "8353c983-1e10-436d-bbc8-1a582716b6c1",
   "prevId": "57725379-eccf-4f0e-b5b0-1b90c1382397",
   "version": "7",
   "dialect": "postgresql",
@@ -604,7 +604,7 @@
         },
         "age": {
           "name": "age",
-          "type": "integer",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": false
         },

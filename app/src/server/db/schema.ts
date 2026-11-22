@@ -4,7 +4,7 @@
 // The teacher, session, account and verification tables belong to the
 // authentication library; their shape follows what it expects.
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, bigint, boolean, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, bigint, boolean, date, doublePrecision, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -1065,7 +1065,7 @@ export const clientRequest = pgTable(
       .notNull()
       .references(() => teacher.id),
     firstName: text("first_name"),
-    age: integer("age"),
+    age: bigint("age", { mode: "number" }),
     schoolYear: text("school_year"),
     contact: text("contact"),
     source: text("source").notNull(),
