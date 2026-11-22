@@ -136,7 +136,7 @@ describe("results of a game the teacher runs during a lesson", () => {
     await expect(teacher.teacher.library.saveLessonResult({ id: video, studentId, result: ok })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     // Not in the format.
     await expect(
-      teacher.teacher.library.saveLessonResult({ id: game, studentId, result: { ...ok, version: 2 } }),
+      teacher.teacher.library.saveLessonResult({ id: game, studentId, result: { ...ok, version: 3 } }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(await kept(studentId)).toEqual([]);
   });
