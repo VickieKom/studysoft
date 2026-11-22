@@ -1037,7 +1037,8 @@ export const assessment = pgTable(
     speakingPicture: uuid("speaking_picture").references(() => blob.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     // Who made the draft (#313): "teacher" by import, "agent" by the
-    // assistant, with the student context it was built on. While the teacher
+    // assistant, with the period it was drafted from (`assessmentPeriod` of
+    // the student context, nothing else of it). While the teacher
     // has done nothing to the assistant's draft, its next save replaces it;
     // her first action (a removal, the recording, the picture) sets
     // `teacherEditedAt`, and the next save makes a new draft.

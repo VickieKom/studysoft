@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { validateAssessment } from "../../../domain/assessment-format";
-import { saveAssistantAssessment } from "../../assessment/assessments";
+import { assessmentPeriod, findAssessment, MAX_ASSESSMENT_LENGTH, saveAssistantAssessment } from "../../assessment/assessments";
 import { closeDb, db } from "../../db/client";
 import { assessment, lesson, vocabularyWord } from "../../db/schema";
 import { env } from "../../env";
@@ -51,6 +51,8 @@ async function newStudent(firstName: string) {
 }
 
 const onCard = (studentId: string) => teacher.teacher.assessments.list({ studentId });
+/** The revision the teacher's page has seen of an assessment, as `list` gives it. */
+const seen = async (id: string) => (await findAssessment(db(), teacherId, id))!.revision;
 
 beforeAll(async () => {
   teacherHeaders = await signedInHeaders(teacherA);
@@ -70,7 +72,7 @@ describe("the assistant's assessment draft", () => {
     expect(format.description).toMatch(/^# Assessment format, version 1/);
   });
 
-  it("shows «от ассистента» without keys, with the context it was built on, and an import does not", async () => {
+  it("shows «от ассистента» without keys, with the period it was drafted from, and an import does not", async () => {
     const studentId = await newStudent("Черновик замера");
     const { id } = await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft("Assistant draft") });
     await teacher.teacher.assessments.import({ studentId, json: JSON.stringify(draft("Teacher's own")) });
@@ -83,7 +85,9 @@ describe("the assistant's assessment draft", () => {
     expect(JSON.stringify(listed)).not.toMatch(/pebble|crate/);
     const [row] = await db().select({ createdBy: assessment.createdBy, context: assessment.context }).from(assessment).where(eq(assessment.id, id));
     expect(row!.createdBy).toBe("agent");
-    expect(row!.context).toMatchObject({ firstName: "Черновик замера", level: "A2", assessmentPeriod: { lastAssessmentAt: null } });
+    // Only the period: the rest of the student context stays where the teacher can delete it.
+    expect(Object.keys(row!.context as object)).toEqual(["assessmentPeriod"]);
+    expect(row!.context).toMatchObject({ assessmentPeriod: { lastAssessmentAt: null, coveredUnits: [], words: [] } });
   });
 
   it("is replaced while the teacher has done nothing to it", async () => {
@@ -98,7 +102,7 @@ describe("the assistant's assessment draft", () => {
     // A removal.
     const removed = await newStudent("Убрала вопрос");
     const { id: hers } = await assistant.agent.saveAssessmentDraft({ studentId: removed, assessment: draft("Hers") });
-    await teacher.teacher.assessments.removeQuestion({ assessmentId: hers, section: "vocabulary", index: 0 });
+    await teacher.teacher.assessments.removeQuestion({ assessmentId: hers, revision: await seen(hers), section: "vocabulary", index: 0 });
     const next = await assistant.agent.saveAssessmentDraft({ studentId: removed, assessment: draft("Next") });
     expect(next.id).not.toBe(hers);
     const kept = (await onCard(removed)).find((a) => a.id === hers)!;
@@ -117,7 +121,7 @@ describe("the assistant's assessment draft", () => {
     // An approved assessment is never replaced.
     const approved = await newStudent("Утвердила");
     const { id: fixed } = await assistant.agent.saveAssessmentDraft({ studentId: approved, assessment: draft("Approved") });
-    await teacher.teacher.assessments.approve({ assessmentId: fixed });
+    await teacher.teacher.assessments.approve({ assessmentId: fixed, revision: await seen(fixed) });
     expect((await assistant.agent.saveAssessmentDraft({ studentId: approved, assessment: draft("After approval") })).id).not.toBe(fixed);
     expect((await onCard(approved)).find((a) => a.id === fixed)).toMatchObject({ title: "Approved", status: "approved" });
   });
@@ -125,7 +129,7 @@ describe("the assistant's assessment draft", () => {
   it("waits for the teacher's action in progress and then makes a new draft instead of replacing hers", async () => {
     const studentId = await newStudent("Гонка с ассистентом");
     const { id: hers } = await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft("Hers, being edited") });
-    const context = { firstName: "Гонка с ассистентом" };
+    const context = { assessmentPeriod: await assessmentPeriod(db(), teacherId, studentId) };
 
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
@@ -157,6 +161,42 @@ describe("the assistant's assessment draft", () => {
     const listed = await onCard(studentId);
     expect(listed.find((a) => a.id === hers)!.title).toBe("Hers, being edited");
     expect(listed.find((a) => a.id === saved)!.title).toBe("Assistant's save");
+  });
+
+  it("is approved only as the version the teacher's page has seen: a save of the assistant's in between is refused «Замер изменился»", async () => {
+    const studentId = await newStudent("Утвердить увиденное");
+    const { id } = await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft("Version one") });
+    // The teacher's page has read version one...
+    const shown = (await onCard(studentId)).find((a) => a.id === id)!;
+    expect(shown.title).toBe("Version one");
+    // ...the assistant replaces the untouched draft...
+    expect((await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft("Version two") })).id).toBe(id);
+    // ...and «Утвердить» and «Убрать» from that page are refused, with nothing changed.
+    await expect(teacher.teacher.assessments.approve({ assessmentId: id, revision: shown.revision })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Замер изменился. Обновите страницу",
+    });
+    await expect(
+      teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: shown.revision, section: "vocabulary", index: 0 }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "Замер изменился. Обновите страницу" });
+    const after = (await onCard(studentId)).find((a) => a.id === id)!;
+    expect(after).toMatchObject({ title: "Version two", status: "draft" });
+    expect(after.sections.find((s) => s.skill === "vocabulary")!.questions).toHaveLength(2);
+
+    // The page refreshed: the version it now shows is approved.
+    await teacher.teacher.assessments.approve({ assessmentId: id, revision: after.revision });
+    expect((await onCard(studentId)).find((a) => a.id === id)).toMatchObject({ title: "Version two", status: "approved" });
+  });
+
+  it("is refused when it is longer than the teacher's import, and nothing is saved", async () => {
+    const studentId = await newStudent("Длинный черновик");
+    const long = draft("Long");
+    (long.sections[0] as { text: string }).text = "x".repeat(MAX_ASSESSMENT_LENGTH);
+    await expect(assistant.agent.saveAssessmentDraft({ studentId, assessment: long })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining(`longer than ${MAX_ASSESSMENT_LENGTH} characters`),
+    });
+    expect(await onCard(studentId)).toEqual([]);
   });
 
   it("is refused with the import's messages when it fails the format, and nothing is saved", async () => {
@@ -267,7 +307,7 @@ describe("the assessment period in the student context", () => {
       ["Latest", 10],
     ] as const) {
       const { id } = await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft(title) });
-      await teacher.teacher.assessments.approve({ assessmentId: id });
+      await teacher.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) });
       await db().update(assessment).set({ approvedAt: new Date(now - daysAgo * DAY) }).where(eq(assessment.id, id));
     }
     await assistant.agent.saveAssessmentDraft({ studentId, assessment: draft("Still a draft") });

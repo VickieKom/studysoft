@@ -19,8 +19,19 @@ export type AssessmentRow = {
   document: AssessmentDocument;
   listeningRecording: string | null;
   speakingPicture: string | null;
+  /** The version of the document the teacher's page has seen (#313); see `revision`. */
+  revision: string;
   createdAt: Date;
 };
+
+/**
+ * The version of an assessment's document, as the teacher's page has seen it
+ * (#313, like the homework's in #99): the text of jsonb is canonical, so the
+ * same content always gives the same revision. «Убрать» and «Утвердить» send
+ * it back and are refused when the draft changed meanwhile, for instance
+ * because the assistant replaced it.
+ */
+const revision = sql<string>`md5(${assessment.document}::text)`;
 
 const columns = {
   id: assessment.id,
@@ -31,6 +42,7 @@ const columns = {
   document: assessment.document,
   listeningRecording: assessment.listeningRecording,
   speakingPicture: assessment.speakingPicture,
+  revision,
   createdAt: assessment.createdAt,
 };
 
@@ -43,6 +55,9 @@ const toRow = ({
   fromAssistant: createdBy === "agent",
   document: r.document as AssessmentDocument,
 });
+
+/** The longest assessment as JSON, imported by the teacher or saved by the assistant: text only, its files are uploaded on the card. */
+export const MAX_ASSESSMENT_LENGTH = 200_000;
 
 /** The teacher's first action on a draft (#313): kept once set, so the assistant's next save makes a new draft. */
 export const TEACHER_EDITED = sql`coalesce(${assessment.teacherEditedAt}, now())`;
@@ -94,16 +109,23 @@ export async function importAssessment(db: Database, teacherId: string, studentI
   return row!.id;
 }
 
-/** «Убрать»: the draft without one question (see `removeQuestionFrom`). */
+/**
+ * «Убрать»: the draft without one question (see `removeQuestionFrom`), refused
+ * as "changed" when the draft is no longer the version the page has seen: the
+ * index is a question of that version.
+ */
 export async function removeQuestion(
   db: Database,
   teacherId: string,
   assessmentId: string,
+  seen: string,
   skill: AssessmentSkill,
   index: number,
 ): Promise<"ok" | "not_found" | "not_removable" | "changed"> {
   const found = await findAssessment(db, teacherId, assessmentId);
-  return found ? removeQuestionFrom(db, teacherId, found, skill, index) : "not_found";
+  if (!found) return "not_found";
+  if (found.revision !== seen) return "changed";
+  return removeQuestionFrom(db, teacherId, found, skill, index);
 }
 
 /**
@@ -138,9 +160,17 @@ export async function removeQuestionFrom(
 
 /**
  * «Утвердить»: the draft is approved and fixed. One statement checks that it
- * is a draft and that it has its recording when it has «Аудирование».
+ * is a draft, that it is still the version the teacher's page has seen (#313:
+ * the assistant may have replaced it since), and that it has its recording
+ * when it has «Аудирование».
  */
-export async function approveAssessment(db: Database, teacherId: string, assessmentId: string, retry = true): Promise<"ok" | "not_found" | "no_recording"> {
+export async function approveAssessment(
+  db: Database,
+  teacherId: string,
+  assessmentId: string,
+  seen: string,
+  retry = true,
+): Promise<"ok" | "not_found" | "changed" | "no_recording"> {
   const rows = await db
     .update(assessment)
     .set({ status: "approved", approvedAt: new Date(), updatedAt: new Date() })
@@ -149,6 +179,7 @@ export async function approveAssessment(db: Database, teacherId: string, assessm
         eq(assessment.id, assessmentId),
         eq(assessment.teacherId, teacherId),
         eq(assessment.status, "draft"),
+        eq(revision, seen),
         or(isNotNull(assessment.listeningRecording), sql`NOT (${assessment.document} -> 'sections' @> '[{"skill":"listening"}]'::jsonb)`),
       ),
     )
@@ -158,9 +189,10 @@ export async function approveAssessment(db: Database, teacherId: string, assessm
   if (!found) return "not_found";
   // Approved already: nothing to do.
   if (found.status === "approved") return "ok";
+  if (found.revision !== seen) return "changed";
   if (needsRecording(found.document) && !found.listeningRecording) return "no_recording";
   // The recording came between the statement and the read: once more.
-  return retry ? approveAssessment(db, teacherId, assessmentId, false) : "no_recording";
+  return retry ? approveAssessment(db, teacherId, assessmentId, seen, false) : "no_recording";
 }
 
 /**
@@ -175,7 +207,7 @@ export async function saveAssistantAssessment(
   teacherId: string,
   studentId: string,
   document: AssessmentDocument,
-  context: unknown,
+  context: { assessmentPeriod: AssessmentPeriod },
 ): Promise<string> {
   const kept = await ownWords(db, teacherId, studentId, document);
   const untouched = and(

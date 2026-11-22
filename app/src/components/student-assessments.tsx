@@ -16,6 +16,8 @@ type Assessment = {
   sections: AssessmentSectionView[];
   recording: string | null;
   picture: string | null;
+  /** The version the page shows, sent back by «Убрать» and «Утвердить» (#313). */
+  revision: string;
 };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
@@ -139,7 +141,7 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
   }
 
   const remove = (section: AssessmentSkill, index: number) =>
-    run(() => routerClient.teacher.assessments.removeQuestion.mutate({ assessmentId: assessment.id, section, index }));
+    run(() => routerClient.teacher.assessments.removeQuestion.mutate({ assessmentId: assessment.id, revision: assessment.revision, section, index }));
 
   return (
     <div role="group" aria-label={assessment.title} className="flex flex-col gap-4 rounded-card border border-border p-4">
@@ -206,7 +208,7 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
       )}
       {draft && (
         <div>
-          <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.approve.mutate({ assessmentId: assessment.id }))}>
+          <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.approve.mutate({ assessmentId: assessment.id, revision: assessment.revision }))}>
             Утвердить
           </Button>
         </div>
