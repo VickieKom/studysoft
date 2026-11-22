@@ -1,3 +1,5 @@
+import { gameWordsOutput } from "../../../domain/game-words-format";
+import { lessonTemplateWords } from "../../library/game-words";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { gameResultSchema } from "../../../domain/game-result-format";
@@ -173,6 +175,16 @@ export const lessonModeRouter = router({
       if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: "Not a game result" });
       if (!(await saveStageGameResult(ctx.db, ctx.teacherId, input.lessonId, input.materialId, parsed.data.answers))) throw notFound();
       return { kept: true as const };
+    }),
+
+  /** The words of the lesson's student for a game template on the stage (#282); NOT_FOUND for anything else. */
+  gameWords: teacherProcedure
+    .input(z.object({ lessonId: z.uuid(), materialId: z.uuid() }))
+    .output(gameWordsOutput)
+    .query(async ({ ctx, input }) => {
+      const words = await lessonTemplateWords(ctx.db, ctx.teacherId, input.lessonId, input.materialId);
+      if (!words) throw notFound();
+      return { words };
     }),
 
   /** Keeps the teacher's note to the lesson as she writes it. */

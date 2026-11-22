@@ -36,7 +36,7 @@ export default async function StudentGamePage({ params }: Props) {
         </Link>
       </p>
       <h1 className="text-task-title font-bold">{game.title}</h1>
-      <StudentGameFrame id={game.id} title={game.title} fileUrl={game.fileUrl} />
+      <StudentGameFrame id={game.id} title={game.title} fileUrl={game.fileUrl} withWords={game.withWords} />
     </main>
   );
 }

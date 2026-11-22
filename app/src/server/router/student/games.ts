@@ -1,7 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { gameResultSchema } from "../../../domain/game-result-format";
+import { gameWordsOutput } from "../../../domain/game-words-format";
 import { saveGameResult } from "../../library/game-results";
+import { templateWords } from "../../library/game-words";
 import { studentGame, studentGames } from "../../library/student-games";
 import { router, studentProcedure } from "../core/trpc";
 
@@ -15,6 +17,8 @@ import { router, studentProcedure } from "../core/trpc";
 const fileUrl = (id: string) => `/api/files/library/${id}`;
 
 const game = z.object({ id: z.uuid(), title: z.string(), fileUrl: z.string().startsWith("/api/files/library/") }).strict();
+// One game opened: also whether it is a game template that gets the student's words (#282).
+const openedGame = game.extend({ withWords: z.boolean() }).strict();
 
 export const studentGamesRouter = router({
   list: studentProcedure.output(z.array(game)).query(async ({ ctx }) =>
@@ -23,11 +27,26 @@ export const studentGamesRouter = router({
 
   get: studentProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(game)
+    .output(openedGame)
     .query(async ({ ctx, input }) => {
       const found = await studentGame(ctx.db, ctx.teacherId, ctx.studentId, input.id.toLowerCase());
       if (!found) throw new TRPCError({ code: "NOT_FOUND" });
       return { ...found, fileUrl: fileUrl(found.id) };
+    }),
+
+  /**
+   * The words of a game template open to this student (#282): their own
+   * words with a confirmed translation, which they see in «Тренировка слов»
+   * anyway. A game not open to them, or not a template: NOT_FOUND.
+   */
+  words: studentProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(gameWordsOutput)
+    .query(async ({ ctx, input }) => {
+      const id = input.id.toLowerCase();
+      const words = (await studentGame(ctx.db, ctx.teacherId, ctx.studentId, id)) ? await templateWords(ctx.db, ctx.teacherId, id, ctx.studentId) : null;
+      if (!words) throw new TRPCError({ code: "NOT_FOUND" });
+      return { words };
     }),
 
   saveResult: studentProcedure

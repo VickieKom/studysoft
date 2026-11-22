@@ -1,12 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { GAME_RESULT_FORMAT_VERSION } from "../../../domain/game-result-format";
+import { GAME_WORDS_VERSION } from "../../../domain/game-words-format";
 import { HOMEWORK_FORMAT_VERSION, homeworkSchema, validateHomework } from "../../../domain/homework-format";
 import { buildStudentContext } from "../../crm/context";
 import { readAssistantDraft, replaceableDraft, saveAssistantDraft } from "../../homework/drafts";
 import { HOMEWORK_FORMAT_DESCRIPTION } from "../../homework/format-description";
 import { taskFileRefs, storeTaskFiles } from "../../homework/images";
 import { GAME_RESULT_FORMAT_DESCRIPTION } from "../../library/game-result-format-description";
+import { GAME_WORDS_FORMAT_DESCRIPTION } from "../../library/game-words-format-description";
 import { agentProcedure, router } from "../core/trpc";
 
 // The assistant's homework tools (#43). Drafts only: there is no agent
@@ -25,6 +27,11 @@ export const agentHomeworkRouter = router({
   gameResultFormat: agentProcedure
     .output(z.object({ version: z.literal(GAME_RESULT_FORMAT_VERSION), description: z.string() }).strict())
     .query(() => ({ version: GAME_RESULT_FORMAT_VERSION, description: GAME_RESULT_FORMAT_DESCRIPTION })),
+
+  /** How a game template gets a student's words (#282), with its version. */
+  gameWordsFormat: agentProcedure
+    .output(z.object({ version: z.literal(GAME_WORDS_VERSION), description: z.string() }).strict())
+    .query(() => ({ version: GAME_WORDS_VERSION, description: GAME_WORDS_FORMAT_DESCRIPTION })),
 
   /**
    * Saves a homework as the assistant's draft for a student, validated like
