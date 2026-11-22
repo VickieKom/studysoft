@@ -17,6 +17,8 @@ const BOX = "Опрос по урокам";
  */
 export function HomeworkSurveyBox({ homeworkId, survey: loaded }: { homeworkId: string; survey: DraftSurveyView }) {
   const [survey, setSurvey] = useState<DraftSurveyView>(loaded);
+  // The box follows the click at once; the questions follow the server.
+  const [on, setOn] = useState(loaded !== null);
   const [own, setOwn] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export function HomeworkSurveyBox({ homeworkId, survey: loaded }: { homeworkId: 
     try {
       setSurvey(await change());
     } catch (cause) {
+      setOn(survey !== null);
       const code = (cause as { data?: { code?: string } } | null)?.data?.code;
       setError((code === "BAD_REQUEST" || code === "CONFLICT") && cause instanceof Error ? cause.message : "Не получилось сохранить. Попробуйте ещё раз");
     } finally {
@@ -34,19 +37,23 @@ export function HomeworkSurveyBox({ homeworkId, survey: loaded }: { homeworkId: 
     }
   }
 
-  const questions = survey && "questions" in survey ? survey : null;
+  const questions = on && survey && "questions" in survey ? survey : null;
   return (
     <section aria-label={BOX} className="flex basis-full flex-col gap-2">
       <label className="flex items-center gap-2 text-small">
         <input
           type="checkbox"
-          checked={survey !== null}
+          checked={on}
           disabled={busy}
-          onChange={(event) => run(() => routerClient.teacher.homework.setSurvey.mutate({ id: homeworkId, on: event.target.checked }))}
+          onChange={(event) => {
+            const next = event.target.checked;
+            setOn(next);
+            void run(() => routerClient.teacher.homework.setSurvey.mutate({ id: homeworkId, on: next }));
+          }}
         />
         {BOX}
       </label>
-      {survey && "noLessons" in survey && <span className="text-caption text-text-secondary">Опрос не собран: уроков за период нет</span>}
+      {on && survey && "noLessons" in survey && <span className="text-caption text-text-secondary">Опрос не собран: уроков за период нет</span>}
       {questions && (
         <div className="flex flex-col gap-2 rounded-control border border-border p-3">
           <ol className="flex flex-col gap-1 text-small">
