@@ -14,7 +14,6 @@ import { createServerCaller } from "../index";
 
 const [teacherA, teacherB] = seedTeachers as [(typeof seedTeachers)[number], (typeof seedTeachers)[number]];
 let teacher: ReturnType<typeof createServerCaller>;
-let other: ReturnType<typeof createServerCaller>;
 let assistant: ReturnType<typeof createServerCaller>;
 
 const run = crypto.randomUUID().slice(0, 8);
@@ -36,7 +35,6 @@ async function textbookFor(as: (typeof seedTeachers)[number], title: string) {
 
 beforeAll(async () => {
   teacher = createServerCaller(await signedInHeaders(teacherA));
-  other = createServerCaller(await signedInHeaders(teacherB));
   assistant = createServerCaller(new Headers({ authorization: `Bearer ${(await teacher.teacher.assistant.createToken()).token}` }));
 });
 
