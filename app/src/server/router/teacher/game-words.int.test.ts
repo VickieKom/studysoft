@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
@@ -24,8 +24,8 @@ let teacherId: string;
 const html = (title: string) => `<!doctype html><html><body><h1>${title}</h1></body></html>`;
 const tags = (title: string) => ({ title, level: "A2" as const, topic: "words", ageGroup: "younger" as const });
 
-async function newStudent(firstName: string, as = teacher) {
-  return (await as.teacher.students.create({ firstName, lastName: "", level: "A2", timeZone: "Europe/Moscow" })).id;
+async function newStudent(firstName: string) {
+  return (await teacher.teacher.students.create({ firstName, lastName: "", level: "A2", timeZone: "Europe/Moscow" })).id;
 }
 
 async function studentCaller(studentId: string) {
@@ -79,8 +79,9 @@ describe("a game template's words", () => {
     await expect(teacher.teacher.library.words({ id: plain, studentId })).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     // Another teacher's student, or another teacher asking: not found.
-    const theirs = await newStudent("Слова чужой", other);
-    await expect(teacher.teacher.library.words({ id: template, studentId: theirs })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // The other teacher's own student, from the seed: none is made here, other tests count hers.
+    const [theirs] = await db().select({ id: student.id }).from(student).where(ne(student.teacherId, teacherId)).limit(1);
+    await expect(teacher.teacher.library.words({ id: template, studentId: theirs!.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(other.teacher.library.words({ id: template, studentId })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 

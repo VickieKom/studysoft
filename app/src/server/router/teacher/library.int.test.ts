@@ -105,6 +105,7 @@ describe("teacher.library", () => {
       fileUrl: `/api/files/library/${id}`,
       questions: null,
       warmup: false,
+      vocabulary: false,
       // Uploaded by the teacher: in the library at once, not a draft (#120).
       draft: false,
     });
@@ -183,6 +184,7 @@ describe("teacher.library", () => {
       fileUrl: `/api/files/library/${picture.id}`,
       questions: null,
       warmup: false,
+      vocabulary: false,
     });
     expect(await teacher.teacher.library.get({ id: questions.id })).toMatchObject({
       kind: "warmup",
@@ -285,6 +287,7 @@ describe("teacher.library", () => {
       // A video is neither a questions warm-up nor a game marked as one (#116).
       questions: null,
       warmup: false,
+      vocabulary: false,
       // The teacher's own material, not the assistant's draft (#120).
       draft: false,
     });

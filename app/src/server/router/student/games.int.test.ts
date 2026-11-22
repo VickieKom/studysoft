@@ -104,7 +104,7 @@ describe("games opened to a student", () => {
 
     const fileUrl = `/api/files/library/${game}`;
     expect(await player.student.student.games.list()).toEqual([{ id: game, title: "Opened", fileUrl }]);
-    expect(await player.student.student.games.get({ id: game })).toEqual({ id: game, title: "Opened", fileUrl });
+    expect(await player.student.student.games.get({ id: game })).toEqual({ id: game, title: "Opened", fileUrl, withWords: false });
     const served = await fileStatus(player.headers, game);
     expect(served).toEqual({ status: 200, body: html("Opened") });
 
