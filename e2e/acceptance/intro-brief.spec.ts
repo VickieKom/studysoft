@@ -123,8 +123,8 @@ test("on a request the teacher fills in the brief as she goes: the template's qu
   await time.getByLabel("Часовой пояс семьи").selectOption({ label: "Новосибирск" });
   await time.getByRole("checkbox", { name: "Вт" }).check();
   await time.getByRole("checkbox", { name: "Чт" }).check();
-  await time.getByLabel("С").fill("16:00");
-  await time.getByLabel("До").fill("19:00");
+  await time.getByLabel("С", { exact: true }).fill("16:00");
+  await time.getByLabel("До", { exact: true }).fill("19:00");
   await time.getByRole("button", { name: "Добавить промежуток", exact: true }).click();
   await expect(time).toContainText("16:00–19:00");
   await expect(filled.getByText("Сохранено")).toBeVisible();
