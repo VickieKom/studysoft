@@ -89,9 +89,11 @@ test("words picked from the vocabulary become a matching task and a choice of tr
   const student = await (await browser.newContext({ storageState: NO_SESSION })).newPage();
   await student.goto(link);
   await expect.poll(() => student.url()).not.toContain("#");
-  if (await control(student, "Начать").isVisible()) await control(student, "Начать").click();
   // The two imported tasks, the matching one and four choices.
   const total = homework.tasks.length + 1 + Object.keys(WORDS).length;
+  // The homework may open on a start screen first.
+  await expect(student.getByText(new RegExp(`1\\s*/\\s*${total}`)).or(control(student, "Начать"))).toBeVisible();
+  if (await control(student, "Начать").isVisible()) await control(student, "Начать").click();
   for (let number = 1; number <= total; number++) {
     await expect(student.getByText(new RegExp(`${number}\\s*/\\s*${total}`))).toBeVisible();
     if (await student.getByText("Соедини слово и перевод").isVisible()) {
