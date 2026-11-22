@@ -7,6 +7,9 @@
 // accepted and the other places a game is played are pinned by integration
 // tests.
 //
+// It leaves a lesson going on: it sits with the library scenarios, which
+// expect other lessons going on, not before game-words.spec.ts, which does not.
+//
 // The teacher starts signed in (sessions.setup.ts). Her time zone and the
 // student's are Moscow. The game is synthetic HTML written here: given the
 // words, it posts one round's result at once.
@@ -109,7 +112,7 @@ test("a word missed in a game template is marked «часто ошибается
   const choice = page.getByLabel("Итог — в урок с");
   if (await choice.isVisible()) await choice.selectOption({ label: "Играющая" });
   await expect(page.frameLocator('iframe[title="Mistake round"]').getByText("Round sent")).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(/Итог игры не сохранился/)).toHaveCount(0);
 
   await expect(async () => {
     await page.goto(card);
