@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskSchema } from "./homework-format";
-import { canChooseTranslation, choicePrompt, MATCH_PROMPT, type PickWord, vocabularyTasks, withKnownWords } from "./vocabulary-homework";
+import { canChooseTranslation, choicePrompt, GAP_PROMPT, MATCH_PROMPT, type PickWord, typePrompt, vocabularyTasks, withKnownWords } from "./vocabulary-homework";
 
 // «Из словаря» (#281): tasks built from the student's words. The words are synthetic.
 
@@ -57,5 +57,26 @@ describe("tasks from the vocabulary", () => {
     expect(kept!.vocabularyWords).toEqual([word(2).id, word(3).id]);
     expect(plain).not.toHaveProperty("vocabularyWords");
     expect(plain!.prompt).toBe(choice!.prompt);
+  });
+
+  it("gaps each word in its example where the example uses it as it is, and skips the others (#283)", () => {
+    const chosen = [
+      { ...word(1), word: "teapot", example: "The Teapot is hot." },
+      { ...word(2), word: "pebble", example: "Pebbles are round." },
+      { ...word(3), word: "ladder", example: null },
+      { ...word(4), word: "ice cream", example: "I like ice  cream." },
+    ];
+    const tasks = vocabularyTasks(chosen, chosen, ["fill_gap"]);
+    expect(tasks).toEqual([
+      { type: "gap", prompt: GAP_PROMPT, text: "The ___ is hot.", answers: [["teapot"]], skill: "vocabulary", words: [chosen[0]!.id] },
+      { type: "gap", prompt: GAP_PROMPT, text: "I like ___.", answers: [["ice cream"]], skill: "vocabulary", words: [chosen[3]!.id] },
+    ]);
+    for (const task of tasks) expect(taskSchema.safeParse(task).success).toBe(true);
+  });
+
+  it("asks each word written from its translation (#283)", () => {
+    const tasks = vocabularyTasks(words(2), words(2), ["type_word"]);
+    expect(tasks).toEqual([1, 2].map((n) => ({ type: "gap", prompt: typePrompt(`перевод${n}`), text: "___", answers: [[`word${n}`]], skill: "vocabulary", words: [word(n).id] })));
+    for (const task of tasks) expect(taskSchema.safeParse(task).success).toBe(true);
   });
 });
