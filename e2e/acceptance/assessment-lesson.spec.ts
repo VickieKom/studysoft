@@ -123,6 +123,28 @@ async function addLessonNow(page: Page, firstName: string) {
   await expect(control(page, "+ Урок")).toBeVisible();
 }
 
+/** Today in Moscow, as the week names its day: «понедельник, 23 ноября». */
+function todayLabel(): string {
+  const iso = new Date(Date.now() - 5 * 60_000).toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+/**
+ * Cancels the lesson going on now, so it does not go on for the scenarios
+ * that run after this one: a game page, for one, offers a lesson going on
+ * instead of the students' words.
+ */
+async function cancelLessonNow(page: Page, firstName: string) {
+  await page.goto("/teacher/schedule");
+  await expect(page.getByRole("heading", { level: 1, name: "Расписание" })).toBeVisible();
+  const day = page.getByRole("region", { name: todayLabel() });
+  await day.getByRole("button", { name: new RegExp(firstName) }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Отменить", exact: true }).click();
+  await dialog.getByRole("button", { name: "Отменить урок", exact: true }).click();
+  await expect(day.getByRole("button", { name: new RegExp(firstName) })).toContainText("отменён");
+}
+
 /** On the card: an approved assessment, imported with its recording for «Аудирование». */
 async function approvedAssessment(page: Page, card: string, title: string): Promise<Locator> {
   await page.goto(card);
@@ -243,6 +265,7 @@ test("opened on the card in a lesson, the assessment is taken by the link sectio
   const text = await student.locator("body").innerText();
   expect(text).not.toMatch(/\d+\s*%|из \d+|верно|неверно/i);
   await student.context().close();
+  await cancelLessonNow(page, "Проходит замер");
 });
 
 test("opened on the lesson panel, «Говорение» is recorded there with «Записать» and «Остановить» and kept with the assessment", async ({
@@ -292,4 +315,5 @@ test("opened on the lesson panel, «Говорение» is recorded there with 
   await page.goto(card);
   const kept = page.getByRole("region", { name: "Замеры" }).getByRole("group", { name: "Speaking check" });
   await expect(kept.getByLabel("Запись говорения", { exact: true })).toBeVisible();
+  await cancelLessonNow(page, "Говорит на замере");
 });
