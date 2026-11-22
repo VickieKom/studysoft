@@ -39,7 +39,7 @@ window.addEventListener("message", (event) => {
 window.parent.postMessage({ type: "studysoft.words-request" }, "*");
 ```
 
-A game template reports the student's answers in the [game result format](game-result-format.md), as any game does.
+A game template reports the student's answers in the [game result format](game-result-format.md), as any game does. In version 2 each answer may name its `word`: a word the student got wrong then comes back in their word training (#285).
 
 ## Versions
 

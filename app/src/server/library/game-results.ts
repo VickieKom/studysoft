@@ -4,9 +4,11 @@
 // result per game and lesson is the one that counts, the earlier ones stay.
 // A game the teacher runs herself during a lesson keeps its result for the
 // student of that lesson (#147).
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { GameAnswer } from "../../domain/game-result-format";
+import { missedOutsideTraining } from "../crm/word-training";
 import type { Database } from "../db/client";
+import { libraryMaterial, vocabularyWord } from "../db/schema";
 import { LIVE_LESSON } from "./student-games";
 
 /**
@@ -34,7 +36,9 @@ export async function saveGameResult(
       AND a.until > ${now.toISOString()}
     RETURNING id
   `);
-  return [...rows].length === 1;
+  if ([...rows].length !== 1) return false;
+  await missedInGame(db, teacherId, studentId, materialId, answers);
+  return true;
 }
 
 /**
@@ -67,7 +71,9 @@ export async function saveLessonGameResult(
     LIMIT 1
     RETURNING id
   `);
-  return [...rows].length === 1;
+  if ([...rows].length !== 1) return false;
+  await missedInGame(db, teacherId, studentId, materialId, answers);
+  return true;
 }
 
 /**
@@ -85,7 +91,7 @@ export async function saveStageGameResult(
   materialId: string,
   answers: GameAnswer[],
 ): Promise<boolean> {
-  const rows = await db.execute<{ id: string }>(sql`
+  const rows = await db.execute<{ id: string; student_id: string }>(sql`
     INSERT INTO game_result (teacher_id, student_id, material_id, lesson_id, title, answers, played_with_teacher)
     SELECT l.teacher_id, l.student_id, m.id, l.id, m.title, ${JSON.stringify(answers)}::jsonb, true
     FROM lesson AS l
@@ -94,9 +100,34 @@ export async function saveStageGameResult(
     WHERE l.id = ${lessonId}
       AND l.teacher_id = ${teacherId}
       AND l.status = 'scheduled'
-    RETURNING id
+    RETURNING id, student_id
   `);
-  return [...rows].length === 1;
+  const [kept] = [...rows];
+  if (!kept) return false;
+  await missedInGame(db, teacherId, kept.student_id, materialId, answers);
+  return true;
+}
+
+/**
+ * The words a game template's result got wrong go back into the training
+ * (#285): an answer of version 2 naming a word of this student's vocabulary,
+ * matched whatever its case. Any other word, a right answer, or a game
+ * without the mark changes nothing. Every kept result counts, as every wrong
+ * answer in the training does.
+ */
+async function missedInGame(db: Database, teacherId: string, studentId: string, materialId: string, answers: GameAnswer[]): Promise<void> {
+  const missed = [...new Set(answers.filter((a) => !a.correct && a.word).map((a) => a.word!.trim().toLocaleLowerCase("en")))];
+  if (missed.length === 0) return;
+  const [template] = await db
+    .select({ id: libraryMaterial.id })
+    .from(libraryMaterial)
+    .where(and(eq(libraryMaterial.id, materialId), eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.vocabulary, true)));
+  if (!template) return;
+  const words = await db
+    .select({ id: vocabularyWord.id })
+    .from(vocabularyWord)
+    .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId), inArray(sql`lower(${vocabularyWord.word})`, missed)));
+  await missedOutsideTraining(db, teacherId, studentId, words.map((w) => w.id));
 }
 
 export type CountedGameResult = { title: string; playedAt: Date; playedWithTeacher: boolean; answers: GameAnswer[] };

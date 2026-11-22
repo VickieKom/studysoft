@@ -167,14 +167,15 @@ export async function answerExercise(db: Database, teacherId: string, studentId:
 }
 
 /**
- * Words the student got wrong in a submitted homework (#284), in the
- * submission's transaction: each counts one mistake towards «часто
+ * Words the student got wrong outside the training: in a submitted homework
+ * (#284), in the submission's transaction, or in a game template's result
+ * (#285): each counts one mistake towards «часто
  * ошибается», starts again from the first interval and is due tomorrow in
  * the student's time zone — unless it is due by then already, or new.
  * A right answer in homework moves nothing: «закрепилось» comes from the
  * training only.
  */
-export async function missedInHomework(db: Pick<Database, "select" | "update">, teacherId: string, studentId: string, ids: string[], now: Date = new Date()): Promise<void> {
+export async function missedOutsideTraining(db: Pick<Database, "select" | "update">, teacherId: string, studentId: string, ids: string[], now: Date = new Date()): Promise<void> {
   if (ids.length === 0) return;
   const today = await studentToday(db, teacherId, studentId, now);
   if (!today) return;

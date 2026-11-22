@@ -153,7 +153,7 @@ describe("game results", () => {
     const answer = { task: "A task", answer: "x", correct: false };
     const broken: unknown[] = [
       { type: "something-else", version: 1, answers: [answer] },
-      { type: "studysoft.game-result", version: 2, answers: [answer] },
+      { type: "studysoft.game-result", version: 3, answers: [answer] },
       { type: "studysoft.game-result", version: 1, answers: [] },
       { type: "studysoft.game-result", version: 1, answers: [{ ...answer, correct: "no" }] },
       { type: "studysoft.game-result", version: 1, answers: [{ correct: false, answer: "x" }] },
