@@ -49,7 +49,7 @@ export const agentPrepRouter = router({
   /** The library materials a plan may take as a stage: warm-ups, games and videos. */
   lessonMaterials: agentProcedure
     .input(z.object({ lessonId: z.uuid() }))
-    .output(z.array(z.object({ id: z.uuid(), kind: z.enum(MATERIAL_KINDS), title: z.string(), level: z.string(), topic: z.string().nullable() }).strict()))
+    .output(z.array(z.object({ id: z.uuid(), kind: z.enum(MATERIAL_KINDS), title: z.string(), level: z.string(), topics: z.array(z.string()) }).strict()))
     .query(async ({ ctx, input }) => {
       if (!(await findPreparation(ctx.db, ctx.teacherId, input.lessonId))) throw notFound();
       return (await stageMaterials(ctx.db, ctx.teacherId)).map((m) => ({ ...m, kind: m.kind as (typeof MATERIAL_KINDS)[number] }));

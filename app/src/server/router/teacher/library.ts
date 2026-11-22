@@ -12,6 +12,8 @@ import {
   MAX_QUESTIONS,
   MAX_TITLE_LENGTH,
   MAX_TOPIC_LENGTH,
+  MAX_TOPICS,
+  parseTopics,
   MAX_URL_LENGTH,
 } from "../../../domain/library";
 import { LEVELS } from "../../../domain/student";
@@ -41,11 +43,13 @@ const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 export const tags = z.object({
   title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
   level: z.enum(LEVELS),
+  // Topics separated by commas (#290): at most 10, each at most 100 characters; empty for none.
   topic: z
     .string()
-    .trim()
-    .max(MAX_TOPIC_LENGTH)
-    .transform((t) => (t === "" ? null : t)),
+    .max(MAX_TOPICS * (MAX_TOPIC_LENGTH + 2))
+    .transform(parseTopics)
+    .refine((list) => list.length <= MAX_TOPICS, { message: `Не больше ${MAX_TOPICS} тем` })
+    .refine((list) => list.every((t) => t.length <= MAX_TOPIC_LENGTH), { message: `Тема длиннее ${MAX_TOPIC_LENGTH} знаков` }),
   ageGroup: z.enum(AGE_GROUPS),
 });
 
@@ -74,7 +78,8 @@ const material = z
     kind: z.enum(MATERIAL_KINDS),
     title: z.string(),
     level: z.enum(LEVELS),
-    topic: z.string().nullable(),
+    // Its topics (#290).
+    topics: z.array(z.string()),
     ageGroup: z.enum(AGE_GROUPS),
     /** A game's page, a warm-up's picture or an own video; null for a questions warm-up and a video link. */
     fileUrl: z.string().nullable(),
@@ -94,7 +99,7 @@ const output = (m: Material) => ({
   kind: m.kind,
   title: m.title,
   level: m.level,
-  topic: m.topic,
+  topics: m.topics,
   ageGroup: m.ageGroup as AgeGroup,
   fileUrl: m.hasFile ? `/api/files/library/${m.id}` : null,
   questions: m.questions,

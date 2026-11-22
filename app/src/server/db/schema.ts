@@ -453,7 +453,10 @@ export const libraryMaterial = pgTable(
     title: text("title").notNull(),
     level: text("level").notNull(),
     // Free text, as in the homework format; the filter offers the ones in use.
+    // shortcut: the single topic before #290, copied into `topics` and no longer read or written; dropped once every environment runs #290 (#299)
     topic: text("topic"),
+    // Its topics (#290), as typed, a repeat in another case kept once; the filter offers every one in use.
+    topics: text("topics").array().notNull().default(sql`'{}'::text[]`),
     ageGroup: text("age_group").notNull(),
     // A game's HTML, a picture warm-up's picture (#116) or an own video (#117); a questions warm-up and a video link have no file.
     blobId: uuid("blob_id").references(() => blob.id),

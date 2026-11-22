@@ -52,7 +52,9 @@ const libraryTags = {
     .describe("The id of your earlier draft to replace; it is replaced while the teacher has neither edited nor added it"),
   title: z.string().describe("What the teacher sees in the library, up to 200 characters"),
   level: z.enum(["A1", "A2", "B1", "B2", "C1"]).describe("CEFR level"),
-  topic: z.string().describe("A topic for the library's filter, up to 100 characters; empty for none"),
+  topic: z
+    .string()
+    .describe("Topics for the library's filter, separated by commas: up to 10, each up to 100 characters; empty for none"),
   ageGroup: z.enum(["younger", "teens"]).describe("younger children or teens"),
 };
 

@@ -162,7 +162,7 @@ export async function ownLesson(db: Database, teacherId: string, lessonId: strin
 /** The materials a plan may take: this teacher's warm-ups, games and videos. */
 export async function stageMaterials(db: Database, teacherId: string) {
   return db
-    .select({ id: libraryMaterial.id, kind: libraryMaterial.kind, title: libraryMaterial.title, level: libraryMaterial.level, topic: libraryMaterial.topic })
+    .select({ id: libraryMaterial.id, kind: libraryMaterial.kind, title: libraryMaterial.title, level: libraryMaterial.level, topics: libraryMaterial.topics })
     .from(libraryMaterial)
     .where(and(eq(libraryMaterial.teacherId, teacherId), inArray(libraryMaterial.kind, [...STAGE_MATERIAL_KINDS])))
     .orderBy(asc(libraryMaterial.title));

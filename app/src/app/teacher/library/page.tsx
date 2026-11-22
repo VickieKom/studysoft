@@ -105,7 +105,9 @@ export default async function LibraryPage({ searchParams }: Props) {
                     <span>{MATERIAL_KIND_FILTERS[m.kind]}</span>
                     {m.kind === "game" && m.warmup && <span>{MATERIAL_KIND_FILTERS.warmup}</span>}
                     <span>{m.level}</span>
-                    {m.topic && <span>{m.topic}</span>}
+                    {m.topics.map((topic) => (
+                      <span key={topic}>{topic}</span>
+                    ))}
                     <span>{AGE_GROUP_LABELS[m.ageGroup]}</span>
                   </span>
                   <Link href={`/teacher/library/${m.id}`} className="self-start text-small text-green-600 hover:text-green-700">
