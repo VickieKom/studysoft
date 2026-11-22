@@ -8,7 +8,9 @@
 // понял», «пока путаюсь»; and «А ещё я хочу…», free text, optional. The
 // topics are those of the period's lesson materials and homework tasks, at
 // most three (product owner, 2026-11-23). In the draft the teacher removes
-// any question and adds her own. On the child's page the survey comes
+// any question and adds her own, answered with text. Any question may be
+// left unanswered: «Готово» keeps what the child answered (product owner,
+// 2026-11-23). On the child's page the survey comes
 // first, above the homework, until answered or skipped; it counts for
 // nothing. «Фидбэк» on the card shows the answers. A homework taken back
 // before the survey is answered takes the survey with it. The period is
@@ -223,6 +225,7 @@ test("the child gets the survey before the homework, answers it, and then gets t
   await question(shown, MORE).getByRole("button", { name: "planets", exact: true }).click();
   await expect(question(shown, CLEAR_PLANETS).getByRole("button")).toHaveText(["могу объяснить", "почти понял", "пока путаюсь"]);
   await question(shown, CLEAR_PLANETS).getByRole("button", { name: "почти понял", exact: true }).click();
+  // «Про что хочется ещё?» answered, the own question too; «Насколько понятно» on pets is gone, and nothing else is required.
   await question(shown, OWN).getByRole("textbox").fill("Про космос");
   await question(shown, WISH).getByRole("textbox").fill("Больше игр про космос");
   await expect(shown.getByRole("button", { name: "Пропустить", exact: true })).toBeVisible();
