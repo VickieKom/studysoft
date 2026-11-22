@@ -3,6 +3,7 @@
 // homework draft prepared for the lesson. A lesson is «подготовлен» once the
 // teacher has saved or approved its plan. The assistant only drafts
 // (AGENTS.md, rule 5); approving is the teacher's.
+import { gamesForStudent } from "../library/material-students";
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { type LessonPlan, lessonPlanSchema, STAGE_MATERIAL_KINDS, withWaitingHomework } from "../../domain/lesson-plan";
 import type { TextbookStructure } from "../../domain/textbook-structure";
@@ -277,9 +278,25 @@ export async function findPreparation(db: Database, teacherId: string, lessonId:
     ),
     homeworkId: row?.homeworkId ?? null,
     lessons: orderedLessons(withBook.structure),
-    materials: await stageMaterials(db, teacherId),
+    materials: await prepMaterials(db, teacherId, found.studentId),
     homeworkDrafts: drafts,
   };
+}
+
+/**
+ * The materials a plan may take, each game with whether it is made for this
+ * student (#292) and its textbook lesson (#291), for the order the prep
+ * offers them in (#293, `domain/prep-materials.ts`).
+ */
+async function prepMaterials(db: Database, teacherId: string, studentId: string) {
+  const listed = await stageMaterials(db, teacherId);
+  const links = await db
+    .select({ id: libraryMaterial.id, textbookLessonId: libraryMaterial.textbookLessonId })
+    .from(libraryMaterial)
+    .where(and(eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.kind, "game")));
+  const lessonOf = new Map(links.map((l) => [l.id, l.textbookLessonId]));
+  const forStudent = new Set((await gamesForStudent(db, teacherId, studentId)).map((g) => g.id));
+  return listed.map((m) => ({ ...m, forStudent: forStudent.has(m.id), textbookLessonId: lessonOf.get(m.id) ?? null }));
 }
 
 type Saved = "saved" | "not_found" | "conflict" | { errors: string[] };

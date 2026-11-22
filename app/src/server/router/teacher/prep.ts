@@ -56,7 +56,18 @@ export const prepRouter = router({
           homeworkId: z.uuid().nullable(),
           lessons: z.array(choice),
           materials: z.array(
-            z.object({ id: z.uuid(), kind: z.enum(MATERIAL_KINDS), title: z.string(), level: z.string(), topics: z.array(z.string()) }).strict(),
+            z
+              .object({
+                id: z.uuid(),
+                kind: z.enum(MATERIAL_KINDS),
+                title: z.string(),
+                level: z.string(),
+                topics: z.array(z.string()),
+                // For the order of «Добавить из библиотеки» (#293): made for this student, and the textbook lesson.
+                forStudent: z.boolean(),
+                textbookLessonId: z.uuid().nullable(),
+              })
+              .strict(),
           ),
           homeworkDrafts: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
         })
