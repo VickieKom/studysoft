@@ -24,6 +24,8 @@ Connects the teacher's AI assistant to the platform (#3). The assistant runs in 
 | `list_upcoming_lessons` | The teacher's lessons in the next two weeks, each prepared or not (#151) |
 | `read_lesson_plan` | A lesson's approved plan, the assistant's draft, the proposed next book lesson and the textbook's lessons |
 | `list_lesson_materials` | Warm-ups, games and videos to add as stages |
+| `read_library_video` | A library video's title, link and the transcript the teacher typed in «Расшифровка», to draft its tasks from (#326) |
+| `save_video_tasks_draft` | Saves a library video's tasks, in the homework format and text only, as a draft «от ассистента» beside the confirmed ones; replaces it until the teacher removes a task, then refuses. Never confirms (#326) |
 | `save_lesson_plan` | Saves a lesson's plan as a draft «от ассистента»; never approves |
 
 Never returned: last names, contacts, payments, links.

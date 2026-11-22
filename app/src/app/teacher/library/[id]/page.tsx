@@ -4,6 +4,7 @@ import { LibraryAddDraft } from "@/components/library-add-draft";
 import { LibraryDelete } from "@/components/library-delete";
 import { LibraryGameFrame } from "@/components/library-game-frame";
 import { LibraryOpenToStudent } from "@/components/library-open-to-student";
+import { VideoTasks } from "@/components/video-tasks";
 import { AGE_GROUP_LABELS, MATERIAL_KIND_FILTERS } from "@/domain/library";
 import { timeIn } from "@/domain/schedule";
 import { isNotFound } from "@/server/router";
@@ -23,6 +24,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * lesson the teacher opens a game to the student (#118), or plays it with
  * them on this page: its result goes to that lesson's student (#147).
  * The assistant's draft (#120) says so and offers «Добавить в библиотеку».
+ * A video has «Задания к видео» (#326): the assistant's draft of its tasks
+ * and the confirmed ones.
  */
 export default async function MaterialPage({ params }: Props) {
   const { id } = await params;
@@ -41,6 +44,7 @@ export default async function MaterialPage({ params }: Props) {
   const [inLesson, opened] = opensToStudent
     ? await Promise.all([caller.teacher.library.studentsInLesson(), caller.teacher.library.openedTo({ id })])
     : [[], null];
+  const videoTasks = material.kind === "video" ? await caller.teacher.library.videoTasks({ id }) : null;
   // A game template without a lesson going on gets the words of a student she picks (#282).
   const allStudents =
     material.kind === "game" && material.vocabulary && inLesson.length === 0
@@ -134,6 +138,7 @@ export default async function MaterialPage({ params }: Props) {
           <img src={material.fileUrl} alt={material.title} className="w-full rounded-card border border-border" />
         )
       )}
+      {videoTasks && <VideoTasks id={material.id} tasks={videoTasks} />}
     </main>
   );
 }

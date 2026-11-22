@@ -472,6 +472,9 @@ export const libraryMaterial = pgTable(
     textbookLessonId: uuid("textbook_lesson_id"),
     // A video link, http or https (#117).
     url: text("url"),
+    // A video's transcript (#326), typed in «Расшифровка» by the teacher so
+    // that the assistant drafts the video's tasks from its text.
+    transcript: text("transcript"),
     // A game or warm-up the assistant saved (#120): not in the library until
     // the teacher adds it. The assistant replaces its draft while
     // `teacher_edited_at` is empty; after her edit it makes a new one.
@@ -1047,4 +1050,31 @@ export const assessment = pgTable(
     }),
     index("assessment_student_id_idx").on(t.studentId),
   ],
+);
+
+/**
+ * A library video's tasks (#326), in the homework format: the confirmed ones
+ * a student gets (#327), and beside them the assistant's draft. The
+ * assistant's save replaces its draft while the teacher has done nothing to
+ * it (`draft_edited_at` empty); «Убрать» sets it; «Подтвердить» makes the
+ * draft the confirmed tasks. One row per video, gone with it.
+ */
+export const videoTasks = pgTable(
+  "video_tasks",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => libraryMaterial.id, { onDelete: "cascade" }),
+    tasks: jsonb("tasks"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    draft: jsonb("draft"),
+    draftEditedAt: timestamp("draft_edited_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("video_tasks_material_key").on(t.materialId)],
 );

@@ -28,6 +28,8 @@ export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 /** The video files a browser plays (#117); other formats are converted by the teacher before uploading. */
 export const VIDEO_FILE_ACCEPT = ".mp4,.m4v,.webm,.mov,video/mp4,video/webm,video/quicktime";
 export const MAX_URL_LENGTH = 2000;
+/** The longest transcript the teacher pastes into a video's «Расшифровка» (#326), in characters. */
+export const MAX_TRANSCRIPT_LENGTH = 100_000;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_TOPIC_LENGTH = 100;
 /** The most topics one material has (#290). */
