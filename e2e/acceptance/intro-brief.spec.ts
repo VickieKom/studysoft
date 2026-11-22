@@ -53,6 +53,8 @@ async function newRequest(page: Page, firstName: string) {
   await page.getByLabel("Имя ребёнка").fill(firstName);
   await page.getByLabel("Источник").selectOption({ label: "Авито" });
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  // Saved before the page is left: the request is under «Заявка».
+  await expect(page.getByRole("region", { name: "Заявка", exact: true }).getByRole("listitem").filter({ hasText: firstName })).toHaveCount(1);
   await openRequest(page, firstName);
 }
 
