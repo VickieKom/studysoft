@@ -41,6 +41,11 @@ export default async function MaterialPage({ params }: Props) {
   const [inLesson, opened] = opensToStudent
     ? await Promise.all([caller.teacher.library.studentsInLesson(), caller.teacher.library.openedTo({ id })])
     : [[], null];
+  // A game template without a lesson going on gets the words of a student she picks (#282).
+  const allStudents =
+    material.kind === "game" && material.vocabulary && inLesson.length === 0
+      ? (await caller.teacher.students.list()).map((s) => ({ studentId: s.id, name: s.lastName ? `${s.firstName} ${s.lastName}` : s.firstName }))
+      : [];
 
   return (
     <main className="flex flex-col gap-4">
@@ -56,6 +61,7 @@ export default async function MaterialPage({ params }: Props) {
           <p className="flex flex-wrap gap-2 text-small text-text-secondary">
             <span>{MATERIAL_KIND_FILTERS[material.kind]}</span>
             {material.kind === "game" && material.warmup && <span>{MATERIAL_KIND_FILTERS.warmup}</span>}
+            {material.kind === "game" && material.vocabulary && <span>Со словами словаря</span>}
             <span>{material.level}</span>
             {material.topic && <span>{material.topic}</span>}
             <span>{AGE_GROUP_LABELS[material.ageGroup]}</span>
@@ -89,7 +95,14 @@ export default async function MaterialPage({ params }: Props) {
           ))}
         </ol>
       ) : material.kind === "game" && material.fileUrl ? (
-        <LibraryGameFrame id={material.id} title={material.title} fileUrl={material.fileUrl} students={inLesson} />
+        <LibraryGameFrame
+          id={material.id}
+          title={material.title}
+          fileUrl={material.fileUrl}
+          students={inLesson}
+          withWords={material.vocabulary}
+          allStudents={allStudents}
+        />
       ) : material.kind === "video" && material.fileUrl ? (
         <video
           src={material.fileUrl}

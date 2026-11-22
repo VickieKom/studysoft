@@ -43,19 +43,21 @@ describe("assistant tools", () => {
     expect(result.content[0]!.text).toMatch(/^not found/);
   });
 
-  it("return the homework format and the game result format, each with its version", async () => {
+  it("return the homework format, the game result format and the game words format, each with its version", async () => {
     const seen: string[] = [];
     const fakeFetch = (async (input: string | URL | Request) => {
       seen.push(String(input));
-      const name = String(input).includes("agent.gameResultFormat") ? "Game result" : "Homework";
+      const url = String(input);
+      const name = url.includes("agent.gameResultFormat") ? "Game result" : url.includes("agent.gameWordsFormat") ? "Game words" : "Homework";
       const body = [{ result: { data: { version: 1, description: `# ${name} format, version 1` } } }];
       return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     }) as typeof fetch;
     const result = await createTools(createPlatform("https://platform.example.test", "test-token", fakeFetch)).getHomeworkFormat();
     expect(seen.some((url) => url.includes("/api/trpc/agent.homeworkFormat"))).toBe(true);
     expect(seen.some((url) => url.includes("/api/trpc/agent.gameResultFormat"))).toBe(true);
+    expect(seen.some((url) => url.includes("/api/trpc/agent.gameWordsFormat"))).toBe(true);
     expect(result.content[0]!.text).toMatch(
-      /^Homework format, version 1\n\n# Homework format, version 1\n\nGame result format, version 1\n\n# Game result format/,
+      /^Homework format, version 1\n\n# Homework format, version 1\n\nGame result format, version 1\n\n# Game result format, version 1\n\nGame words format, version 1\n\n# Game words format/,
     );
   });
 

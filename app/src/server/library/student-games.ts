@@ -125,9 +125,9 @@ export async function studentGame(
   studentId: string,
   id: string,
   now: Date = new Date(),
-): Promise<{ id: string; title: string } | null> {
+): Promise<{ id: string; title: string; withWords: boolean } | null> {
   const [row] = await db
-    .select({ id: libraryMaterial.id, title: libraryMaterial.title })
+    .select({ id: libraryMaterial.id, title: libraryMaterial.title, withWords: libraryMaterial.vocabulary })
     .from(gameAccess)
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
     .where(and(openMaterials(teacherId, studentId, now, "game"), eq(gameAccess.materialId, id)));

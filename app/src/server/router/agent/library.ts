@@ -16,16 +16,16 @@ const replace = z.uuid().optional();
 const saved = z.object({ id: z.uuid() }).strict();
 
 export const agentLibraryRouter = router({
-  /** A game: one HTML file as text, at most 5 MB. */
+  /** A game: one HTML file as text, at most 5 MB; `vocabulary` marks a game template that gets a student's words (#282). */
   saveGameDraft: agentProcedure
-    .input(tags.extend({ id: replace, html: z.string().max(MAX_GAME_BYTES) }))
+    .input(tags.extend({ id: replace, html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false) }))
     .output(saved)
     .mutation(async ({ ctx, input }) => {
-      const { id, html, ...rest } = input;
+      const { id, html, vocabulary, ...rest } = input;
       const blobId = await storeGame(ctx.db, ctx.teacherId, new TextEncoder().encode(html));
       if (blobId === "too_big") throw refuse("Файл больше 5 МБ");
       if (blobId === "not_html") throw refuse("Это не HTML-страница: нужна игра одним файлом .html");
-      return { id: await saveDraft(ctx.db, ctx.teacherId, rest, { kind: "game", blobId }, id?.toLowerCase()) };
+      return { id: await saveDraft(ctx.db, ctx.teacherId, rest, { kind: "game", blobId, vocabulary }, id?.toLowerCase()) };
     }),
 
   /** A warm-up: a picture (base64, PNG, JPEG or WebP, at most 2 MB) or a list of questions. */

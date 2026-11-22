@@ -25,6 +25,7 @@ import {
 import type { Board } from "@/domain/board";
 import { LessonBoard } from "./lesson-board";
 import type { LessonResourcesView } from "./lesson-panel";
+import { useGameWords } from "./game-words";
 import { routerClient } from "./router-client";
 
 /** The stage says it is there this often, and asks for the state when it opens. */
@@ -320,6 +321,8 @@ function StageGame({
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // A game template gets the lesson's student's words (#282); for any other game the server says not found and nothing is sent.
+  useGameWords(frame, { kind: "stage", lessonId, materialId });
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow || !looksLikeGameResult(event.data)) return;

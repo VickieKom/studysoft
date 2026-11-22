@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { looksLikeGameResult } from "@/domain/game-result-format";
 import { GAME_SANDBOX } from "@/domain/library";
+import { useGameWords } from "./game-words";
 import { routerClient } from "./router-client";
 
 /**
@@ -12,8 +13,10 @@ import { routerClient } from "./router-client";
  * checks the format again and whether the game is still open. The student
  * is not told either way: the game shows its own result.
  */
-export function StudentGameFrame({ id, title, fileUrl }: { id: string; title: string; fileUrl: string }) {
+export function StudentGameFrame({ id, title, fileUrl, withWords }: { id: string; title: string; fileUrl: string; withWords: boolean }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  // A game template gets the student's own words (#282).
+  useGameWords(frame, withWords ? { kind: "student", id } : null);
   // Results go one after another, so a later round is never kept before an earlier one: the latest kept is the one that counts.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {

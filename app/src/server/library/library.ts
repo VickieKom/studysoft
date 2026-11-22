@@ -19,6 +19,8 @@ export type Material = MaterialTags & {
   questions: string[] | null;
   /** A game the teacher also uses as a warm-up. */
   warmup: boolean;
+  /** A game template (#282): it gets a student's words when it opens. */
+  vocabulary: boolean;
   /** A video link's address; null for every other material. */
   url: string | null;
   /** Whether a file is served for it: a game's page, a warm-up's picture or an own video. */
@@ -37,6 +39,7 @@ const columns = {
   ageGroup: libraryMaterial.ageGroup,
   questions: libraryMaterial.questions,
   warmup: libraryMaterial.warmup,
+  vocabulary: libraryMaterial.vocabulary,
   url: libraryMaterial.url,
   draft: libraryMaterial.draft,
   blobId: libraryMaterial.blobId,
@@ -73,12 +76,13 @@ export async function createGame(
   teacherId: string,
   tags: MaterialTags,
   html: Uint8Array,
+  vocabulary = false,
 ): Promise<{ id: string } | "too_big" | "not_html"> {
   const blobId = await storeGame(db, teacherId, html);
   if (blobId === "too_big" || blobId === "not_html") return blobId;
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "game", ...tags, blobId })
+    .values({ teacherId, kind: "game", ...tags, blobId, vocabulary })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createGame: insert returned no row");
   return row;
@@ -256,7 +260,7 @@ export async function listDrafts(db: Database, teacherId: string): Promise<Mater
 
 /** What the assistant saves: a game's file, a picture warm-up's picture, or a questions warm-up's questions. */
 export type DraftContent =
-  | { kind: "game"; blobId: string }
+  | { kind: "game"; blobId: string; vocabulary?: boolean }
   | { kind: "warmup"; blobId: string }
   | { kind: "warmup"; questions: string[] };
 
@@ -278,6 +282,7 @@ export async function saveDraft(
     ...tags,
     blobId: "blobId" in content ? content.blobId : null,
     questions: "questions" in content ? content.questions : null,
+    ...(content.kind === "game" ? { vocabulary: content.vocabulary ?? false } : {}),
   };
   if (replace) {
     const [replaced] = await db
@@ -326,7 +331,7 @@ export async function findMaterial(db: Database, teacherId: string, id: string):
  * What an edit may change besides the tags: whether a game is also a
  * warm-up, and a questions warm-up's questions (#116).
  */
-export type MaterialChanges = MaterialTags & { warmup?: boolean; questions?: string[] };
+export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: boolean; questions?: string[] };
 
 /**
  * Renames and retags a material of this teacher; false when there is none.
@@ -335,15 +340,18 @@ export type MaterialChanges = MaterialTags & { warmup?: boolean; questions?: str
  * does not fit the material is not applied to it.
  */
 export async function updateMaterial(db: Database, teacherId: string, id: string, changes: MaterialChanges): Promise<boolean> {
-  const { warmup, questions, ...tags } = changes;
+  const { warmup, vocabulary, questions, ...tags } = changes;
   const own = and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId));
   return db.transaction(async (tx) => {
     // Her edit of a draft keeps the assistant from replacing it (#120).
     const edited = { teacherEditedAt: sql`CASE WHEN ${libraryMaterial.draft} THEN now() ELSE ${libraryMaterial.teacherEditedAt} END` };
     const rows = await tx.update(libraryMaterial).set({ ...tags, ...edited }).where(own).returning({ id: libraryMaterial.id });
     if (rows.length === 0) return false;
-    if (warmup !== undefined) {
-      await tx.update(libraryMaterial).set({ warmup }).where(and(own, eq(libraryMaterial.kind, "game")));
+    if (warmup !== undefined || vocabulary !== undefined) {
+      await tx
+        .update(libraryMaterial)
+        .set({ ...(warmup !== undefined ? { warmup } : {}), ...(vocabulary !== undefined ? { vocabulary } : {}) })
+        .where(and(own, eq(libraryMaterial.kind, "game")));
     }
     if (questions !== undefined) {
       await tx

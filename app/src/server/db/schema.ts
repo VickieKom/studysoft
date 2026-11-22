@@ -461,6 +461,8 @@ export const libraryMaterial = pgTable(
     questions: text("questions").array(),
     // A game the teacher also uses as a warm-up: listed under both (#116).
     warmup: boolean("warmup").notNull().default(false),
+    // A game template (#282): when it opens, the platform sends it the words of a student.
+    vocabulary: boolean("vocabulary").notNull().default(false),
     // A video link, http or https (#117).
     url: text("url"),
     // A game or warm-up the assistant saved (#120): not in the library until

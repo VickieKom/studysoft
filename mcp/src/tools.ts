@@ -64,6 +64,13 @@ export const gameDraftInput = {
       "The whole game as one self-contained HTML file, at most 5 MB. To report the student's answers it posts a result " +
         "in the game result format (see get_homework_format)",
     ),
+  vocabulary: z
+    .boolean()
+    .optional()
+    .describe(
+      "true for a game template with no words of its own: the platform sends it a student's words in the game words format " +
+        "(see get_homework_format)",
+    ),
 };
 
 export const warmupDraftInput = {
@@ -266,9 +273,12 @@ export function createTools(platform: Platform) {
         const format = await platform.agent.homeworkFormat.query();
         // Games report results in a format of their own (#119): the assistant gets it with the homework format.
         const game = await platform.agent.gameResultFormat.query();
+        // A game template gets a student's words in a format of its own (#282).
+        const words = await platform.agent.gameWordsFormat.query();
         const text =
           `Homework format, version ${format.version}\n\n${format.description}\n\n` +
-          `Game result format, version ${game.version}\n\n${game.description}`;
+          `Game result format, version ${game.version}\n\n${game.description}\n\n` +
+          `Game words format, version ${words.version}\n\n${words.description}`;
         return { content: [{ type: "text", text }] };
       } catch (error) {
         return failure(error);
@@ -289,7 +299,7 @@ export function createTools(platform: Platform) {
         return failure(error);
       }
     },
-    async saveGameDraft(input: LibraryTags & { html: string }): Promise<ToolResult> {
+    async saveGameDraft(input: LibraryTags & { html: string; vocabulary?: boolean }): Promise<ToolResult> {
       try {
         return savedToLibrary((await platform.agent.saveGameDraft.mutate(input)).id);
       } catch (error) {

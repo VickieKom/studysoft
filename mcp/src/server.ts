@@ -90,7 +90,8 @@ server.registerTool(
     title: "Homework format",
     description:
       "The homework format the platform accepts, with its version: task types, keys, topic, skill, source; " +
-      "and the game result format, with which a game reports the student's answers to the platform. " +
+      "the game result format, with which a game reports the student's answers to the platform; " +
+      "and the game words format, in which a game template gets a student's words. " +
       "Read it before writing a homework or making a game.",
   },
   () => tools.getHomeworkFormat(),
@@ -128,7 +129,8 @@ server.registerTool(
     description:
       "Saves a game you made — one self-contained HTML file — to the teacher's library as a draft, under «От ассистента». " +
       "Pass the id of your earlier draft to replace it while the teacher has neither edited nor added it; otherwise a new " +
-      "draft is made. Only the teacher adds a draft to the library or deletes it.",
+      "draft is made. Only the teacher adds a draft to the library or deletes it. With vocabulary set, the game is a " +
+      "template: it has no words of its own and gets a student's words in the game words format.",
     inputSchema: gameDraftInput,
   },
   (input) => tools.saveGameDraft(input),

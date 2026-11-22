@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { looksLikeGameResult } from "@/domain/game-result-format";
 import { GAME_SANDBOX } from "@/domain/library";
+import { useGameWords } from "./game-words";
 import { routerClient } from "./router-client";
 
 const field = "h-10 rounded-control border border-border bg-bg px-3";
@@ -13,21 +14,31 @@ const field = "h-10 rounded-control border border-border bg-bg px-3";
  * game result format goes to that student and lesson (#147): with one
  * lesson going on, its student; with several, the one she picks; with none,
  * nothing is kept. Only messages from this frame count, and the server
- * checks the format and the lesson again.
+ * checks the format and the lesson again. A game template (#282) gets the
+ * words of the lesson's student, or, with no lesson going on, of the student
+ * she picks in «Слова ученика».
  */
 export function LibraryGameFrame({
   id,
   title,
   fileUrl,
   students,
+  withWords,
+  allStudents,
 }: {
   id: string;
   title: string;
   fileUrl: string;
   students: { studentId: string; name: string }[];
+  withWords: boolean;
+  /** All her students, for «Слова ученика» when no lesson is going on. */
+  allStudents: { studentId: string; name: string }[];
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [studentId, setStudentId] = useState(students.length === 1 ? students[0]!.studentId : "");
+  const [wordsOf, setWordsOf] = useState("");
+  const wordsStudent = students.length > 0 ? studentId : wordsOf;
+  useGameWords(frame, withWords && wordsStudent ? { kind: "library", id, studentId: wordsStudent } : null);
   const [error, setError] = useState<string | null>(null);
   // Results go one after another, so a later round is never kept before an earlier one (as on the student's page).
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -50,6 +61,21 @@ export function LibraryGameFrame({
     <div className="flex flex-col gap-2">
       {students.length === 0 && (
         <p className="text-small text-text-secondary">Сейчас нет урока: итог игры не сохранится</p>
+      )}
+      {students.length === 0 && withWords && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="game-words-student" className="text-small text-text-secondary">
+            Слова ученика
+          </label>
+          <select id="game-words-student" value={wordsOf} onChange={(e) => setWordsOf(e.target.value)} className={field}>
+            <option value="">выберите ученика</option>
+            {allStudents.map((s) => (
+              <option key={s.studentId} value={s.studentId}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
       {students.length === 1 && <p className="text-small text-text-secondary">Итог — в урок с: {students[0]!.name}</p>}
       {students.length > 1 && (

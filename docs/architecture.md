@@ -752,7 +752,7 @@ The archive is easy to keep in a private folder or a private git repository, whi
 
 **What never enters the repository.** The teacher's materials, textbook excerpts, characters, real student data. The `forbidden-files` check catches files by type and size but not text. All test data therefore lives in one guarded directory, `deploy/seed`, and the rule is repeated in `AGENTS.md`.
 
-**Games in stage 1.** A game receives only the colour theme from the shell. It returns a result with one message in the game result format (`docs/game-result-format.md`, #119): the student's answers, right or wrong, with topics, which join the student's mistakes. Awarding points from a game to homework is a separate decision for later.
+**Games in stage 1.** A game receives only the colour theme from the shell. A game marked «Со словами словаря», `vocabulary` on `library_material` (#282), is a template: it also receives a student's words with a confirmed translation in the game words format (`docs/game-words-format.md`), posted to its frame. Whose words depends on where it runs: the lesson's student on the stage and on her page during a lesson, the student she picks in «Слова ученика» with no lesson going on, the student behind the link for a game open to them (`library/game-words.ts`). It returns a result with one message in the game result format (`docs/game-result-format.md`, #119): the student's answers, right or wrong, with topics, which join the student's mistakes. Awarding points from a game to homework is a separate decision for later.
 
 **License.** The code is under the MIT license. Content is not covered by the code's license.
 

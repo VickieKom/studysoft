@@ -1,3 +1,5 @@
+import { gameWordsOutput } from "../../../domain/game-words-format";
+import { templateWords } from "../../library/game-words";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -78,6 +80,8 @@ const material = z
     fileUrl: z.string().nullable(),
     questions: z.array(z.string()).nullable(),
     warmup: z.boolean(),
+    // A game template that gets a student's words (#282).
+    vocabulary: z.boolean(),
     // A video link's address; null for every other material.
     url: z.string().nullable(),
     /** Saved by the assistant and not yet in the library (#120). */
@@ -95,6 +99,7 @@ const output = (m: Material) => ({
   fileUrl: m.hasFile ? `/api/files/library/${m.id}` : null,
   questions: m.questions,
   warmup: m.warmup,
+  vocabulary: m.vocabulary,
   url: m.url,
   draft: m.draft,
 });
@@ -140,11 +145,11 @@ export const libraryRouter = router({
 
   /** A game: one HTML file as text, at most 5 MB. */
   addGame: teacherProcedure
-    .input(tags.extend({ html: z.string().max(MAX_GAME_BYTES) }))
+    .input(tags.extend({ html: z.string().max(MAX_GAME_BYTES), vocabulary: z.boolean().default(false) }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { html, ...rest } = input;
-      const created = await createGame(ctx.db, ctx.teacherId, rest, new TextEncoder().encode(html));
+      const { html, vocabulary, ...rest } = input;
+      const created = await createGame(ctx.db, ctx.teacherId, rest, new TextEncoder().encode(html), vocabulary);
       if (created === "too_big") throw new TRPCError({ code: "BAD_REQUEST", message: "Файл больше 5 МБ" });
       if (created === "not_html")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Это не HTML-страница: нужна игра одним файлом .html" });
@@ -215,6 +220,20 @@ export const libraryRouter = router({
     }),
 
   /**
+   * The words a game template gets on her page (#282): of the student she
+   * picks, or of the lesson's. A game not marked «Со словами словаря», or
+   * not hers, or another teacher's student: NOT_FOUND.
+   */
+  words: teacherProcedure
+    .input(z.object({ id: z.uuid(), studentId: z.uuid() }))
+    .output(gameWordsOutput)
+    .query(async ({ ctx, input }) => {
+      const words = await templateWords(ctx.db, ctx.teacherId, input.id, input.studentId.toLowerCase());
+      if (!words) throw notFound();
+      return { words };
+    }),
+
+  /**
    * A result of a game the teacher runs on her page during a lesson (#147),
    * kept for the student of that lesson. A missing or another teacher's game
    * is NOT_FOUND; a message not in the game result format, or a student
@@ -256,7 +275,7 @@ export const libraryRouter = router({
 
   /** Title and tags; a game's warm-up mark; a questions warm-up's questions. */
   update: teacherProcedure
-    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), questions: questions.optional() }))
+    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional() }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { id, questions: lines, ...rest } = input;
