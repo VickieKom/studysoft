@@ -7,7 +7,11 @@
 // not touched it. On the video's page «Задания к видео» shows the draft «от
 // ассистента» by task, as the child will see it; the teacher removes a task
 // with «Убрать» and presses «Подтвердить». Confirmed tasks are the ones a
-// student gets (#327). No agent procedure confirms. A draft that fails the
+// student gets (#327). Any library video takes them, a link or the
+// teacher's own file. Once tasks are confirmed, the assistant's next save is
+// a new draft beside them, and they stay the student's until the teacher
+// confirms the new draft, which then replaces them (product owner,
+// 2026-11-23). No agent procedure confirms. A draft that fails the
 // format, and another teacher's video, are pinned by integration tests.
 //
 // The assistant's calls are the HTTP calls the MCP server makes with the
@@ -94,6 +98,9 @@ test("the teacher saves a video link with its transcript in «Расшифров
   await page.goto("/teacher/library");
   await control(page, "Загрузить").click();
   await page.getByLabel("Тип материала").selectOption({ label: "Видео" });
+  // Any library video takes a transcript, the teacher's own file too.
+  await page.getByLabel("Источник видео").selectOption({ label: "Файл" });
+  await expect(page.getByLabel("Расшифровка")).toBeVisible();
   await page.getByLabel("Источник видео").selectOption({ label: "Ссылка" });
   await page.getByLabel("Название").fill(TITLE);
   await page.getByLabel("Тема").fill("video tasks");
@@ -153,6 +160,34 @@ test("the teacher removes a task and confirms: two confirmed tasks", async ({ pa
   await expect(confirmed).toHaveCount(2);
   await expect(confirmed.nth(0)).toContainText("The robot wakes up at seven.");
   await expect(confirmed.nth(1)).toContainText("The robot stays at home in the rain.");
+});
+
+test("after confirmation the assistant's save is a new draft beside the confirmed tasks, which it replaces once confirmed", async ({
+  page,
+  assistant,
+}) => {
+  const token = await createToken(page);
+  const third = tasks("Robot walk, again", [
+    ["The robot walks to the red box.", 1],
+    ["The robot gets up at seven.", 0],
+  ]);
+  expect((await agentMutation(assistant, token, "agent.saveVideoTasksDraft", { videoId, tasks: third })).status).toBe(200);
+
+  await page.goto(videoPage);
+  const confirmed = videoTasks(page).getByRole("region", { name: "Подтверждённые задания" });
+  const draft = videoTasks(page).getByRole("region", { name: "Черновик от ассистента" });
+  await expect(confirmed.getByRole("listitem")).toHaveCount(2);
+  await expect(confirmed).toContainText("The robot stays at home in the rain.");
+  await expect(draft.getByRole("listitem")).toHaveCount(2);
+  await expect(draft).toContainText("The robot gets up at seven.");
+
+  await draft.getByRole("button", { name: "Подтвердить", exact: true }).click();
+  await page.reload();
+  await expect(videoTasks(page).getByRole("region", { name: "Черновик от ассистента" })).toHaveCount(0);
+  const replaced = videoTasks(page).getByRole("listitem");
+  await expect(replaced).toHaveCount(2);
+  await expect(videoTasks(page)).toContainText("The robot gets up at seven.");
+  await expect(videoTasks(page)).not.toContainText("The robot stays at home in the rain.");
 });
 
 test("no agent procedure confirms the tasks", async ({ page, assistant }) => {
