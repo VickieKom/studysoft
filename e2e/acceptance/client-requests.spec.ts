@@ -73,9 +73,9 @@ test("the teacher adds a request from Avito: it shows under «Заявка», da
 
   await control(page, "Новая заявка").click();
   await expect(page.getByLabel("Дата")).toHaveValue(todayInMoscow());
-  // The first name and the source are required.
+  // The first name and the source are required: the form says so (Next has an alert of its own for route changes).
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("form", { name: "Новая заявка" }).getByRole("alert")).toBeVisible();
 
   await page.getByLabel("Имя ребёнка").fill("Заявкина");
   await page.getByLabel("Возраст").fill("9");
