@@ -56,7 +56,7 @@ export const prepRouter = router({
           homeworkId: z.uuid().nullable(),
           lessons: z.array(choice),
           materials: z.array(
-            z.object({ id: z.uuid(), kind: z.enum(MATERIAL_KINDS), title: z.string(), level: z.string(), topic: z.string().nullable() }).strict(),
+            z.object({ id: z.uuid(), kind: z.enum(MATERIAL_KINDS), title: z.string(), level: z.string(), topics: z.array(z.string()) }).strict(),
           ),
           homeworkDrafts: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
         })

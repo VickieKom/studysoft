@@ -3,16 +3,22 @@
 // another teacher's material is the same as a missing one. The assistant saves
 // games and warm-ups as drafts, which stay out of the library until the
 // teacher adds them (#120; AGENTS.md, rule 5).
-import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, arrayContains, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { type AgeGroup, MAX_GAME_BYTES, MAX_PICTURE_BYTES, MAX_URL_LENGTH, type MaterialKind } from "../../domain/library";
 import type { Level } from "../../domain/student";
 import { type BlobReader, openBlob, saveBlob } from "../blob/store";
 import type { Database } from "../db/client";
 import { blob, libraryMaterial } from "../db/schema";
 
-export type MaterialTags = { title: string; level: Level; topic: string | null; ageGroup: AgeGroup };
+/** The tags a material is saved with; `topic` is the list typed into «Тема» (#290), stored as `topics`. */
+export type MaterialTags = { title: string; level: Level; topic: string[]; ageGroup: AgeGroup };
 
-export type Material = MaterialTags & {
+/** The tags as the table's columns. */
+const tagColumns = ({ topic, ...rest }: MaterialTags) => ({ ...rest, topics: topic });
+
+export type Material = Omit<MaterialTags, "topic"> & {
+  /** Its topics (#290). */
+  topics: string[];
   id: string;
   kind: MaterialKind;
   /** A questions warm-up's questions; null for every other material. */
@@ -35,7 +41,7 @@ const columns = {
   kind: libraryMaterial.kind,
   title: libraryMaterial.title,
   level: libraryMaterial.level,
-  topic: libraryMaterial.topic,
+  topics: libraryMaterial.topics,
   ageGroup: libraryMaterial.ageGroup,
   questions: libraryMaterial.questions,
   warmup: libraryMaterial.warmup,
@@ -82,7 +88,7 @@ export async function createGame(
   if (blobId === "too_big" || blobId === "not_html") return blobId;
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "game", ...tags, blobId, vocabulary })
+    .values({ teacherId, kind: "game", ...tagColumns(tags), blobId, vocabulary })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createGame: insert returned no row");
   return row;
@@ -116,7 +122,7 @@ export async function createPictureWarmup(
   if (blobId === "too_big" || blobId === "not_picture") return blobId;
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "warmup", ...tags, blobId })
+    .values({ teacherId, kind: "warmup", ...tagColumns(tags), blobId })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createPictureWarmup: insert returned no row");
   return row;
@@ -131,7 +137,7 @@ export async function createQuestionsWarmup(
 ): Promise<{ id: string }> {
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "warmup", ...tags, questions })
+    .values({ teacherId, kind: "warmup", ...tagColumns(tags), questions })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createQuestionsWarmup: insert returned no row");
   return row;
@@ -184,7 +190,7 @@ export async function createVideoLink(
   if (!isVideoLink(url)) return "not_a_link";
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "video", ...tags, url })
+    .values({ teacherId, kind: "video", ...tagColumns(tags), url })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createVideoLink: insert returned no row");
   return row;
@@ -206,7 +212,7 @@ export async function createVideoFile(
   if (!file || file.teacherId !== teacherId || !file.contentType.startsWith("video/")) return "no_file";
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "video", ...tags, blobId })
+    .values({ teacherId, kind: "video", ...tagColumns(tags), blobId })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createVideoFile: insert returned no row");
   return row;
@@ -230,7 +236,7 @@ export async function listMaterials(db: Database, teacherId: string, filter: Mat
             ? eq(libraryMaterial.kind, filter.kind)
             : undefined,
         filter.level ? eq(libraryMaterial.level, filter.level) : undefined,
-        filter.topic ? eq(libraryMaterial.topic, filter.topic) : undefined,
+        filter.topic ? arrayContains(libraryMaterial.topics, [filter.topic]) : undefined,
         filter.ageGroup ? eq(libraryMaterial.ageGroup, filter.ageGroup) : undefined,
       ),
     )
@@ -238,14 +244,14 @@ export async function listMaterials(db: Database, teacherId: string, filter: Mat
   return rows.map(toMaterial);
 }
 
-/** The topics this teacher's materials use, for the topic filter. */
+/** The topics this teacher's materials use, for the topic filter: every topic of every material (#290). */
 export async function materialTopics(db: Database, teacherId: string): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ topic: libraryMaterial.topic })
-    .from(libraryMaterial)
-    .where(and(eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.draft, false), isNotNull(libraryMaterial.topic)))
-    .orderBy(asc(libraryMaterial.topic));
-  return rows.map((r) => r.topic).filter((t): t is string => t !== null);
+  const rows = await db.execute<{ topic: string }>(sql`
+    SELECT DISTINCT unnest(topics) AS topic FROM library_material
+    WHERE teacher_id = ${teacherId} AND NOT draft
+    ORDER BY topic
+  `);
+  return [...rows].map((r) => r.topic);
 }
 
 /** The assistant's drafts of this teacher, newest first: «От ассистента» above the library (#120). */
@@ -279,7 +285,7 @@ export async function saveDraft(
   replace?: string,
 ): Promise<string> {
   const values = {
-    ...tags,
+    ...tagColumns(tags),
     blobId: "blobId" in content ? content.blobId : null,
     questions: "questions" in content ? content.questions : null,
     ...(content.kind === "game" ? { vocabulary: content.vocabulary ?? false } : {}),
@@ -345,7 +351,7 @@ export async function updateMaterial(db: Database, teacherId: string, id: string
   return db.transaction(async (tx) => {
     // Her edit of a draft keeps the assistant from replacing it (#120).
     const edited = { teacherEditedAt: sql`CASE WHEN ${libraryMaterial.draft} THEN now() ELSE ${libraryMaterial.teacherEditedAt} END` };
-    const rows = await tx.update(libraryMaterial).set({ ...tags, ...edited }).where(own).returning({ id: libraryMaterial.id });
+    const rows = await tx.update(libraryMaterial).set({ ...tagColumns(tags), ...edited }).where(own).returning({ id: libraryMaterial.id });
     if (rows.length === 0) return false;
     if (warmup !== undefined || vocabulary !== undefined) {
       await tx

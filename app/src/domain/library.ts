@@ -30,6 +30,25 @@ export const VIDEO_FILE_ACCEPT = ".mp4,.m4v,.webm,.mov,video/mp4,video/webm,vide
 export const MAX_URL_LENGTH = 2000;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_TOPIC_LENGTH = 100;
+/** The most topics one material has (#290). */
+export const MAX_TOPICS = 10;
+
+/**
+ * The topics typed into «Тема», separated by commas (#290): each trimmed,
+ * empty ones dropped, a repeat in another letter case kept once as first
+ * typed.
+ */
+export function parseTopics(text: string): string[] {
+  const topics: string[] = [];
+  for (const part of text.split(",")) {
+    const topic = part.trim().replace(/\s+/g, " ");
+    if (topic !== "" && !topics.some((t) => t.toLocaleLowerCase("ru") === topic.toLocaleLowerCase("ru"))) topics.push(topic);
+  }
+  return topics;
+}
+
+/** The topics as the «Тема» field shows them. */
+export const topicsText = (topics: string[]) => topics.join(", ");
 
 /**
  * The sandbox a game runs in, framed and when its address is opened (#115).

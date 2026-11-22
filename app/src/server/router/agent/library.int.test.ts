@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { arrayContains, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, db } from "../../db/client";
 import { libraryMaterial } from "../../db/schema";
@@ -114,7 +114,7 @@ describe("the assistant's library drafts", () => {
     await expect(assistant.agent.saveWarmupDraft({ ...tags("Empty", topic), format: "questions", questions: ["", " "] })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
-    expect(await db().select().from(libraryMaterial).where(eq(libraryMaterial.topic, topic))).toEqual([]);
+    expect(await db().select().from(libraryMaterial).where(arrayContains(libraryMaterial.topics, [topic]))).toEqual([]);
   });
 
   it("never reach another teacher's library, and the token is not a teacher session", async () => {

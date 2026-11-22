@@ -1,3 +1,4 @@
+import { topicsText } from "@/domain/library";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LibraryMaterialForm } from "@/components/library-material-form";
@@ -36,7 +37,7 @@ export default async function EditMaterialPage({ params }: Props) {
           kind: material.kind,
           title: material.title,
           level: material.level,
-          topic: material.topic ?? "",
+          topic: topicsText(material.topics),
           ageGroup: material.ageGroup,
           warmup: material.warmup,
           vocabulary: material.vocabulary,

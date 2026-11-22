@@ -8,6 +8,8 @@ import {
   type AgeGroup,
   MAX_GAME_BYTES,
   MAX_PICTURE_BYTES,
+  MAX_TOPIC_LENGTH,
+  MAX_TOPICS,
   MAX_URL_LENGTH,
   MAX_VIDEO_BYTES,
   type MaterialKind,
@@ -300,11 +302,15 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
       <Labelled id="material-topic" label="Тема">
         <input
           id="material-topic"
-          maxLength={100}
+          maxLength={MAX_TOPICS * (MAX_TOPIC_LENGTH + 2)}
           value={tags.topic}
           onChange={(event) => set({ topic: event.target.value })}
+          aria-describedby="material-topic-hint"
           className={field}
         />
+        <p id="material-topic-hint" className="text-small text-text-secondary">
+          Несколько тем — через запятую
+        </p>
       </Labelled>
       <Labelled id="material-age" label="Возраст">
         <select
