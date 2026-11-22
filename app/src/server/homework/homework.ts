@@ -21,7 +21,10 @@ import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
 import { env } from "../env";
 import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, todayIn } from "../../domain/homework";
-import { checkAnswer, checkSentences, fitsTask } from "./check";
+import { missedInHomework } from "../crm/word-training";
+import { studentWords } from "../crm/vocabulary-homework";
+import { taskWordIds } from "../../domain/vocabulary-homework";
+import { checkAnswer, checkSentences, fitsTask, missedWords } from "./check";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
 export type HomeworkStatus = (typeof HOMEWORK_STATUSES)[number];
@@ -490,9 +493,13 @@ export async function submitHomework(
     let correct = 0;
     let wrong = 0;
     let pending = 0;
+    // Words of tasks from «Из словаря» still in the vocabulary (#284); the ones missed go back to the training.
+    const known = await studentWords(tx, teacherId, studentId, taskWordIds(tasks));
+    const missed = new Set<string>();
     for (const [taskIndex, task] of tasks.entries()) {
       const parsed = byIndex.get(taskIndex);
       const answer = parsed?.success ? parsed.data : null;
+      for (const wordId of missedWords(task, answer, known)) missed.add(wordId);
       // Written, voice and file answers are kept as they are, for the teacher to mark (#36).
       const isCorrect = isAutoChecked(task) ? answer !== null && answer.type !== "voice" && answer.type !== "file" && checkAnswer(task, answer) : null;
       // An order task of several sentences: each sentence is its own point (#161).
@@ -524,6 +531,7 @@ export async function submitHomework(
       pendingCount: pending,
     });
     await tx.update(homework).set({ status: "submitted" }).where(eq(homework.id, id));
+    await missedInHomework(tx, teacherId, studentId, [...missed]);
     return { correct, wrong, pending };
   });
 }

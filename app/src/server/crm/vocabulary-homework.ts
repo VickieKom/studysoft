@@ -4,7 +4,7 @@
 // are built on the teacher's page (domain/vocabulary-homework.ts) and saved
 // like any edit of the draft, keeping only word ids of this student.
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
-import { PICKED_WORDS } from "../../domain/vocabulary-homework";
+import { type KnownWord, PICKED_WORDS } from "../../domain/vocabulary-homework";
 import { wordMark } from "../../domain/word-training";
 import type { Database } from "../db/client";
 import { lesson, vocabularyWord } from "../db/schema";
@@ -43,12 +43,12 @@ export async function wordsToPick(db: Database, teacherId: string, studentId: st
   return rows.map((r) => ({ id: r.id, word: r.word, translation: r.translation!, example: r.example, ticked: ticked.has(r.id) }));
 }
 
-/** Which of `ids` are words of this student's vocabulary. */
-export async function studentWordIds(db: Database, teacherId: string, studentId: string, ids: string[]): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
+/** Which of `ids` are words of this student's vocabulary, with the word and its translation. */
+export async function studentWords(db: Database, teacherId: string, studentId: string, ids: string[]): Promise<Map<string, KnownWord>> {
+  if (ids.length === 0) return new Map();
   const rows = await db
-    .select({ id: vocabularyWord.id })
+    .select({ id: vocabularyWord.id, word: vocabularyWord.word, translation: vocabularyWord.translation })
     .from(vocabularyWord)
     .where(and(eq(vocabularyWord.teacherId, teacherId), eq(vocabularyWord.studentId, studentId), inArray(vocabularyWord.id, ids)));
-  return new Set(rows.map((r) => r.id));
+  return new Map(rows.map((r) => [r.id, { word: r.word, translation: r.translation }]));
 }
