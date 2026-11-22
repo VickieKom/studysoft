@@ -1,6 +1,6 @@
 // «Из словаря» in a homework draft (#281): tasks built from the student's
 // words with a confirmed translation, their keys set here. Every task names
-// the words it asks in `words`, which the student never receives. Plain
+// the words it asks in `vocabularyWords` (not `words`, which an order task has for its own words), which the student never receives. Plain
 // data and pure functions only.
 import type { Task } from "./homework-format";
 import { CHOICE_OPTIONS } from "./word-training";
@@ -57,7 +57,7 @@ function matchTask(group: PickWord[]): Task {
     prompt: MATCH_PROMPT,
     pairs: group.map((w) => ({ left: w.word, right: w.translation })),
     skill: "vocabulary",
-    words: group.map((w) => w.id),
+    vocabularyWords: group.map((w) => w.id),
   };
 }
 
@@ -68,7 +68,7 @@ function choiceTask(word: PickWord, pool: PickWord[], random: () => number): Tas
     random,
   ).slice(0, CHOICE_OPTIONS - 1);
   const options = shuffled([word.translation, ...others], random);
-  return { type: "single_choice", prompt: choicePrompt(word.word), options, answer: options.indexOf(word.translation), skill: "vocabulary", words: [word.id] };
+  return { type: "single_choice", prompt: choicePrompt(word.word), options, answer: options.indexOf(word.translation), skill: "vocabulary", vocabularyWords: [word.id] };
 }
 
 /**
@@ -85,7 +85,7 @@ export function vocabularyTasks(chosen: PickWord[], pool: PickWord[], types: Voc
 }
 
 /** The word ids every task names. */
-export const taskWordIds = (tasks: Task[]) => [...new Set(tasks.flatMap((t) => t.words ?? []))];
+export const taskWordIds = (tasks: Task[]) => [...new Set(tasks.flatMap((t) => t.vocabularyWords ?? []))];
 
 /**
  * The tasks with only the words in `known`: a word deleted from the
@@ -93,9 +93,9 @@ export const taskWordIds = (tasks: Task[]) => [...new Set(tasks.flatMap((t) => t
  */
 export function withKnownWords(tasks: Task[], known: Set<string>): Task[] {
   return tasks.map((task) => {
-    if (!task.words) return task;
-    const { words, ...rest } = task;
-    const kept = words.filter((id) => known.has(id));
-    return (kept.length > 0 ? { ...rest, words: kept } : rest) as Task;
+    if (!task.vocabularyWords) return task;
+    const { vocabularyWords, ...rest } = task;
+    const kept = vocabularyWords.filter((id) => known.has(id));
+    return (kept.length > 0 ? { ...rest, vocabularyWords: kept } : rest) as Task;
   });
 }

@@ -23,7 +23,7 @@ describe("tasks from the vocabulary", () => {
         { left: "word2", right: "перевод2" },
       ],
       skill: "vocabulary",
-      words: [word(1).id, word(2).id],
+      vocabularyWords: [word(1).id, word(2).id],
     });
   });
 
@@ -37,7 +37,7 @@ describe("tasks from the vocabulary", () => {
       expect(task.options).toHaveLength(4);
       expect(new Set(task.options).size).toBe(4);
       expect(task.options[task.answer]).toBe(`перевод${index + 1}`);
-      expect(task.words).toEqual([word(index + 1).id]);
+      expect(task.vocabularyWords).toEqual([word(index + 1).id]);
       expect(taskSchema.safeParse(task).success).toBe(true);
     }
   });
@@ -54,8 +54,8 @@ describe("tasks from the vocabulary", () => {
   it("keeps a task's known words only, and the task without words when none is known", () => {
     const [match, choice] = vocabularyTasks(words(4), words(4), ["match", "choose_translation"]);
     const [kept, plain] = withKnownWords([match!, choice!], new Set([word(2).id, word(3).id]));
-    expect(kept!.words).toEqual([word(2).id, word(3).id]);
-    expect(plain).not.toHaveProperty("words");
+    expect(kept!.vocabularyWords).toEqual([word(2).id, word(3).id]);
+    expect(plain).not.toHaveProperty("vocabularyWords");
     expect(plain!.prompt).toBe(choice!.prompt);
   });
 });

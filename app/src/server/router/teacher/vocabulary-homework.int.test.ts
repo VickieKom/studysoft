@@ -102,16 +102,19 @@ describe("«Из словаря» in a homework draft", () => {
     const pool = (await teacher.teacher.homework.vocabulary({ id })).map(({ id: wordId, word, translation }) => ({ id: wordId, word, translation }));
     const built = vocabularyTasks(pool, pool, ["match", "choose_translation"]);
     // Another student's word slipped into a task is dropped; the task stays.
-    const forged = { ...built[1]!, words: [...built[1]!.words!, theirs.cat!] };
+    const forged = { ...built[1]!, vocabularyWords: [...built[1]!.vocabularyWords!, theirs.cat!] };
     const { revision } = await teacher.teacher.homework.get({ id });
-    const saved = await teacher.teacher.homework.updateTasks({ id, revision, tasks: [draft.tasks[0], built[0], forged, ...built.slice(2)] });
-    expect(saved.tasks).toHaveLength(1 + built.length);
-    expect(saved.tasks[1]!.words!.sort()).toEqual(Object.values(ids).sort());
-    expect(saved.tasks[2]!.words).toEqual(built[1]!.words);
+    // An order task has `words` of its own, the sentence's: it is saved as it is, untouched by the vocabulary.
+    const order = { type: "order", prompt: "Put in order.", words: ["We", "play", "after", "school"] };
+    const saved = await teacher.teacher.homework.updateTasks({ id, revision, tasks: [draft.tasks[0], built[0], forged, ...built.slice(2), order] });
+    expect(saved.tasks).toHaveLength(2 + built.length);
+    expect(saved.tasks.at(-1)).toEqual(order);
+    expect(saved.tasks[1]!.vocabularyWords!.sort()).toEqual(Object.values(ids).sort());
+    expect(saved.tasks[2]!.vocabularyWords).toEqual(built[1]!.vocabularyWords);
 
     await teacher.teacher.homework.publish({ id, revision: saved.revision, dueDate: inDays(3) });
     const opened = await (await studentCaller(studentId)).student.homework.open({ id });
-    expect(JSON.stringify(opened)).not.toMatch(/words|[0-9a-f]{8}-[0-9a-f]{4}-/);
+    expect(JSON.stringify(opened)).not.toMatch(/vocabularyWords|[0-9a-f]{8}-[0-9a-f]{4}-/);
   });
 
   it("is the teacher's own: another teacher, and a published homework, get not found", async () => {
