@@ -48,7 +48,13 @@ describe("assistant tools", () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       seen.push(String(input));
       const url = String(input);
-      const name = url.includes("agent.gameResultFormat") ? "Game result" : url.includes("agent.gameWordsFormat") ? "Game words" : "Homework";
+      const name = url.includes("agent.gameResultFormat")
+        ? "Game result"
+        : url.includes("agent.gameWordsFormat")
+          ? "Game words"
+          : url.includes("agent.assessmentFormat")
+            ? "Assessment"
+            : "Homework";
       const body = [{ result: { data: { version: 1, description: `# ${name} format, version 1` } } }];
       return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     }) as typeof fetch;
@@ -56,9 +62,33 @@ describe("assistant tools", () => {
     expect(seen.some((url) => url.includes("/api/trpc/agent.homeworkFormat"))).toBe(true);
     expect(seen.some((url) => url.includes("/api/trpc/agent.gameResultFormat"))).toBe(true);
     expect(seen.some((url) => url.includes("/api/trpc/agent.gameWordsFormat"))).toBe(true);
+    expect(seen.some((url) => url.includes("/api/trpc/agent.assessmentFormat"))).toBe(true);
     expect(result.content[0]!.text).toMatch(
-      /^Homework format, version 1\n\n# Homework format, version 1\n\nGame result format, version 1\n\n# Game result format, version 1\n\nGame words format, version 1\n\n# Game words format/,
+      /^Homework format, version 1\n\n# Homework format, version 1\n\nGame result format, version 1\n\n# Game result format, version 1\n\nGame words format, version 1\n\n# Game words format, version 1\n\nAssessment format, version 1\n\n# Assessment format/,
     );
+  });
+
+  it("save an assessment draft with a POST and pass the platform's message about an invalid assessment back", async () => {
+    const seen: { url?: string; auth?: string | null } = {};
+    const saved = createTools(
+      platformAnswering(200, { result: { data: { id: "00000000-0000-4000-8000-000000000003" } } }, seen),
+    );
+    const ok = await saved.saveAssessmentDraft({ studentId: "00000000-0000-4000-8000-000000000001", assessment: {} });
+    expect(seen.url).toContain("/api/trpc/agent.saveAssessmentDraft");
+    expect(JSON.parse(ok.content[0]!.text)).toMatchObject({ id: "00000000-0000-4000-8000-000000000003", status: "draft" });
+
+    const refused = createTools(
+      platformAnswering(400, {
+        error: {
+          message: "Лексика, вопрос 2, поле answers: нужен хотя бы один ответ",
+          code: -32600,
+          data: { code: "BAD_REQUEST", httpStatus: 400 },
+        },
+      }),
+    );
+    const result = await refused.saveAssessmentDraft({ studentId: "00000000-0000-4000-8000-000000000001", assessment: {} });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain("Лексика, вопрос 2, поле answers");
   });
 
   it("save a draft with a POST and pass the platform's message about an invalid homework back", async () => {
