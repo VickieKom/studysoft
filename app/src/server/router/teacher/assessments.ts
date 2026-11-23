@@ -118,11 +118,15 @@ export const assessmentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await finishAssessment(ctx.db, ctx.teacherId, input.assessmentId);
       if (result === "not_found") throw notFound();
-      if (result === "ended") throw new TRPCError({ code: "BAD_REQUEST", message: "Замер уже сдан" });
+      if (result === "ended") throw new TRPCError({ code: "BAD_REQUEST", message: "Замер уже завершён" });
       return { ok: true as const };
     }),
 
-  /** «Замер» on the lesson panel (#253): the lesson's student's approved assessments still to be taken. */
+  /**
+   * «Замер» on the lesson panel (#253): the lesson's student's approved
+   * assessments not ended — handed in ones too, whose «Говорение» is
+   * recorded until «Завершить замер».
+   */
   forLesson: teacherProcedure
     .input(z.object({ lessonId: z.uuid() }))
     .output(z.array(assessmentViewSchema))
@@ -130,7 +134,7 @@ export const assessmentsRouter = router({
       const studentId = await lessonStudent(ctx.db, ctx.teacherId, input.lessonId);
       if (!studentId) throw notFound();
       return (await listAssessments(ctx.db, ctx.teacherId, studentId))
-        .filter((row) => row.status === "approved" && !row.submittedAt && !row.finishedAt)
+        .filter((row) => row.status === "approved" && !row.finishedAt)
         .map(view);
     }),
 });

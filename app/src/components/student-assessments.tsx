@@ -131,6 +131,8 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
   const [error, setError] = useState<string | null>(null);
   const draft = assessment.status === "draft";
   const takeable = assessment.status === "approved" && assessment.taking !== "submitted" && assessment.taking !== "finished";
+  // Handed in, not ended: «Говорение» is still recorded on the lesson panel until «Завершить замер».
+  const finishable = assessment.status === "approved" && assessment.taking !== "not_opened" && assessment.taking !== "finished";
   const taking = TAKING_LABELS[assessment.taking];
 
   async function run(change: () => Promise<unknown>) {
@@ -233,12 +235,14 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
           </Button>
         </div>
       )}
-      {takeable && (
+      {(takeable || finishable) && (
         <div className="flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.open.mutate({ assessmentId: assessment.id }))}>
-            Открыть ученику
-          </Button>
-          {assessment.taking !== "not_opened" && (
+          {takeable && (
+            <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.open.mutate({ assessmentId: assessment.id }))}>
+              Открыть ученику
+            </Button>
+          )}
+          {finishable && (
             <Button
               variant="secondary"
               disabled={busy}

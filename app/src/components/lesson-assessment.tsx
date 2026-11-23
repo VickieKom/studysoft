@@ -22,7 +22,8 @@ function message(cause: unknown): string {
  * still to be taken. The teacher opens one to the child, and records
  * «Говорение» from her microphone while the child answers in the call:
  * «Записать», then «Остановить»; the recording, at most 5 minutes, is kept
- * with the assessment. Nothing of it reaches the stage.
+ * with the assessment. A handed-in assessment stays here, its «Говорение»
+ * still recorded, until «Завершить замер». Nothing of it reaches the stage.
  */
 export function LessonAssessment({ lessonId }: { lessonId: string }) {
   const [assessments, setAssessments] = useState<LessonAssessmentRow[] | null>(null);
@@ -66,6 +67,19 @@ export function LessonAssessment({ lessonId }: { lessonId: string }) {
     setError(null);
     try {
       await routerClient.teacher.assessments.open.mutate({ assessmentId: current.id });
+      await load();
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finish() {
+    setBusy(true);
+    setError(null);
+    try {
+      await routerClient.teacher.assessments.finish.mutate({ assessmentId: current.id });
       await load();
     } catch (cause) {
       setError(message(cause));
@@ -147,7 +161,15 @@ export function LessonAssessment({ lessonId }: { lessonId: string }) {
           ))}
         </select>
       </label>
-      {current.taking === "open" ? (
+      {current.taking === "submitted" ? (
+        // Handed in: the speaking recording is still taken until «Завершить замер».
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-small text-accent-900">Сдан учеником</p>
+          <Button variant="secondary" disabled={busy || recording} onClick={() => void finish()}>
+            Завершить замер
+          </Button>
+        </div>
+      ) : current.taking === "open" ? (
         <p className="text-small text-accent-900">Открыт ученику</p>
       ) : (
         <div>

@@ -215,9 +215,12 @@ export async function submitAssessment(db: Database, teacherId: string, studentI
 }
 
 /**
- * «Завершить замер»: the teacher ends an approved assessment the child has
- * not handed in. An unanswered question counts as wrong, a section not
- * started is not scored. It closes for the child at once.
+ * «Завершить замер»: the teacher ends an approved assessment. One the child
+ * has not handed in is scored here: an unanswered question counts as wrong,
+ * a section not started is not scored, and it closes for the child at once.
+ * One handed in keeps the scores of «Сдать»: ending it only stops the
+ * speaking recording, which the lesson panel takes until then (product
+ * owner, 2026-11-23).
  */
 export async function finishAssessment(db: Database, teacherId: string, id: string, now: Date = new Date()): Promise<"ok" | "not_found" | "ended"> {
   return db.transaction(async (tx) => {
@@ -234,7 +237,11 @@ export async function finishAssessment(db: Database, teacherId: string, id: stri
       .where(and(eq(assessment.id, id), eq(assessment.teacherId, teacherId)))
       .for("update");
     if (!row || row.status !== "approved") return "not_found";
-    if (row.submittedAt || row.finishedAt) return "ended";
+    if (row.finishedAt) return "ended";
+    if (row.submittedAt) {
+      await tx.update(assessment).set({ finishedAt: now, updatedAt: now }).where(eq(assessment.id, id));
+      return "ok";
+    }
     const document = row.document as AssessmentDocument;
     const answers = row.answers as AssessmentAnswers;
     await tx

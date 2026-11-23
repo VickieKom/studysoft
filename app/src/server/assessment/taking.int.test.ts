@@ -241,6 +241,26 @@ describe("«Завершить замер»", () => {
     await expect(teacher.teacher.assessments.open({ assessmentId: id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect((await teacher.teacher.assessments.list({ studentId })).find((a) => a.id === id)!.taking).toBe("finished");
   });
+  it("after «Сдать» stays on the lesson panel for «Говорение» until «Завершить замер», its scores kept", async () => {
+    const { studentId, id } = await approved("Говорит после сдачи");
+    const [going] = await db().select({ id: lesson.id }).from(lesson).where(eq(lesson.studentId, studentId));
+    await teacher.teacher.assessments.open({ assessmentId: id });
+    const { caller: child } = await childOf(studentId);
+    await child.student.assessments.answer({ id, section: "reading", index: 0, value: "true" });
+    await child.student.assessments.submit({ id });
+    const handedIn = await scores(id);
+
+    // Handed in: still on the panel, and «Говорение» is still recorded.
+    expect((await teacher.teacher.assessments.forLesson({ lessonId: going!.id })).map((a) => [a.id, a.taking])).toEqual([[id, "submitted"]]);
+    expect((await put(id, "speaking", teacherHeaders, webmRecording(3))).status).toBe(200);
+
+    // «Завершить замер» keeps the scores of «Сдать» and stops the recording.
+    await teacher.teacher.assessments.finish({ assessmentId: id });
+    expect(await scores(id)).toEqual(handedIn);
+    expect(await teacher.teacher.assessments.forLesson({ lessonId: going!.id })).toEqual([]);
+    expect((await put(id, "speaking", teacherHeaders, webmRecording(3))).status).toBe(404);
+    await expect(teacher.teacher.assessments.finish({ assessmentId: id })).rejects.toMatchObject({ code: "BAD_REQUEST", message: "Замер уже завершён" });
+  });
 });
 
 describe("the speaking recording", () => {
