@@ -330,6 +330,13 @@
       "when": 1795371926259,
       "tag": "0046_video_answers",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795447585999,
+      "tag": "0047_textbook_video_access",
+      "breakpoints": true
     }
   ]
 }

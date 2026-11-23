@@ -140,7 +140,7 @@ export async function saveTeacherStructure(
   return rows.length > 0 ? "saved" : "conflict";
 }
 
-/** One lesson of a textbook's confirmed structure, with its books' page ranges and its tracks, or null. */
+/** One lesson of a textbook's confirmed structure, with its books' page ranges, its tracks and its videos (#329), or null. */
 export async function findLesson(db: Database, teacherId: string, textbookId: string, lessonId: string) {
   const found = await findTextbook(db, teacherId, textbookId);
   const view = found ? await readStructure(db, teacherId, textbookId) : null;
@@ -149,11 +149,12 @@ export async function findLesson(db: Database, teacherId: string, textbookId: st
     const lesson = unit.lessons.find((l) => l.id === lessonId);
     if (!lesson) continue;
     const tracks = lesson.tracks.flatMap((name) => found.tracks.filter((t) => t.name === name));
+    const videos = (lesson.videos ?? []).flatMap((name) => found.videos.filter((v) => v.name === name));
     const pages = found.books.flatMap((book) => {
       const range = lesson.pages[book.kind as BookKind];
       return range ? [{ fileId: book.id, kind: book.kind, from: range.from, to: range.to }] : [];
     });
-    return { textbookTitle: found.title, unit: unit.title, title: lesson.title, pages, tracks, words: lesson.words };
+    return { textbookTitle: found.title, unit: unit.title, title: lesson.title, pages, tracks, videos, words: lesson.words };
   }
   return null;
 }

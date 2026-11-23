@@ -8,11 +8,11 @@ import { Button } from "./button";
 import { routerClient } from "./router-client";
 
 type Range = { from: string; to: string };
-type LessonForm = { id?: string; title: string; pages: Partial<Record<BookKind, Range>>; tracks: string; words: string };
+type LessonForm = { id?: string; title: string; pages: Partial<Record<BookKind, Range>>; tracks: string; videos: string; words: string };
 type UnitForm = { id?: string; title: string; lessons: LessonForm[] };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
-const blankLesson = (): LessonForm => ({ title: "", pages: {}, tracks: "", words: "" });
+const blankLesson = (): LessonForm => ({ title: "", pages: {}, tracks: "", videos: "", words: "" });
 
 function toForm(structure: TextbookStructure): UnitForm[] {
   return structure.units.map((unit) => ({
@@ -25,6 +25,7 @@ function toForm(structure: TextbookStructure): UnitForm[] {
         Object.entries(lesson.pages).map(([kind, range]) => [kind, { from: String(range!.from), to: String(range!.to) }]),
       ),
       tracks: lesson.tracks.join(", "),
+      videos: (lesson.videos ?? []).join(", "),
       words: lesson.words.join("\n"),
     })),
   }));
@@ -50,6 +51,7 @@ function fromForm(units: UnitForm[]): unknown {
             .map(([kind, range]) => [kind, { from: Number(range!.from || range!.to), to: Number(range!.to || range!.from) }]),
         ),
         tracks: list(lesson.tracks, /,/),
+        videos: list(lesson.videos, /,/),
         words: list(lesson.words, /\n/),
       })),
     })),
@@ -158,6 +160,15 @@ export function TextbookStructureEditor({
                   value={lesson.tracks}
                   onChange={(e) => setLesson(u, l, { tracks: e.target.value })}
                   placeholder="через запятую: 1-01, 1-02"
+                  className={field}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-small text-text-secondary">Видео</span>
+                <input
+                  value={lesson.videos}
+                  onChange={(e) => setLesson(u, l, { videos: e.target.value })}
+                  placeholder="через запятую: 1-2-clip"
                   className={field}
                 />
               </label>

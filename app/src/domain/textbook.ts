@@ -16,6 +16,8 @@ export const MAX_BOOK_BYTES = 300 * 1024 * 1024;
 export const MAX_TRACKS_BYTES = 500 * 1024 * 1024;
 /** The most tracks in one set: a few CDs' worth. */
 export const MAX_TRACKS = 300;
+/** The most videos in one set (#329); each is at most a library video's 200 MB (MAX_VIDEO_BYTES). */
+export const MAX_TEXTBOOK_VIDEOS = 100;
 
 export const RENDER_STATUSES = ["rendering", "done", "failed"] as const;
 export type RenderStatus = (typeof RENDER_STATUSES)[number];

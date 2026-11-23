@@ -3,7 +3,7 @@
 import { PREP_GROUP_LABELS, prepMaterialGroups } from "@/domain/prep-materials";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { HOMEWORK_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
+import { HOMEWORK_STAGE_MINUTES, VIDEO_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
 import type { MaterialKind } from "@/domain/library";
 import { Button } from "./button";
 import { type PrepBankLesson, PrepBankTasks } from "./prep-bank-tasks";
@@ -14,6 +14,9 @@ type Material = { id: string; kind: MaterialKind; title: string; forStudent: boo
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
 const KIND_ONE: Record<MaterialKind, string> = { warmup: "Разминка", game: "Игра", video: "Видео" };
+
+/** A textbook lesson's video the plan may take (#329), with its lesson's bank tasks by prompt. */
+export type TextbookVideoChoice = { fileId: string; name: string; lessonId: string; lessonTitle: string; tasks: string[] };
 
 /**
  * A lesson's plan by stages (#151): in order, with minutes; the book lesson
@@ -36,6 +39,8 @@ export function LessonPlanEditor({
   waitingHomework,
   stageHomework,
   bank,
+  textbookVideos,
+  openedVideos,
 }: {
   lessonId: string;
   start: LessonPlan;
@@ -48,6 +53,10 @@ export function LessonPlanEditor({
   waitingHomework: { id: string; title: string } | null;
   stageHomework: { id: string; title: string }[];
   bank: PrepBankLesson[];
+  /** The textbook's lesson videos (#329), each with its lesson's bank tasks by prompt. */
+  textbookVideos: TextbookVideoChoice[];
+  /** The videos opened to the student from this preparation, still open. */
+  openedVideos: string[];
 }) {
   const router = useRouter();
   const [stages, setStages] = useState<PlanStage[]>(start.stages);
@@ -55,6 +64,21 @@ export function LessonPlanEditor({
   const [homework, setHomework] = useState<string>(homeworkId ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [addingVideo, setAddingVideo] = useState<string>(textbookVideos[0]?.fileId ?? "");
+  const [opened, setOpened] = useState<Set<string>>(new Set(openedVideos));
+  const videoOf = (fileId: string) => textbookVideos.find((v) => v.fileId === fileId);
+
+  async function openVideo(fileId: string) {
+    setError(null);
+    try {
+      await routerClient.teacher.prep.openTextbookVideo.mutate({ lessonId, fileId });
+      setOpened((before) => new Set([...before, fileId]));
+    } catch (caught) {
+      const message = (caught as { message?: string })?.message;
+      const code = (caught as { data?: { code?: string } })?.data?.code;
+      setError(code === "NOT_FOUND" && message ? message : "Не получилось открыть видео. Попробуйте ещё раз");
+    }
+  }
 
   // The student's games first, then the plan's book lessons', then the rest (#293).
   const groups = prepMaterialGroups(
@@ -100,6 +124,7 @@ export function LessonPlanEditor({
       const title = stageHomework.find((h) => h.id === stage.homeworkId)?.title ?? waitingHomework?.title;
       return title ? `Домашка: ${title}` : "Домашка";
     }
+    if (stage.type === "textbook_video") return `Видео: ${videoOf(stage.fileId)?.name ?? "не найдено"}`;
     const material = materials.find((m) => m.id === stage.materialId);
     return material ? `${KIND_ONE[material.kind]}: ${material.title}` : "Материал не найден";
   };
@@ -148,6 +173,38 @@ export function LessonPlanEditor({
                     </label>
                   </>
                 )}
+                {stage.type === "textbook_video" && (
+                  <div className="flex basis-full flex-col gap-2">
+                    {(videoOf(stage.fileId)?.tasks.length ?? 0) === 0 ? (
+                      <p className="text-small text-text-secondary">В банке урока нет подтверждённых заданий</p>
+                    ) : (
+                      <ul aria-label="Задания к видео" className="flex flex-col gap-1">
+                        {videoOf(stage.fileId)!.tasks.map((prompt, t) => (
+                          <li key={t} className="flex items-start gap-2 text-small">
+                            <label className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                aria-label="К видео"
+                                checked={stage.tasks.includes(t)}
+                                onChange={(e) =>
+                                  update(i, { tasks: e.target.checked ? [...stage.tasks, t].sort((a, b) => a - b) : stage.tasks.filter((x) => x !== t) })
+                                }
+                              />
+                              <span>{prompt}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="secondary" onClick={() => void openVideo(stage.fileId)}>
+                        Открыть ученику
+                      </Button>
+                      {opened.has(stage.fileId) && <span className="text-small text-accent-900">Открыто ученику</span>}
+                      <span className="text-caption text-text-muted">Ученик увидит видео сразу и до часа после конца урока</span>
+                    </div>
+                  </div>
+                )}
                 <label className="flex flex-col gap-1">
                   <span className="text-small text-text-secondary">Минуты</span>
                   <input
@@ -181,6 +238,29 @@ export function LessonPlanEditor({
           >
             Добавить урок учебника
           </Button>
+        )}
+        {textbookVideos.length > 0 && (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-small text-text-secondary">Видео урока</span>
+              <select value={addingVideo} onChange={(e) => setAddingVideo(e.target.value)} className={`${field} h-10`}>
+                {textbookVideos.map((v) => (
+                  <option key={`${v.lessonId}-${v.fileId}`} value={v.fileId}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const video = videoOf(addingVideo);
+                if (video) change([...stages, { type: "textbook_video", fileId: video.fileId, lessonId: video.lessonId, tasks: [], minutes: VIDEO_STAGE_MINUTES }]);
+              }}
+            >
+              Добавить видео
+            </Button>
+          </>
         )}
         {materials.length > 0 && (
           <>

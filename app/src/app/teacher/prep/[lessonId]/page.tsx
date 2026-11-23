@@ -76,6 +76,8 @@ export default async function LessonPrepPage({ params }: Props) {
         waitingHomework={prep.waitingHomework}
         stageHomework={prep.stageHomework}
         bank={bank}
+        textbookVideos={prep.textbookVideos}
+        openedVideos={prep.openedVideos}
       />
     </main>
   );

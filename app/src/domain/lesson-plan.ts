@@ -1,7 +1,8 @@
 // The plan of a lesson (#151): its stages in order, with minutes. A book
 // stage is a lesson of the student's textbook, with the exercises to skip as
 // the teacher writes them («3, 5»); a material stage is a warm-up, a game or a
-// video from «Библиотека»; a homework stage reviews the student's submitted
+// video from «Библиотека»; a textbook video stage is a video of the textbook's
+// lesson with tasks from its bank (#329); a homework stage reviews the student's submitted
 // homework on the stage (#153). Plain data, zod and pure functions only.
 import { z } from "zod";
 
@@ -9,11 +10,25 @@ export const MAX_STAGES = 20;
 export const MAX_STAGE_MINUTES = 180;
 
 const minutes = z.number().int().min(0).max(MAX_STAGE_MINUTES);
+/** The most bank tasks a textbook video stage takes, as a library video's tasks (#326). */
+export const MAX_STAGE_VIDEO_TASKS = 20;
+/** The minutes a textbook video stage is given when added. */
+export const VIDEO_STAGE_MINUTES = 10;
 
 const stage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("book"), lessonId: z.uuid(), skip: z.string().trim().max(200), minutes }).strict(),
   z.object({ type: z.literal("material"), materialId: z.uuid(), minutes }).strict(),
   z.object({ type: z.literal("homework"), homeworkId: z.uuid(), minutes }).strict(),
+  // A video of the student's textbook (#329), of the book lesson `lessonId`, with tasks of that lesson's bank by position.
+  z
+    .object({
+      type: z.literal("textbook_video"),
+      fileId: z.uuid(),
+      lessonId: z.uuid(),
+      tasks: z.array(z.number().int().min(0).max(49)).max(MAX_STAGE_VIDEO_TASKS),
+      minutes,
+    })
+    .strict(),
 ]);
 
 export const lessonPlanSchema = z.object({ stages: z.array(stage).max(MAX_STAGES) }).strict();

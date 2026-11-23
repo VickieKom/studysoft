@@ -11,6 +11,7 @@ import {
   type HomeworkStage,
   homeworkStageLabel,
   type MaterialStage,
+  type TextbookVideoStage,
   type KeptState,
   type LessonBook,
   type BookLesson,
@@ -51,6 +52,8 @@ export type LessonResourcesView = {
   tracks: { name: string; url: string }[];
   materials: Material[];
   homework: StageHomework[];
+  /** The student's textbook videos (#329), for the labels of their stages. */
+  videos: { id: string; title: string }[];
 };
 
 const HINT = "В Телемосте покажите окно «Экран для ученика» и включите звук";
@@ -185,7 +188,10 @@ export function LessonPanel({
   const { state } = kept;
   const current = state.stages[state.current];
   // A video stage's tasks with the student's answers (#328), asked again while it is on.
-  const videos = useLessonVideos(lessonId, current?.type === "material" && resources.materials.find((m) => m.id === current.materialId)?.kind === "video");
+  const videos = useLessonVideos(
+    lessonId,
+    current?.type === "textbook_video" || (current?.type === "material" && resources.materials.find((m) => m.id === current.materialId)?.kind === "video"),
+  );
   const lessonOf = (id: string) => resources.lessons.find((l) => l.id === id);
   const materialOf = (id: string) => resources.materials.find((m) => m.id === id);
   const homeworkOf = (id: string) => resources.homework.find((h) => h.id === id);
@@ -194,7 +200,9 @@ export function LessonPanel({
       ? bookStageLabel(lessonOf(stage.lessonId))
       : stage.type === "homework"
         ? homeworkStageLabel(homeworkOf(stage.homeworkId))
-        : (materialOf(stage.materialId)?.title ?? "материал удалён");
+        : stage.type === "textbook_video"
+          ? `Видео: ${resources.videos.find((v) => v.id === stage.fileId)?.title ?? "не найдено"}`
+          : (materialOf(stage.materialId)?.title ?? "материал удалён");
   const stageOn = lastHello > 0 && now - lastHello < STAGE_SILENT_MS;
   const [adding, setAdding] = useState(resources.materials[0]?.id ?? "");
   const [finishing, setFinishing] = useState(false);
@@ -312,6 +320,13 @@ export function LessonPanel({
         <VideoControls
           stage={current}
           video={videos.find((v) => v.id === current.materialId)}
+          onStage={(next) => change((s) => ({ ...s, stages: s.stages.map((x, i) => (i === s.current ? next : x)) }))}
+        />
+      )}
+      {current?.type === "textbook_video" && (
+        <VideoControls
+          stage={current}
+          video={videos.find((v) => v.id === current.fileId)}
           onStage={(next) => change((s) => ({ ...s, stages: s.stages.map((x, i) => (i === s.current ? next : x)) }))}
         />
       )}
@@ -529,7 +544,7 @@ function HomeworkControls({
  * «Показать ответ» for a task — the stage shows a key only then. The
  * student's answers come in while the lesson goes on.
  */
-function VideoControls({ stage, video, onStage }: { stage: MaterialStage; video: StageVideo | undefined; onStage: (next: MaterialStage) => void }) {
+function VideoControls<S extends MaterialStage | TextbookVideoStage>({ stage, video, onStage }: { stage: S; video: StageVideo | undefined; onStage: (next: S) => void }) {
   const pressed = (on: boolean) => `rounded-control border px-3 py-1.5 text-small ${on ? "border-green-600 bg-green-50 font-semibold" : "border-border"}`;
   if (!video) return <p className="rounded-card border border-border p-4 text-small text-text-secondary">У этого видео нет подтверждённых заданий</p>;
   const tasks = visibleVideoTasks(stage, video);
