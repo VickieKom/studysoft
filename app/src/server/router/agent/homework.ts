@@ -7,6 +7,7 @@ import { buildStudentContext } from "../../crm/context";
 import { readAssistantDraft, replaceableDraft, saveAssistantDraft } from "../../homework/drafts";
 import { HOMEWORK_FORMAT_DESCRIPTION } from "../../homework/format-description";
 import { taskFileRefs, storeTaskFiles } from "../../homework/images";
+import { taskVideoErrors } from "../../homework/videos";
 import { GAME_RESULT_FORMAT_DESCRIPTION } from "../../library/game-result-format-description";
 import { GAME_WORDS_FORMAT_DESCRIPTION } from "../../library/game-words-format-description";
 import { agentProcedure, router } from "../core/trpc";
@@ -46,6 +47,9 @@ export const agentHomeworkRouter = router({
       if (!context) throw notFound();
       const checked = validateHomework(input.homework);
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
+      // A task's video (#330) is one of this teacher's library videos.
+      const videoErrors = await taskVideoErrors(ctx.db, ctx.teacherId, checked.homework);
+      if (videoErrors.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: videoErrors.join("\n") });
       // A picture already stored may stay only in the draft being replaced.
       const replaced = await replaceableDraft(ctx.db, ctx.teacherId, input.studentId);
       const stored = await storeTaskFiles(ctx.db, ctx.teacherId, checked.homework, replaced ? taskFileRefs(replaced.document) : new Set());

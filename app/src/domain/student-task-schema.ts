@@ -4,6 +4,16 @@
 // of the task bank as the child sees it, the bank's (#224). Plain zod only.
 import { z } from "zod";
 
+/** A task's video as it plays (#330): a library video's own file, a YouTube player (#325) or a link. */
+export const taskVideoSchema = z
+  .object({
+    title: z.string(),
+    file: z.string().startsWith("/api/files/library/").optional(),
+    embed: z.url({ protocol: /^https$/ }).optional(),
+    link: z.url({ protocol: /^https?$/ }).optional(),
+  })
+  .strict();
+
 export function studentTaskSchema(files: string) {
   const text = z.string();
   // A picture goes out as the address it is served at, never as the stored reference.
@@ -12,6 +22,8 @@ export function studentTaskSchema(files: string) {
   const parts = {
     passage: text.optional(),
     example: z.object({ text, answer: text.optional() }).strict().optional(),
+    // The video the task is about (#330): a library file, a YouTube player or a link.
+    video: taskVideoSchema.optional(),
   };
   // A recording to listen to (#127), by its address as a picture is.
   const audio = z.string().startsWith(files).optional();

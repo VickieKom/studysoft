@@ -14,6 +14,8 @@ import {
   unpublishHomework,
   updateDraftTasks,
 } from "../../homework/homework";
+import { studentTaskVideos, taskVideoErrors, videosToAdd, videoTasksForHomework } from "../../homework/videos";
+import { taskVideoSchema } from "../../../domain/student-task-schema";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -50,6 +52,8 @@ export const homeworkRouter = router({
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
       const parsed = parseHomework(input.json);
       if (!parsed.ok) throw new TRPCError({ code: "BAD_REQUEST", message: parsed.errors.join("\n") });
+      const videoErrors = await taskVideoErrors(ctx.db, ctx.teacherId, parsed.homework);
+      if (videoErrors.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: videoErrors.join("\n") });
       // Pictures arrive as data URLs only: a pasted reference to a stored file is refused.
       const stored = await storeTaskFiles(ctx.db, ctx.teacherId, parsed.homework, new Set());
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
@@ -94,6 +98,8 @@ export const homeworkRouter = router({
       if (draft.revision !== input.revision) throw changed();
       const checked = validateHomework({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: input.tasks });
       if (!checked.ok) throw new TRPCError({ code: "BAD_REQUEST", message: checked.errors.join("\n") });
+      const videoErrors = await taskVideoErrors(ctx.db, ctx.teacherId, checked.homework);
+      if (videoErrors.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: videoErrors.join("\n") });
       // New pictures come as data URLs; a stored one may stay only if this draft already has it.
       const keep = taskFileRefs({ version: HOMEWORK_FORMAT_VERSION, title: draft.title, tasks: draft.tasks });
       // A task keeps only words of this student's vocabulary (#281) that are still its answer (#284).
@@ -105,6 +111,37 @@ export const homeworkRouter = router({
       if (saved === "not_found") throw notFound();
       if (saved === "changed") throw changed();
       return { tasks: stored.homework.tasks, revision: saved.revision };
+    }),
+
+  /** «Добавить видео» (#330): the teacher's library videos with confirmed tasks, by title, each as it plays. */
+  videosToAdd: teacherProcedure
+    .output(z.array(z.object({ id: z.uuid(), title: z.string(), video: taskVideoSchema.nullable() }).strict()))
+    .query(({ ctx }) => videosToAdd(ctx.db, ctx.teacherId)),
+
+  /** The videos a draft's tasks are about (#330), one per task, as the student will watch them. */
+  taskVideos: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.array(taskVideoSchema.nullable()))
+    .query(async ({ ctx, input }) => {
+      const draft = await findHomework(ctx.db, ctx.teacherId, input.id);
+      if (!draft) throw notFound();
+      return (await studentTaskVideos(ctx.db, ctx.teacherId, draft.tasks)).map((video) => video ?? null);
+    }),
+
+  /**
+   * «Добавить в домашку» (#330): copies of the video's confirmed tasks, keys
+   * included, each carrying the video, for the editor to append and save as
+   * the draft's own tasks.
+   */
+  videoTasks: teacherProcedure
+    .input(z.object({ id: z.uuid(), materialId: z.uuid() }))
+    .output(z.array(taskSchema))
+    .query(async ({ ctx, input }) => {
+      const draft = await findHomework(ctx.db, ctx.teacherId, input.id);
+      if (!draft || draft.status !== "draft") throw notFound();
+      const tasks = await videoTasksForHomework(ctx.db, ctx.teacherId, input.materialId.toLowerCase());
+      if (!tasks) throw notFound();
+      return tasks;
     }),
 
   /** «Из словаря» (#281): the draft's student's words with a confirmed translation, the ones to start with ticked. */

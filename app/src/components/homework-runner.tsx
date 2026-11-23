@@ -20,6 +20,7 @@ import { HomeworkMiniQuestion } from "./homework-mini-question";
 import { HomeworkResult } from "./homework-result";
 import { routerClient } from "./router-client";
 import { TaskExampleLine, TaskPassage } from "./task-parts";
+import { TaskVideo } from "./task-video";
 
 type Props = {
   homeworkId: string;
@@ -241,6 +242,8 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
       )}
       {/* A recording to listen to (#127), as many times as the student likes. */}
       {task.audio && <audio key={task.audio} controls preload="metadata" src={task.audio} className="w-full" />}
+      {/* The video the task is about (#330), above it on each of its tasks. */}
+      {task.video && <TaskVideo video={task.video} />}
       <TaskBody
         key={index}
         task={task}

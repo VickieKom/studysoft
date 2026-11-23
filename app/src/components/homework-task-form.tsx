@@ -144,6 +144,8 @@ export function HomeworkTaskForm({ imageUrl, audioUrl, type, task, pending, erro
       ...(task?.source ? { source: task.source } : {}),
       // The vocabulary words of a task from «Из словаря» (#281) stay with it.
       ...(task?.vocabularyWords ? { vocabularyWords: task.vocabularyWords } : {}),
+      // The video the task is about (#330) stays with it through an edit.
+      ...(task?.video ? { video: task.video } : {}),
       ...(image ? { image } : {}),
       ...(audio ? { audio } : {}),
     };

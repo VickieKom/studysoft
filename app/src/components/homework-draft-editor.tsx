@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { homeworkAudioUrl, homeworkImageUrl, TASK_TYPE_LABELS } from "@/domain/homework";
-import { TASK_TYPES, type Task, type TaskType } from "@/domain/homework-format";
+import { type StudentTaskVideo, TASK_TYPES, type Task, type TaskType } from "@/domain/homework-format";
+import { playedVideo, startsVideo } from "@/domain/homework-video";
 import { HomeworkTaskForm } from "./homework-task-form";
 import { HomeworkTaskPreview } from "./homework-task-preview";
 import { routerClient } from "./router-client";
+import { TaskVideo } from "./task-video";
+import { VideoTasksToAdd } from "./video-tasks-to-add";
 import { VocabularyTasks } from "./vocabulary-tasks";
 
 /** The most tasks a homework holds, as the format says. */
@@ -25,12 +28,18 @@ export function HomeworkDraftEditor({
   tasks: initial,
   revision,
   onSaved,
+  libraryVideos,
+  addableVideos,
 }: {
   homeworkId: string;
   tasks: Task[];
   /** The version of the draft this page shows; a save over a newer one is refused (#99). */
   revision: string;
   onSaved: (revision: string) => void;
+  /** The library videos the tasks are about or may be about (#330), as they play, by id. */
+  libraryVideos: Record<string, StudentTaskVideo>;
+  /** «Видео из библиотеки» (#330). */
+  addableVideos: { id: string; title: string }[];
 }) {
   const [tasks, setTasks] = useState(initial);
   const [editing, setEditing] = useState<number | "new" | null>(null);
@@ -64,7 +73,7 @@ export function HomeworkDraftEditor({
     if (await save(next)) setEditing(null);
   }
 
-  /** «Из словаря» (#281): the new tasks go after the others, within the 50 a homework holds. */
+  /** «Из словаря» (#281) and «Добавить видео» (#330): the new tasks go after the others, within the 50 a homework holds. */
   async function addTasks(added: Task[]): Promise<boolean> {
     if (tasks.length + added.length > MAX_TASKS) {
       setError(`В домашке не больше ${MAX_TASKS} заданий: выберите меньше слов или заданий`);
@@ -108,6 +117,11 @@ export function HomeworkDraftEditor({
               form(task)
             ) : (
               <>
+                {/* The video the tasks are about (#330), once above the first of them in a row. */}
+                {task.video && startsVideo(tasks, index) && (() => {
+                  const video = playedVideo(task.video, libraryVideos);
+                  return video ? <div className="mb-3"><TaskVideo video={video} /></div> : null;
+                })()}
                 <HomeworkTaskPreview task={task} number={index + 1} homeworkId={homeworkId} />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className={control} disabled={pending} onClick={() => openForm(index)}>
@@ -170,6 +184,7 @@ export function HomeworkDraftEditor({
         </div>
       )}
       {editing === null && <VocabularyTasks homeworkId={homeworkId} disabled={pending} onAdd={addTasks} />}
+      {editing === null && <VideoTasksToAdd homeworkId={homeworkId} videos={addableVideos} disabled={pending} onAdd={addTasks} />}
 
       {error && editing === null && (
         <p role="alert" className="whitespace-pre-line rounded-control bg-danger-bg px-3 py-2 text-small text-danger">

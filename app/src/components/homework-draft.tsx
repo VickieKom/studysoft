@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import type { Task } from "@/domain/homework-format";
+import type { StudentTaskVideo, Task } from "@/domain/homework-format";
 import { HomeworkDraftEditor } from "./homework-draft-editor";
 import { HomeworkPublish } from "./homework-publish";
 
@@ -16,6 +16,8 @@ export function HomeworkDraft({
   tasks,
   revision: loaded,
   askFeedback,
+  libraryVideos,
+  addableVideos,
   children,
 }: {
   homeworkId: string;
@@ -23,6 +25,10 @@ export function HomeworkDraft({
   revision: string;
   /** «Мини-вопрос после домашки» (#331). */
   askFeedback: boolean;
+  /** The library videos the tasks are about or may be about (#330), as they play, by id. */
+  libraryVideos: Record<string, StudentTaskVideo>;
+  /** «Видео из библиотеки»: the teacher's videos with confirmed tasks (#330). */
+  addableVideos: { id: string; title: string }[];
   /** The heading: the title and the status. */
   children: ReactNode;
 }) {
@@ -40,7 +46,14 @@ export function HomeworkDraft({
           oneKind={new Set(tasks.map((task) => task.type)).size < 2}
         />
       </header>
-      <HomeworkDraftEditor homeworkId={homeworkId} tasks={tasks} revision={revision} onSaved={setRevision} />
+      <HomeworkDraftEditor
+        homeworkId={homeworkId}
+        tasks={tasks}
+        revision={revision}
+        onSaved={setRevision}
+        libraryVideos={libraryVideos}
+        addableVideos={addableVideos}
+      />
     </>
   );
 }
