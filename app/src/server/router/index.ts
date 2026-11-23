@@ -35,6 +35,7 @@ import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 import { textbooksRouter } from "./teacher/textbooks";
 import { goalRouter } from "./teacher/goal";
+import { requestsRouter } from "./teacher/requests";
 import { homeRouter } from "./teacher/home";
 import { prepRouter } from "./teacher/prep";
 import { reportsRouter } from "./teacher/reports";
@@ -59,6 +60,7 @@ export const appRouter = router({
     notes: notesRouter,
     progress: progressRouter,
     goal: goalRouter,
+    requests: requestsRouter,
     reports: reportsRouter,
     assessments: assessmentsRouter,
     links: linksTeacherRouter,

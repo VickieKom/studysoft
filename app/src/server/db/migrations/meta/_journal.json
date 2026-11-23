@@ -337,6 +337,20 @@
       "when": 1795435450338,
       "tag": "0047_homework_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795437139066,
+      "tag": "0048_client_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795438770409,
+      "tag": "0049_assessment_lesson",
+      "breakpoints": true
     }
   ]
 }
