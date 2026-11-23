@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import {
@@ -140,6 +141,9 @@ export function ClientRequests({ requests, today }: { requests: ClientRequestVie
                             </option>
                           ))}
                         </select>
+                        <Link href={`/teacher/requests/${request.id}`} className="text-small text-green-600 hover:text-green-700">
+                          Открыть
+                        </Link>
                         <Button
                           variant="secondary"
                           disabled={busy}

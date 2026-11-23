@@ -12,7 +12,9 @@ import {
   REQUEST_STAGES,
 } from "../../../domain/requests";
 import { teacherTimeZone } from "../../access/settings";
-import { createRequest, deleteRequest, listRequests, moveRequest } from "../../crm/requests";
+import { briefTemplate, requestBrief, saveBriefTemplate, saveRequestBrief } from "../../crm/brief";
+import { createRequest, deleteRequest, findRequest, listRequests, moveRequest } from "../../crm/requests";
+import { briefAnswersSchema, briefTemplateSchema, convenientTimeSchema } from "../../../domain/brief";
 import { router, teacherProcedure } from "../core/trpc";
 
 // «Привлечение клиентов» (#337): the teacher's requests by stage. Teacher
@@ -77,6 +79,51 @@ export const requestsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...move } = input;
       if (!(await moveRequest(ctx.db, ctx.teacherId, id.toLowerCase(), move))) throw notFound();
+      return { ok: true as const };
+    }),
+
+  /** One request for its page (#339). */
+  get: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(request)
+    .query(async ({ ctx, input }) => {
+      const found = await findRequest(ctx.db, ctx.teacherId, input.id.toLowerCase());
+      if (!found) throw notFound();
+      return found;
+    }),
+
+  /** «Бриф вводного» in «Настройки» (#339): her questions, or the platform's starting set. */
+  briefTemplate: teacherProcedure.output(briefTemplateSchema).query(({ ctx }) => briefTemplate(ctx.db, ctx.teacherId)),
+
+  /** Saves the template whole; briefs already filled in keep their own questions. */
+  saveBriefTemplate: teacherProcedure
+    .input(z.object({ questions: briefTemplateSchema }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (new Set(input.questions.map((q) => q.id)).size !== input.questions.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Вопросы повторяются" });
+      await saveBriefTemplate(ctx.db, ctx.teacherId, input.questions);
+      return { ok: true as const };
+    }),
+
+  /** «Бриф» on a request (#339): as saved, or the template's questions before the first save. */
+  brief: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.object({ questions: briefTemplateSchema, answers: briefAnswersSchema, convenientTime: convenientTimeSchema, saved: z.boolean() }).strict())
+    .query(async ({ ctx, input }) => {
+      const brief = await requestBrief(ctx.db, ctx.teacherId, input.id.toLowerCase());
+      if (!brief) throw notFound();
+      return brief;
+    }),
+
+  /** Saves the brief as the teacher fills it in; the first save keeps the questions her page showed. */
+  saveBrief: teacherProcedure
+    .input(z.object({ id: z.uuid(), questions: briefTemplateSchema, answers: briefAnswersSchema, convenientTime: convenientTimeSchema }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...brief } = input;
+      const result = await saveRequestBrief(ctx.db, ctx.teacherId, id.toLowerCase(), brief);
+      if (result === "not_found") throw notFound();
+      if (result === "invalid") throw new TRPCError({ code: "BAD_REQUEST", message: "Бриф не совпадает с вопросами. Обновите страницу" });
       return { ok: true as const };
     }),
 
