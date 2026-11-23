@@ -21,6 +21,27 @@ export const TASK_TYPE_LABELS = {
   file: "Фото или аудио",
 } as const;
 
+/**
+ * The kinds of tasks as the child reads them in «Какое задание было самым
+ * интересным?» (#331, product owner 2026-11-23): the child's words, not the
+ * editor's. «Фидбэк» on the card shows the same words.
+ */
+export const CHILD_TASK_KIND_LABELS = {
+  single_choice: "Выбрать ответ",
+  multiple_choice: "Выбрать несколько",
+  gap: "Вставить слово",
+  match: "Соединить пары",
+  order: "Собрать предложение",
+  table: "Таблица",
+  written: "Написать",
+  voice: "Сказать вслух",
+  file: "Фото или запись",
+} as const satisfies Record<keyof typeof TASK_TYPE_LABELS, string>;
+
+/** «Все классные»: every kind, as the answer stores it. */
+export const ALL_KINDS_ANSWER = "all";
+export const ALL_KINDS_LABEL = "Все классные";
+
 // The weekday as it reads after «к»: "к четвергу", "к среде". Index = getUTCDay().
 const WEEKDAY_AFTER_K = ["воскресенью", "понедельнику", "вторнику", "среде", "четвергу", "пятнице", "субботе"];
 

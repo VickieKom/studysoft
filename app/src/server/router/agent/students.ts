@@ -77,6 +77,15 @@ const studentContext = z
     weakWords: z.array(z.object({ word: z.string(), translation: z.string().nullable() }).strict()),
     // The library games made for the student (#292).
     gamesForStudent: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
+    // What the next monthly assessment is drafted from (#313): since the last approved one, or the last 30 days.
+    assessmentPeriod: z
+      .object({
+        lastAssessmentAt: z.iso.datetime().nullable(),
+        since: z.iso.datetime(),
+        coveredUnits: z.array(z.object({ unit: z.string(), heldAt: z.iso.datetime() }).strict()),
+        words: z.array(z.object({ id: z.uuid(), word: z.string(), translation: z.string().nullable() }).strict()),
+      })
+      .strict(),
   })
   .strict();
 
@@ -113,6 +122,12 @@ export const agentStudentsRouter = router({
         notes: context.notes.map((note) => ({ body: note.body, createdAt: note.createdAt.toISOString() })),
         recentHomework: context.recentHomework.map((h) => ({ ...h, submittedAt: h.submittedAt.toISOString() })),
         recentGames: context.recentGames.map((g) => ({ ...g, playedAt: g.playedAt.toISOString() })),
+        assessmentPeriod: {
+          ...context.assessmentPeriod,
+          lastAssessmentAt: context.assessmentPeriod.lastAssessmentAt?.toISOString() ?? null,
+          since: context.assessmentPeriod.since.toISOString(),
+          coveredUnits: context.assessmentPeriod.coveredUnits.map((u) => ({ unit: u.unit, heldAt: u.heldAt.toISOString() })),
+        },
       };
     }),
 

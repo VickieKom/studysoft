@@ -269,6 +269,8 @@ export const homework = pgTable(
     attempt: bigint("attempt", { mode: "number" }).notNull().default(1),
     // The teacher's one comment on the homework (#36).
     reviewComment: text("review_comment"),
+    // «Мини-вопрос после домашки» (#331): ticked in the draft, off by default.
+    askFeedback: boolean("ask_feedback").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1039,6 +1041,15 @@ export const assessment = pgTable(
     listeningRecording: uuid("listening_recording").references(() => blob.id),
     speakingPicture: uuid("speaking_picture").references(() => blob.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    // Who made the draft (#313): "teacher" by import, "agent" by the
+    // assistant, with the period it was drafted from (`assessmentPeriod` of
+    // the student context, nothing else of it). While the teacher
+    // has done nothing to the assistant's draft, its next save replaces it;
+    // her first action (a removal, the recording, the picture) sets
+    // `teacherEditedAt`, and the next save makes a new draft.
+    createdBy: text("created_by").notNull().default("teacher"),
+    context: jsonb("context"),
+    teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1077,6 +1088,108 @@ export const videoTasks = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("video_tasks_material_key").on(t.materialId)],
+);
+
+/**
+ * The child's answer to «Какое задание было самым интересным?» after a
+ * homework's first «Сдать» (#331): a kind of the homework's tasks, "all" for
+ * «Все классные», or null for «Пропустить». One per homework. Counts for
+ * nothing; the teacher's only — no student or parent procedure returns it.
+ */
+export const homeworkFeedback = pgTable(
+  "homework_feedback",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id, { onDelete: "cascade" }),
+    answer: text("answer"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "homework_feedback_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("homework_feedback_homework_key").on(t.homeworkId),
+    index("homework_feedback_student_id_idx").on(t.studentId),
+  ],
+);
+
+/**
+ * A request of a family that may become a student (#337), in «Привлечение
+ * клиентов»: the child's first name, age and school year, the parent's
+ * contact, the source and the date, and the stage the teacher moved it to;
+ * «Отказ» keeps its reason and comment. «Удалить заявку» erases everything
+ * personal and keeps the row as an anonymous count of its stage, source and
+ * reason for the metrics (#341): `deleted_at` set, the personal fields null.
+ */
+export const clientRequest = pgTable(
+  "client_request",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    firstName: text("first_name"),
+    age: bigint("age", { mode: "number" }),
+    schoolYear: text("school_year"),
+    contact: text("contact"),
+    source: text("source").notNull(),
+    requestedOn: date("requested_on").notNull(),
+    stage: text("stage").notNull().default("request"),
+    declineReason: text("decline_reason"),
+    declineComment: text("decline_comment"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("client_request_teacher_id_idx").on(t.teacherId)],
+);
+
+/**
+ * The survey about the lessons sent with a homework (#332), when the teacher
+ * ticks «Опрос по урокам» in its draft: its questions, gathered from the
+ * lessons held in its period and edited in the draft; the child's answers.
+ * A draft's survey is `draft`; «Опубликовать» opens it, «Снять с публикации»
+ * takes an unanswered one back to `draft`; the child answers or skips it.
+ * Counts for nothing; the teacher's only — the child gets the questions, never
+ * an answer back, and the parent nothing.
+ */
+export const homeworkSurvey = pgTable(
+  "homework_survey",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id, { onDelete: "cascade" }),
+    periodFrom: timestamp("period_from", { withTimezone: true }).notNull(),
+    periodTo: timestamp("period_to", { withTimezone: true }).notNull(),
+    questions: jsonb("questions").notNull(),
+    answers: jsonb("answers"),
+    status: text("status").notNull().default("draft"),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "homework_survey_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("homework_survey_homework_key").on(t.homeworkId),
+    index("homework_survey_student_id_idx").on(t.studentId),
+  ],
 );
 
 /**

@@ -1,7 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { answerSchema, studentAnswerSchema } from "../../../domain/homework-format";
+import { ALL_KINDS_ANSWER } from "../../../domain/homework";
+import { answerSchema, studentAnswerSchema, TASK_TYPES } from "../../../domain/homework-format";
 import { studentTaskSchema } from "../../../domain/student-task-schema";
+import { answerMiniQuestion, miniQuestion } from "../../homework/feedback";
+import { answerSurvey, studentSurvey } from "../../homework/survey";
+import { surveyAnswersSchema } from "../../../domain/survey";
 import { currentHomeworkForStudent, openHomework, saveAnswer, submitHomework } from "../../homework/homework";
 import { router, studentProcedure } from "../core/trpc";
 
@@ -59,5 +63,51 @@ export const studentHomeworkRouter = router({
       if (submitted === "not_found") throw notFound();
       if (submitted === "conflict") throw new TRPCError({ code: "CONFLICT" });
       return submitted;
+    }),
+
+  /**
+   * «Какое задание было самым интересным?» after the first «Сдать» (#331):
+   * the kinds of the homework's tasks to choose from, or null when there is
+   * nothing to ask. The output carries the kinds only, never an answer.
+   */
+  miniQuestion: studentProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.object({ kinds: z.array(z.enum(TASK_TYPES)) }).strict().nullable())
+    .query(({ ctx, input }) => miniQuestion(ctx.db, ctx.teacherId, ctx.studentId, input.id.toLowerCase())),
+
+  /**
+   * «Опрос про уроки» (#332): the open survey of the published homework, its
+   * questions and choices; null when there is none. Nothing of an answer goes back.
+   */
+  survey: studentProcedure
+    .output(
+      z
+        .object({
+          homeworkId: z.uuid(),
+          questions: z.array(z.object({ text: z.string(), choices: z.array(z.string()), textAnswer: z.boolean() }).strict()),
+        })
+        .strict()
+        .nullable(),
+    )
+    .query(({ ctx }) => studentSurvey(ctx.db, ctx.teacherId, ctx.studentId)),
+
+  /** «Готово» with one answer per question, any left null, or «Пропустить» with none; once. */
+  answerSurvey: studentProcedure
+    .input(z.object({ homeworkId: z.uuid(), answers: surveyAnswersSchema.max(30).nullable() }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const result = await answerSurvey(ctx.db, ctx.teacherId, ctx.studentId, input.homeworkId.toLowerCase(), input.answers);
+      if (result === "not_found") throw notFound();
+      if (result === "invalid") throw new TRPCError({ code: "BAD_REQUEST" });
+      return { ok: true as const };
+    }),
+
+  /** The child's pick: a kind the question offered, «Все классные», or null for «Пропустить»; once. */
+  answerMiniQuestion: studentProcedure
+    .input(z.object({ id: z.uuid(), answer: z.enum([...TASK_TYPES, ALL_KINDS_ANSWER]).nullable() }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await answerMiniQuestion(ctx.db, ctx.teacherId, ctx.studentId, input.id.toLowerCase(), input.answer))) throw notFound();
+      return { ok: true as const };
     }),
 });

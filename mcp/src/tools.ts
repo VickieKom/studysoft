@@ -44,6 +44,14 @@ export const draftInput = {
     .describe("The homework as JSON in the format from get_homework_format: { version, title, tasks }"),
 };
 
+// The month's assessment (#313).
+export const assessmentDraftInput = {
+  ...studentIdInput,
+  assessment: z
+    .record(z.string(), z.unknown())
+    .describe("The assessment as JSON in the assessment format from get_homework_format: { version, title, sections }"),
+};
+
 // A game or a warm-up for the library (#120): its title and the tags the library filters by.
 const libraryTags = {
   id: z
@@ -325,10 +333,13 @@ export function createTools(platform: Platform) {
         const game = await platform.agent.gameResultFormat.query();
         // A game template gets a student's words in a format of its own (#282).
         const words = await platform.agent.gameWordsFormat.query();
+        // The monthly assessment has a format of its own (#313).
+        const assessment = await platform.agent.assessmentFormat.query();
         const text =
           `Homework format, version ${format.version}\n\n${format.description}\n\n` +
           `Game result format, version ${game.version}\n\n${game.description}\n\n` +
-          `Game words format, version ${words.version}\n\n${words.description}`;
+          `Game words format, version ${words.version}\n\n${words.description}\n\n` +
+          `Assessment format, version ${assessment.version}\n\n${assessment.description}`;
         return { content: [{ type: "text", text }] };
       } catch (error) {
         return failure(error);
@@ -338,6 +349,18 @@ export function createTools(platform: Platform) {
       try {
         const { id } = await platform.agent.saveHomeworkDraft.mutate({ studentId, homework });
         return json({ id, status: "draft", note: "Saved as a draft on the student's card; the teacher reviews and publishes it." });
+      } catch (error) {
+        return failure(error);
+      }
+    },
+    async saveAssessmentDraft({ studentId, assessment }: { studentId: string; assessment: unknown }): Promise<ToolResult> {
+      try {
+        const { id } = await platform.agent.saveAssessmentDraft.mutate({ studentId, assessment });
+        return json({
+          id,
+          status: "draft",
+          note: "Saved as a draft in «Замеры» on the student's card; the teacher uploads the recording and the picture, and approves it.",
+        });
       } catch (error) {
         return failure(error);
       }

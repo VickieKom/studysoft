@@ -1,5 +1,5 @@
 {
-  "id": "874140b1-c7cc-409f-a1ed-391dfab20829",
+  "id": "6fd30414-805c-475c-a9f6-fb1ceee7490a",
   "prevId": "57725379-eccf-4f0e-b5b0-1b90c1382397",
   "version": "7",
   "dialect": "postgresql",
@@ -406,6 +406,25 @@
         },
         "approved_at": {
           "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'teacher'"
+        },
+        "context": {
+          "name": "context",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "teacher_edited_at": {
+          "name": "teacher_edited_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -2373,12 +2392,6 @@
         },
         "url": {
           "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "transcript": {
-          "name": "transcript",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -4416,119 +4429,6 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.video_tasks": {
-      "name": "video_tasks",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "teacher_id": {
-          "name": "teacher_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "material_id": {
-          "name": "material_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tasks": {
-          "name": "tasks",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confirmed_at": {
-          "name": "confirmed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "draft": {
-          "name": "draft",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "draft_edited_at": {
-          "name": "draft_edited_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "video_tasks_material_key": {
-          "name": "video_tasks_material_key",
-          "columns": [
-            {
-              "expression": "material_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "video_tasks_teacher_id_teacher_id_fk": {
-          "name": "video_tasks_teacher_id_teacher_id_fk",
-          "tableFrom": "video_tasks",
-          "tableTo": "teacher",
-          "columnsFrom": [
-            "teacher_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "video_tasks_material_id_library_material_id_fk": {
-          "name": "video_tasks_material_id_library_material_id_fk",
-          "tableFrom": "video_tasks",
-          "tableTo": "library_material",
-          "columnsFrom": [
-            "material_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

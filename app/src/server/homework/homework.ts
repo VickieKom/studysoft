@@ -19,6 +19,7 @@ import {
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
+import { openSurvey, takeBackSurvey } from "./survey";
 import { env } from "../env";
 import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, todayIn } from "../../domain/homework";
 import { missedOutsideTraining } from "../crm/word-training";
@@ -115,9 +116,9 @@ export async function findHomework(
   db: Database,
   teacherId: string,
   id: string,
-): Promise<(HomeworkSummary & { studentId: string; tasks: Task[]; revision: string }) | null> {
+): Promise<(HomeworkSummary & { studentId: string; tasks: Task[]; revision: string; askFeedback: boolean }) | null> {
   const [row] = await db
-    .select({ ...summaryColumns, studentId: homework.studentId, revision })
+    .select({ ...summaryColumns, studentId: homework.studentId, revision, askFeedback: homework.askFeedback })
     .from(homework)
     .leftJoin(draftOrigin, eq(draftOrigin.homeworkId, homework.id))
     .where(and(eq(homework.id, id), eq(homework.teacherId, teacherId)));
@@ -127,6 +128,7 @@ export async function findHomework(
     studentId: row.studentId,
     tasks: (row.document as HomeworkDocument).tasks,
     revision: row.revision,
+    askFeedback: row.askFeedback,
   };
 }
 
@@ -181,6 +183,8 @@ export async function publishHomework(
   id: string,
   seen: string,
   dueDate: string,
+  /** «Мини-вопрос после домашки» as the publish form has it (#331). */
+  askFeedback = false,
 ): Promise<"published" | "not_found" | "changed" | "past"> {
   return db.transaction(async (tx) => {
     const [draft] = await tx
@@ -207,8 +211,10 @@ export async function publishHomework(
       .where(and(eq(homework.studentId, draft.studentId), eq(homework.teacherId, teacherId), eq(homework.status, "published")));
     await tx
       .update(homework)
-      .set({ status: "published", dueDate, publishedAt: sql`now()` })
+      .set({ status: "published", dueDate, publishedAt: sql`now()`, askFeedback })
       .where(eq(homework.id, id));
+    // «Опрос по урокам» ticked in the draft opens with it (#332).
+    await openSurvey(tx, id);
     return "published";
   });
 }
@@ -232,6 +238,8 @@ export async function unpublishHomework(db: Database, teacherId: string, id: str
     await tx
       .delete(homeworkAnswer)
       .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, taken.attempt)));
+    // An unanswered survey goes back with it (#332).
+    await takeBackSurvey(tx, id);
     return true;
   });
 }

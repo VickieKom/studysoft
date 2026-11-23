@@ -2,6 +2,8 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StudentVideoTasks } from "@/components/student-video-tasks";
+import { YouTubePlayer } from "@/components/youtube-player";
+import { youTubeEmbedUrl } from "@/domain/library";
 import { createServerCaller, isNotFound, isUnauthorized } from "@/server/router";
 
 export const metadata = { title: "Видео — StudySoft" };
@@ -13,8 +15,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * A video the teacher opened to the student (#158). An own file plays here,
  * served in byte ranges as for the teacher; the student plays, pauses and
- * seeks it. A link opens in a new tab. Its confirmed tasks are answered
- * under it (#327). A video not open to this student, a
+ * seeks it. A YouTube link plays in an embedded player (#325); any other link
+ * opens in a new tab. Its confirmed tasks are answered under it (#327). A
+ * video not open to this student, a
  * closed one, a missing one and no session all end in the same 404 page.
  */
 export default async function StudentVideoPage({ params }: Props) {
@@ -30,6 +33,7 @@ export default async function StudentVideoPage({ params }: Props) {
     if (isNotFound(error) || isUnauthorized(error)) notFound();
     throw error;
   }
+  const embedded = video.link ? youTubeEmbedUrl(video.link) : null;
 
   return (
     <main className="flex flex-col gap-4">
@@ -42,6 +46,8 @@ export default async function StudentVideoPage({ params }: Props) {
       {video.fileUrl ? (
         // biome-ignore lint/a11y/useMediaCaption: the teacher's own video has no captions
         <video src={video.fileUrl} controls playsInline preload="metadata" className="w-full rounded-task border border-border bg-black" />
+      ) : embedded ? (
+        <YouTubePlayer src={embedded} title={video.title} />
       ) : video.link ? (
         <a
           href={video.link}
@@ -52,7 +58,7 @@ export default async function StudentVideoPage({ params }: Props) {
           Смотреть
         </a>
       ) : null}
-      {tasks && <StudentVideoTasks id={video.id} tasks={tasks.tasks} done={tasks.done} />}
+      {tasks && <StudentVideoTasks id={video.id} tasks={tasks.tasks} revision={tasks.revision} done={tasks.done} />}
     </main>
   );
 }
