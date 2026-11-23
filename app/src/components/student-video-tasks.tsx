@@ -11,9 +11,11 @@ const PRAISE = "Готово! Ответы отправлены, учитель 
  * «Задания к видео» under a video behind the student's link (#327): the
  * confirmed tasks, one attempt, «Готово», then praise only — no score,
  * nothing right or wrong, as in homework (#227). Answered once in this
- * lesson, the tasks give way to the praise.
+ * lesson, the tasks give way to the praise. «Готово» sends the revision of
+ * the tasks shown: tasks the teacher confirmed anew meanwhile are refused,
+ * and the child is asked to reload.
  */
-export function StudentVideoTasks({ id, tasks, done }: { id: string; tasks: StudentTask[]; done: boolean }) {
+export function StudentVideoTasks({ id, tasks, revision, done }: { id: string; tasks: StudentTask[]; revision: string; done: boolean }) {
   const [answers, setAnswers] = useState<(Answer | null)[]>(() => tasks.map(() => null));
   const [sent, setSent] = useState(done);
   const [busy, setBusy] = useState(false);
@@ -23,12 +25,14 @@ export function StudentVideoTasks({ id, tasks, done }: { id: string; tasks: Stud
     setBusy(true);
     setError(null);
     try {
-      await routerClient.student.videos.submitTasks.mutate({ id, answers });
+      await routerClient.student.videos.submitTasks.mutate({ id, revision, answers });
       setSent(true);
     } catch (cause) {
       const code = (cause as { data?: { code?: string } } | null)?.data?.code;
       // Answered already, from another device: the praise is what is current.
       if (code === "CONFLICT") setSent(true);
+      // The teacher confirmed other tasks meanwhile: these answers are not checked against tasks the child has not seen.
+      else if (code === "PRECONDITION_FAILED") setError("Учитель поменял задания. Обновите страницу и ответьте на новые");
       else setError("Не получилось отправить. Проверьте интернет и нажмите «Готово» ещё раз");
     } finally {
       setBusy(false);

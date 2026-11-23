@@ -54,22 +54,28 @@ export const studentVideosRouter = router({
   /** The video's confirmed tasks without keys, and whether they are answered in this lesson; null for a video without tasks. */
   tasks: studentProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(z.object({ tasks: z.array(studentTaskSchema("/api/files/video-tasks/")), done: z.boolean() }).strict().nullable())
+    .output(z.object({ tasks: z.array(studentTaskSchema("/api/files/video-tasks/")), revision: z.string(), done: z.boolean() }).strict().nullable())
     .query(async ({ ctx, input }) => {
       const id = input.id.toLowerCase();
       if (!(await studentVideo(ctx.db, ctx.teacherId, ctx.studentId, id))) throw notFound();
       return studentVideoTasks(ctx.db, ctx.teacherId, ctx.studentId, id);
     }),
 
-  /** «Готово»: one answer per task, in order, once per lesson. The output says nothing of right or wrong. */
+  /**
+   * «Готово»: one answer per task, in order, once per lesson, to the tasks the
+   * page showed (`revision`). Already answered is CONFLICT; tasks the teacher
+   * confirmed anew meanwhile are PRECONDITION_FAILED. The output says nothing
+   * of right or wrong.
+   */
   submitTasks: studentProcedure
-    .input(z.object({ id: z.uuid(), answers: z.array(answerSchema.nullable()).max(MAX_VIDEO_TASKS) }))
+    .input(z.object({ id: z.uuid(), revision: z.string().max(64), answers: z.array(answerSchema.nullable()).max(MAX_VIDEO_TASKS) }))
     .output(z.object({ ok: z.literal(true) }).strict())
     .mutation(async ({ ctx, input }) => {
-      const result = await submitVideoAnswers(ctx.db, ctx.teacherId, ctx.studentId, input.id.toLowerCase(), input.answers);
+      const result = await submitVideoAnswers(ctx.db, ctx.teacherId, ctx.studentId, input.id.toLowerCase(), input.revision, input.answers);
       if (result === "not_found") throw notFound();
       if (result === "invalid") throw new TRPCError({ code: "BAD_REQUEST" });
       if (result === "done") throw new TRPCError({ code: "CONFLICT" });
+      if (result === "changed") throw new TRPCError({ code: "PRECONDITION_FAILED" });
       return { ok: true as const };
     }),
 });

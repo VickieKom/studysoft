@@ -52,7 +52,7 @@ export default async function StudentVideoPage({ params }: Props) {
           Смотреть
         </a>
       ) : null}
-      {tasks && <StudentVideoTasks id={video.id} tasks={tasks.tasks} done={tasks.done} />}
+      {tasks && <StudentVideoTasks id={video.id} tasks={tasks.tasks} revision={tasks.revision} done={tasks.done} />}
     </main>
   );
 }

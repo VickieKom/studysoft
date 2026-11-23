@@ -283,11 +283,6 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
 }
 
 /**
- * One task as the child will see it, for the teacher (#224): the same prompt,
- * parts and controls as in the homework, without the keys. She may try it;
- * nothing is saved and nothing is checked.
- */
-/**
  * One task for the child to answer outside a homework (#327, a video's tasks):
  * the same prompt, parts and controls, the answer kept by the caller. Text
  * answers only: no recording or file is taken here.
@@ -309,6 +304,11 @@ export function TaskToAnswer({ task, answer, onChange }: { task: StudentTask; an
   );
 }
 
+/**
+ * One task as the child will see it, for the teacher (#224): the same prompt,
+ * parts and controls as in the homework, without the keys. She may try it;
+ * nothing is saved and nothing is checked.
+ */
 export function TaskAsStudent({ task }: { task: StudentTask }) {
   const [answer, setAnswer] = useState<StudentAnswer | null>(null);
   return (
