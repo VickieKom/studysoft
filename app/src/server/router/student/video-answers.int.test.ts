@@ -1,8 +1,9 @@
-import { eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
-import { gameAccess, lesson, videoAnswer } from "../../db/schema";
+import { gameAccess, lesson, videoAnswer, videoTasks } from "../../db/schema";
 import { videoShuffleSeed } from "../../library/video-answers";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
@@ -142,6 +143,20 @@ describe("a video's tasks behind the student's link", () => {
     await student.student.videos.submitTasks({ id, revision: current.revision, answers });
     const [kept] = await db().select({ tasks: videoAnswer.tasks }).from(videoAnswer).where(eq(videoAnswer.materialId, id));
     expect((kept!.tasks as { prompt: string }[])[0]!.prompt).toBe("The robot sleeps at noon.");
+  });
+
+  it("sends a revision keyed with a secret, never the bare hash of the tasks and their keys", async () => {
+    const { id, student } = await opened("Ревизия");
+    const { revision } = (await student.student.videos.tasks({ id }))!;
+    const [row] = await db()
+      .select({ md5: sql<string>`md5(${videoTasks.tasks}::text)`, text: sql<string>`${videoTasks.tasks}::text` })
+      .from(videoTasks)
+      .where(eq(videoTasks.materialId, id));
+    expect(revision).not.toBe(row!.md5);
+    expect(revision).not.toContain(row!.md5);
+    // Guessing the answers and hashing gets nowhere: the revision is not any md5 of the tasks' text.
+    expect(revision).not.toBe(createHash("md5").update(row!.text).digest("hex"));
+    expect(revision).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it("shuffles with a seed derived from a secret, not from the ids", () => {
