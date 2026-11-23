@@ -50,7 +50,7 @@ export default async function HomeworkPage({ params }: Props) {
         </Link>
       </p>
       {homework.status === "draft" ? (
-        <HomeworkDraft homeworkId={homework.id} tasks={homework.tasks} revision={homework.revision}>
+        <HomeworkDraft homeworkId={homework.id} tasks={homework.tasks} revision={homework.revision} askFeedback={homework.askFeedback}>
           {heading}
         </HomeworkDraft>
       ) : (
