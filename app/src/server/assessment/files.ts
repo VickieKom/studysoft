@@ -12,6 +12,7 @@ import { byteRange } from "../blob/range";
 import { readBlob, saveBlobStream } from "../blob/store";
 import { db } from "../db/client";
 import { assessment } from "../db/schema";
+import { TEACHER_EDITED } from "./assessments";
 import { sniffMedia } from "../homework/media";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,7 +67,7 @@ export async function handleAssessmentFileUpload(request: Request, assessmentId:
   // Conditional on the draft: an approval in between keeps the file it was approved with.
   const rows = await database
     .update(assessment)
-    .set({ ...setTo(which, saved), updatedAt: new Date() })
+    .set({ ...setTo(which, saved), teacherEditedAt: TEACHER_EDITED, updatedAt: new Date() })
     .where(and(eq(assessment.id, id), eq(assessment.teacherId, teacherId), eq(assessment.status, "draft")))
     .returning({ id: assessment.id });
   if (rows.length === 0) return refused(409, "Замер уже утверждён");
@@ -80,7 +81,7 @@ export async function handleAssessmentFileRemove(request: Request, assessmentId:
   if (!teacherId) return notFound();
   const rows = await db()
     .update(assessment)
-    .set({ ...setTo(which, null), updatedAt: new Date() })
+    .set({ ...setTo(which, null), teacherEditedAt: TEACHER_EDITED, updatedAt: new Date() })
     .where(and(eq(assessment.id, assessmentId.toLowerCase()), eq(assessment.teacherId, teacherId), eq(assessment.status, "draft")))
     .returning({ id: assessment.id });
   return rows.length > 0 ? new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }) : notFound();

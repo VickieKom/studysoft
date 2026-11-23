@@ -33,6 +33,7 @@ function failure(error: unknown, subject: { refused?: string; missing?: string }
 const TEXTBOOK = { refused: "invalid textbook structure", missing: "textbook or page" };
 const PLAN = { refused: "invalid lesson plan", missing: "lesson still to hold" };
 const LESSON_TASKS = { refused: "invalid lesson tasks", missing: "textbook, or lesson in its confirmed structure" };
+const VIDEO = { refused: "invalid video tasks", missing: "video in the teacher's library" };
 
 export const studentIdInput = { studentId: z.string().uuid().describe("The student's id from list_students") };
 
@@ -41,6 +42,14 @@ export const draftInput = {
   homework: z
     .record(z.string(), z.unknown())
     .describe("The homework as JSON in the format from get_homework_format: { version, title, tasks }"),
+};
+
+// The month's assessment (#313).
+export const assessmentDraftInput = {
+  ...studentIdInput,
+  assessment: z
+    .record(z.string(), z.unknown())
+    .describe("The assessment as JSON in the assessment format from get_homework_format: { version, title, sections }"),
 };
 
 // A game or a warm-up for the library (#120): its title and the tags the library filters by.
@@ -135,6 +144,18 @@ export const lessonTasksInput = {
     .describe("The lesson's exercises that did not become tasks: their source as above and the reason, up to 300 characters"),
 };
 
+// A library video and its tasks (#326).
+export const videoIdInput = { videoId: z.string().uuid().describe("The video's id: a video from list_lesson_materials") };
+export const videoTasksInput = {
+  ...videoIdInput,
+  tasks: z
+    .record(z.string(), z.unknown())
+    .describe(
+      "The video's tasks as one homework in the format from get_homework_format: { version, title, tasks }, up to 20 tasks, " +
+        "text only — no pictures or recordings. For true / false use single_choice with the options «True» and «False».",
+    ),
+};
+
 // The student's words and the assistant's translations for them (#237).
 export const wordDraftsInput = {
   ...studentIdInput,
@@ -176,6 +197,30 @@ export function createTools(platform: Platform) {
         return json(await platform.agent.lessonPlan.query({ lessonId }));
       } catch (error) {
         return failure(error, PLAN);
+      }
+    },
+    async readLibraryVideo({ videoId }: { videoId: string }): Promise<ToolResult> {
+      try {
+        const video = await platform.agent.libraryVideo.query({ id: videoId });
+        return json({
+          ...video,
+          note: video.transcript
+            ? "Draft the tasks from the transcript."
+            : "No transcript: open the link yourself if you can; otherwise ask the teacher to paste the text into «Расшифровка» on the video's page.",
+        });
+      } catch (error) {
+        return failure(error, VIDEO);
+      }
+    },
+    async saveVideoTasksDraft({ videoId, tasks }: { videoId: string; tasks: unknown }): Promise<ToolResult> {
+      try {
+        await platform.agent.saveVideoTasksDraft.mutate({ videoId, tasks });
+        return json({
+          status: "draft",
+          note: "Saved as a draft «от ассистента» in «Задания к видео» on the video's page; the teacher removes what she does not want and confirms.",
+        });
+      } catch (error) {
+        return failure(error, VIDEO);
       }
     },
     async listLessonMaterials({ lessonId }: { lessonId: string }): Promise<ToolResult> {
@@ -287,10 +332,13 @@ export function createTools(platform: Platform) {
         const game = await platform.agent.gameResultFormat.query();
         // A game template gets a student's words in a format of its own (#282).
         const words = await platform.agent.gameWordsFormat.query();
+        // The monthly assessment has a format of its own (#313).
+        const assessment = await platform.agent.assessmentFormat.query();
         const text =
           `Homework format, version ${format.version}\n\n${format.description}\n\n` +
           `Game result format, version ${game.version}\n\n${game.description}\n\n` +
-          `Game words format, version ${words.version}\n\n${words.description}`;
+          `Game words format, version ${words.version}\n\n${words.description}\n\n` +
+          `Assessment format, version ${assessment.version}\n\n${assessment.description}`;
         return { content: [{ type: "text", text }] };
       } catch (error) {
         return failure(error);
@@ -300,6 +348,18 @@ export function createTools(platform: Platform) {
       try {
         const { id } = await platform.agent.saveHomeworkDraft.mutate({ studentId, homework });
         return json({ id, status: "draft", note: "Saved as a draft on the student's card; the teacher reviews and publishes it." });
+      } catch (error) {
+        return failure(error);
+      }
+    },
+    async saveAssessmentDraft({ studentId, assessment }: { studentId: string; assessment: unknown }): Promise<ToolResult> {
+      try {
+        const { id } = await platform.agent.saveAssessmentDraft.mutate({ studentId, assessment });
+        return json({
+          id,
+          status: "draft",
+          note: "Saved as a draft in «Замеры» on the student's card; the teacher uploads the recording and the picture, and approves it.",
+        });
       } catch (error) {
         return failure(error);
       }
