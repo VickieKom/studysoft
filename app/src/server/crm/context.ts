@@ -5,6 +5,7 @@
 //
 // Never in the context: the last name, contacts, payments, links (#18), and
 // the keys of homework tasks.
+import { type AssessmentPeriod, assessmentPeriod } from "../assessment/assessments";
 import { gamesForStudent } from "../library/material-students";
 import type { Database } from "../db/client";
 import type { GameAnswer } from "../../domain/game-result-format";
@@ -44,6 +45,8 @@ export type StudentContext = {
   weakWords: { word: string; translation: string | null }[];
   /** The library games made for this student (#292), so the assistant reuses one before making another. */
   gamesForStudent: { id: string; title: string }[];
+  /** What the next monthly assessment is drafted from (#313): since the last approved one, the units held and the words added. */
+  assessmentPeriod: AssessmentPeriod;
 };
 
 /** The context of one student of this teacher, or null — another teacher's student is the same as a missing one. */
@@ -78,5 +81,6 @@ export async function buildStudentContext(
       .filter((w) => wordMark({ step: w.trainStep, rightCount: w.rightCount, wrongCount: w.wrongCount, trained: w.trainedAt !== null }) === "often_wrong")
       .map(({ word, translation }) => ({ word, translation })),
     gamesForStudent: await gamesForStudent(db, teacherId, studentId),
+    assessmentPeriod: await assessmentPeriod(db, teacherId, studentId),
   };
 }

@@ -1,6 +1,8 @@
 # Assessment format, version 1
 
-How the monthly skills assessment is written as JSON for the platform: pasted by the teacher in «Импортировать замер» on the student card (#252), and later saved by the assistant (#313). The platform validates every assessment against this format and refuses one that does not match, naming the section, the question and the field.
+How the monthly skills assessment is written as JSON for the platform: pasted by the teacher in «Импортировать замер» on the student card (#252), or saved by the assistant through MCP as a draft «от ассистента» (#313). The platform validates every assessment against this format and refuses one that does not match, naming the section, the question and the field.
+
+The assistant drafts the month's assessment from the student context's `assessmentPeriod`: the period since the student's last approved assessment (the last 30 days without one), the lessons of the student's textbook finished in it («Завершить урок»), and the words added to the vocabulary in it, with their ids for `vocabularyWord`; the material is at the student's `level`. Saving again replaces the assistant's draft while the teacher has done nothing to it; once she has removed a question or uploaded the recording or the picture, the next save makes a new draft and keeps hers. Only the teacher uploads the recording and the picture, and approves.
 
 Once a month about half a lesson goes to the assessment: the same form every month, with new material at the student's level, so the months compare. Content lives in the platform's database, never in this repository. The example below is synthetic.
 
@@ -65,7 +67,7 @@ The recording is not in the JSON: the teacher records or finds it and uploads it
 - `{ "type": "translation", "translation": "…", "answers": ["…"] }` — the child writes the word for the translation.
 - `{ "type": "sentence", "text": "…", "answers": ["…"] }` — a sentence with one gap `___`; the child writes the word.
 
-`answers` lists every accepted variant. A question may name the word of the student's vocabulary it asks in `vocabularyWord`, the word's id (as `list_student_words` gives it to the assistant): a mistake in it will bring the word back into the training (#253). An id that is not one of the student's words is dropped on import, and the question stays.
+`answers` lists every accepted variant. A question may name the word of the student's vocabulary it asks in `vocabularyWord`, the word's id (as `list_student_words` or `assessmentPeriod` give it to the assistant): a mistake in it will bring the word back into the training (#253). An id that is not one of the student's words is dropped on import, and the question stays.
 
 ### `writing`
 

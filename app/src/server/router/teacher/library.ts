@@ -17,8 +17,11 @@ import {
   MAX_TOPIC_LENGTH,
   MAX_TOPICS,
   parseTopics,
+  MAX_TRANSCRIPT_LENGTH,
   MAX_URL_LENGTH,
 } from "../../../domain/library";
+import { studentTaskSchema } from "../../../domain/student-task-schema";
+import { confirmVideoTasks, readVideoTasks, removeVideoDraftTask } from "../../library/video-tasks";
 import { LEVELS } from "../../../domain/student";
 import {
   addToLibrary,
@@ -44,6 +47,17 @@ import { materialLikes } from "../../library/likes";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+
+/** A video's «Расшифровка» (#326): trimmed, empty for none; left out, an edit keeps it. */
+const transcript = z
+  .string()
+  .max(MAX_TRANSCRIPT_LENGTH)
+  .transform((text) => text.trim() || null)
+  .optional();
+
+/** A video's tasks as the child will see them, without keys; they carry no files (#326). */
+const videoTask = studentTaskSchema("/api/files/video-tasks/");
+const videoTasksChanged = () => new TRPCError({ code: "CONFLICT", message: "Задания изменились, пока страница была открыта. Обновите страницу" });
 
 export const tags = z.object({
   title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
@@ -210,11 +224,57 @@ export const libraryRouter = router({
 
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(material)
+    // A video's transcript on its own page only, not in the lists (#326).
+    .output(material.extend({ transcript: z.string().nullable() }).strict())
     .query(async ({ ctx, input }) => {
       const found = await findMaterial(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();
-      return (await outputs(ctx, [found]))[0]!;
+      return { ...(await outputs(ctx, [found]))[0]!, transcript: found.transcript };
+    }),
+
+  /**
+   * «Задания к видео» on a video's page (#326): the confirmed tasks and the
+   * assistant's draft beside them, as the child will see them, with the
+   * draft's revision. Another teacher's video, and any other material, are
+   * NOT_FOUND.
+   */
+  videoTasks: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(
+      z
+        .object({
+          confirmed: z.array(videoTask).nullable(),
+          draft: z.object({ tasks: z.array(videoTask), revision: z.string() }).strict().nullable(),
+        })
+        .strict(),
+    )
+    .query(async ({ ctx, input }) => {
+      const tasks = await readVideoTasks(ctx.db, ctx.teacherId, input.id.toLowerCase());
+      if (!tasks) throw notFound();
+      return tasks;
+    }),
+
+  /** «Убрать»: one task out of the draft the page showed; the last one stays. */
+  removeVideoTask: teacherProcedure
+    .input(z.object({ id: z.uuid(), index: z.number().int().min(0), revision: z.string().max(64) }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const result = await removeVideoDraftTask(ctx.db, ctx.teacherId, input.id.toLowerCase(), input.index, input.revision);
+      if (result === "not_found") throw notFound();
+      if (result === "conflict") throw videoTasksChanged();
+      if (result === "last") throw new TRPCError({ code: "BAD_REQUEST", message: "Последнее задание убрать нельзя" });
+      return { ok: true as const };
+    }),
+
+  /** «Подтвердить»: the draft the page showed becomes the video's tasks. Teacher only: no agent procedure confirms. */
+  confirmVideoTasks: teacherProcedure
+    .input(z.object({ id: z.uuid(), revision: z.string().max(64) }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const result = await confirmVideoTasks(ctx.db, ctx.teacherId, input.id.toLowerCase(), input.revision);
+      if (result === "not_found") throw notFound();
+      if (result !== "saved") throw videoTasksChanged();
+      return { ok: true as const };
     }),
 
   /** A game: one HTML file as text, at most 5 MB. */
@@ -235,11 +295,11 @@ export const libraryRouter = router({
 
   /** A video link: http or https (#117). Checked in the module, so the form shows the message. */
   addVideoLink: teacherProcedure
-    .input(tags.extend({ url: z.string().trim().max(MAX_URL_LENGTH) }))
+    .input(tags.extend({ url: z.string().trim().max(MAX_URL_LENGTH), transcript }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { url, ...rest } = input;
-      const created = await createVideoLink(ctx.db, ctx.teacherId, rest, url);
+      const { url, transcript: text, ...rest } = input;
+      const created = await createVideoLink(ctx.db, ctx.teacherId, rest, url, text ?? null);
       if (created === "not_a_link")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Нужна ссылка, которая начинается с http:// или https://" });
       return created;
@@ -247,11 +307,11 @@ export const libraryRouter = router({
 
   /** An own video: its file is uploaded first with PUT to /api/files/library, which answers its id (#117). */
   addVideoFile: teacherProcedure
-    .input(tags.extend({ file: z.uuid() }))
+    .input(tags.extend({ file: z.uuid(), transcript }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { file, ...rest } = input;
-      const created = await createVideoFile(ctx.db, ctx.teacherId, rest, file.toLowerCase());
+      const { file, transcript: text, ...rest } = input;
+      const created = await createVideoFile(ctx.db, ctx.teacherId, rest, file.toLowerCase(), text ?? null);
       if (created === "no_file") throw new TRPCError({ code: "BAD_REQUEST", message: "Не нашли загруженное видео. Загрузите файл ещё раз" });
       return created;
     }),
@@ -352,7 +412,9 @@ export const libraryRouter = router({
 
   /** Title and tags; a game's warm-up mark; a questions warm-up's questions. */
   update: teacherProcedure
-    .input(tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional(), ...linkInput, studentIds }))
+    .input(
+      tags.extend({ id: z.uuid(), warmup: z.boolean().optional(), vocabulary: z.boolean().optional(), questions: questions.optional(), transcript, ...linkInput, studentIds }),
+    )
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { id, questions: lines, textbookId, textbookLessonId, studentIds: marked, ...rest } = input;

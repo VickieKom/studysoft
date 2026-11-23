@@ -1,11 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import short from "../../../../../deploy/seed/homework/demo-short.json";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
-import { homeworkSurvey, lesson, lessonPlan } from "../../db/schema";
+import { homework, homeworkSurvey, lesson, lessonPlan } from "../../db/schema";
 import { env } from "../../env";
-import { surveyPeriod } from "../../homework/survey";
+import { openSurvey, surveyPeriod } from "../../homework/survey";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { appRouter, createServerCaller, handleRouterRequest } from "../index";
 
@@ -188,6 +188,77 @@ describe("the survey for the child", () => {
     const parent = await studentCaller(studentId, "parent");
     const outputs = JSON.stringify([await student.student.me(), await student.student.homework.current(), await parent.parent.me(), await parent.parent.progress(), await parent.parent.reports()]);
     expect(outputs).not.toContain("Секретное желание");
+  });
+});
+
+describe("the survey and «Опубликовать»", () => {
+  /** A publication in progress: it holds the draft's row, as publishHomework does, until released. */
+  async function publishing(id: string) {
+    let locked!: () => void;
+    let release!: () => void;
+    const isLocked = new Promise<void>((resolve) => (locked = resolve));
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const done = db().transaction(async (tx) => {
+      await tx.select({ id: homework.id }).from(homework).where(eq(homework.id, id)).for("update");
+      locked();
+      await released;
+      await tx.update(homework).set({ status: "published", dueDate: inDays(3), publishedAt: new Date() }).where(eq(homework.id, id));
+      await openSurvey(tx, id);
+    });
+    await isLocked;
+    return { release, done };
+  }
+
+  const outcome = (p: Promise<unknown>) =>
+    p.then(
+      () => "done",
+      (error: unknown) => error,
+    );
+  const stillWaiting = (p: Promise<unknown>) => Promise.race([p, new Promise((resolve) => setTimeout(() => resolve("waiting"), 300))]);
+
+  it("a box ticked while the publication is in progress waits for it, then is refused, never left a draft unseen", async () => {
+    const studentId = await newStudent("Гонка опроса");
+    await held(studentId, DAY, [planets, pets]);
+    const id = await draft(studentId);
+    const publication = await publishing(id);
+    const ticking = outcome(teacher.teacher.homework.setSurvey({ id, on: true }));
+    expect(await stillWaiting(ticking)).toBe("waiting");
+    publication.release();
+    await publication.done;
+    expect(await ticking).toMatchObject({ code: "NOT_FOUND" });
+    expect(await db().select({ id: homeworkSurvey.id }).from(homeworkSurvey).where(eq(homeworkSurvey.homeworkId, id))).toEqual([]);
+  });
+
+  it("an edit while the publication is in progress waits for it and is refused; the survey opens as it was", async () => {
+    const studentId = await newStudent("Правка в гонке");
+    await held(studentId, DAY, [planets, pets]);
+    const id = await draft(studentId);
+    const shown = (await teacher.teacher.homework.setSurvey({ id, on: true })) as { revision: string; questions: unknown[] };
+    const publication = await publishing(id);
+    const editing = outcome(teacher.teacher.homework.editSurvey({ id, revision: shown.revision, edit: { remove: 0 } }));
+    expect(await stillWaiting(editing)).toBe("waiting");
+    publication.release();
+    await publication.done;
+    expect(await editing).toMatchObject({ code: "NOT_FOUND" });
+    const [open] = await db()
+      .select({ questions: homeworkSurvey.questions })
+      .from(homeworkSurvey)
+      .where(and(eq(homeworkSurvey.homeworkId, id), eq(homeworkSurvey.status, "open")));
+    expect((open!.questions as unknown[]).length).toBe(shown.questions.length);
+  });
+
+  it("a survey with every question removed asks nothing: the child gets none", async () => {
+    const studentId = await newStudent("Пустой опрос");
+    await held(studentId, DAY, [planets]);
+    const id = await draft(studentId);
+    let survey = (await teacher.teacher.homework.setSurvey({ id, on: true })) as { revision: string; questions: unknown[] };
+    while (survey.questions.length > 0) {
+      survey = (await teacher.teacher.homework.editSurvey({ id, revision: survey.revision, edit: { remove: 0 } })) as typeof survey;
+    }
+    await publish(id);
+    const student = await studentCaller(studentId);
+    expect(await student.student.homework.survey()).toBeNull();
+    expect(await db().select({ id: homeworkSurvey.id }).from(homeworkSurvey).where(eq(homeworkSurvey.homeworkId, id))).toEqual([]);
   });
 });
 

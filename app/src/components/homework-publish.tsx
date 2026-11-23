@@ -31,6 +31,8 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeed
   const [date, setDate] = useState("");
   const [ask, setAsk] = useState(askFeedback);
   const [pending, setPending] = useState(false);
+  // «Опрос по урокам» saving a change: publishing waits for it (#332).
+  const [surveyBusy, setSurveyBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function run(action: () => Promise<unknown>) {
@@ -54,7 +56,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeed
 
   async function onPublish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!date) return;
+    if (!date || surveyBusy) return;
     await run(() => routerClient.teacher.homework.publish.mutate({ id: homeworkId, revision, dueDate: date, askFeedback: ask }));
   }
 
@@ -77,7 +79,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeed
               className="h-10 rounded-control border border-border px-3"
             />
           </div>
-          <Button type="submit" disabled={pending || !date}>
+          <Button type="submit" disabled={pending || surveyBusy || !date}>
             Опубликовать
           </Button>
           <div className="flex basis-full flex-col gap-1">
@@ -93,7 +95,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeed
               </span>
             )}
           </div>
-          <HomeworkSurveyBox homeworkId={homeworkId} survey={survey} />
+          <HomeworkSurveyBox homeworkId={homeworkId} survey={survey} onBusy={setSurveyBusy} />
         </form>
       ) : (
         <div className="flex flex-wrap items-center gap-3">

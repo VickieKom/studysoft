@@ -28,6 +28,8 @@ export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 /** The video files a browser plays (#117); other formats are converted by the teacher before uploading. */
 export const VIDEO_FILE_ACCEPT = ".mp4,.m4v,.webm,.mov,video/mp4,video/webm,video/quicktime";
 export const MAX_URL_LENGTH = 2000;
+/** The longest transcript the teacher pastes into a video's «Расшифровка» (#326), in characters. */
+export const MAX_TRANSCRIPT_LENGTH = 100_000;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_TOPIC_LENGTH = 100;
 /** The most topics one material has (#290). */
@@ -65,4 +67,39 @@ export function likedLabel(children: number): string | null {
   const mod10 = children % 10;
   const mod100 = children % 100;
   return `нравится ${children} ${mod10 === 1 && mod100 !== 11 ? "ребёнку" : "детям"}`;
+}
+
+/** Where an embedded YouTube player comes from (#325): the privacy-enhanced host, which sets no cookies until the video plays. */
+export const YOUTUBE_EMBED_ORIGIN = "https://www.youtube-nocookie.com";
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
+
+/**
+ * The video's id when a link is a YouTube video (#325): youtube.com/watch?v=,
+ * youtu.be/ or youtube.com/shorts/, over https or http. Anything else — a
+ * channel, a playlist, another site — is null and stays a link.
+ */
+export function youTubeId(link: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  const host = url.hostname.toLowerCase();
+  let id: string | null = null;
+  if (host === "youtu.be") id = url.pathname.split("/")[1] ?? null;
+  else if (YOUTUBE_HOSTS.has(host)) {
+    if (url.pathname === "/watch") id = url.searchParams.get("v");
+    else if (url.pathname.startsWith("/shorts/")) id = url.pathname.split("/")[2] ?? null;
+  }
+  return id && YOUTUBE_ID.test(id) ? id : null;
+}
+
+/** The embedded player's address for a YouTube link, or null for any other link. */
+export function youTubeEmbedUrl(link: string): string | null {
+  const id = youTubeId(link);
+  return id ? `${YOUTUBE_EMBED_ORIGIN}/embed/${id}` : null;
 }

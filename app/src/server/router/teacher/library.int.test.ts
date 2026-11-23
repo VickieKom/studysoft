@@ -112,6 +112,8 @@ describe("teacher.library", () => {
       likedBy: 0,
       // Uploaded by the teacher: in the library at once, not a draft (#120).
       draft: false,
+      // A game has no transcript (#326).
+      transcript: null,
     });
     const listed = await teacher.teacher.library.list({ kind: "game", topic });
     expect(listed.materials.map((m) => m.id)).toEqual([id]);
@@ -302,6 +304,8 @@ describe("teacher.library", () => {
       likedBy: 0,
       // The teacher's own material, not the assistant's draft (#120).
       draft: false,
+      // None typed in «Расшифровка» (#326).
+      transcript: null,
     });
     expect((await teacher.teacher.library.list({ kind: "video", topic })).materials.map((m) => m.id)).toEqual([id]);
     expect((await teacher.teacher.library.list({ kind: "game", topic })).materials).toEqual([]);

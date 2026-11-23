@@ -474,6 +474,9 @@ export const libraryMaterial = pgTable(
     textbookLessonId: uuid("textbook_lesson_id"),
     // A video link, http or https (#117).
     url: text("url"),
+    // A video's transcript (#326), typed in «Расшифровка» by the teacher so
+    // that the assistant drafts the video's tasks from its text.
+    transcript: text("transcript"),
     // A game or warm-up the assistant saved (#120): not in the library until
     // the teacher adds it. The assistant replaces its draft while
     // `teacher_edited_at` is empty; after her edit it makes a new one.
@@ -1038,6 +1041,15 @@ export const assessment = pgTable(
     listeningRecording: uuid("listening_recording").references(() => blob.id),
     speakingPicture: uuid("speaking_picture").references(() => blob.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    // Who made the draft (#313): "teacher" by import, "agent" by the
+    // assistant, with the period it was drafted from (`assessmentPeriod` of
+    // the student context, nothing else of it). While the teacher
+    // has done nothing to the assistant's draft, its next save replaces it;
+    // her first action (a removal, the recording, the picture) sets
+    // `teacherEditedAt`, and the next save makes a new draft.
+    createdBy: text("created_by").notNull().default("teacher"),
+    context: jsonb("context"),
+    teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1049,6 +1061,33 @@ export const assessment = pgTable(
     }),
     index("assessment_student_id_idx").on(t.studentId),
   ],
+);
+
+/**
+ * A library video's tasks (#326), in the homework format: the confirmed ones
+ * a student gets (#327), and beside them the assistant's draft. The
+ * assistant's save replaces its draft while the teacher has done nothing to
+ * it (`draft_edited_at` empty); «Убрать» sets it; «Подтвердить» makes the
+ * draft the confirmed tasks. One row per video, gone with it.
+ */
+export const videoTasks = pgTable(
+  "video_tasks",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => libraryMaterial.id, { onDelete: "cascade" }),
+    tasks: jsonb("tasks"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    draft: jsonb("draft"),
+    draftEditedAt: timestamp("draft_edited_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("video_tasks_material_key").on(t.materialId)],
 );
 
 /**
@@ -1080,6 +1119,37 @@ export const homeworkFeedback = pgTable(
     uniqueIndex("homework_feedback_homework_key").on(t.homeworkId),
     index("homework_feedback_student_id_idx").on(t.studentId),
   ],
+);
+
+/**
+ * A request of a family that may become a student (#337), in «Привлечение
+ * клиентов»: the child's first name, age and school year, the parent's
+ * contact, the source and the date, and the stage the teacher moved it to;
+ * «Отказ» keeps its reason and comment. «Удалить заявку» erases everything
+ * personal and keeps the row as an anonymous count of its stage, source and
+ * reason for the metrics (#341): `deleted_at` set, the personal fields null.
+ */
+export const clientRequest = pgTable(
+  "client_request",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    firstName: text("first_name"),
+    age: bigint("age", { mode: "number" }),
+    schoolYear: text("school_year"),
+    contact: text("contact"),
+    source: text("source").notNull(),
+    requestedOn: date("requested_on").notNull(),
+    stage: text("stage").notNull().default("request"),
+    declineReason: text("decline_reason"),
+    declineComment: text("decline_comment"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("client_request_teacher_id_idx").on(t.teacherId)],
 );
 
 /**
