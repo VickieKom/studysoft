@@ -3,10 +3,10 @@ import { dayMonthIn } from "@/domain/schedule";
 type Topic = {
   topic: string;
   count: number;
-  mistakes: { from: "homework" | "game" | "lesson_game"; title: string; at: string; task: string; answer: string | null }[];
+  mistakes: { from: "homework" | "game" | "lesson_game" | "video"; title: string; at: string; task: string; answer: string | null }[];
 };
 
-const FROM_LABELS = { homework: "Домашка", game: "Игра", lesson_game: "Игра на уроке" } as const;
+const FROM_LABELS = { homework: "Домашка", game: "Игра", lesson_game: "Игра на уроке", video: "Видео" } as const;
 
 /**
  * «Ошибки по темам» on the student card (#119): the wrong answers of homework
