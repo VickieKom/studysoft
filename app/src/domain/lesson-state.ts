@@ -44,7 +44,17 @@ const stage = z.discriminatedUnion("type", [
       pages: z.partialRecord(z.enum(BOOK_KINDS), page),
     })
     .strict(),
-  z.object({ type: z.literal("material"), materialId: z.uuid(), minutes, done: z.boolean() }).strict(),
+  // A video stage reviews the video's tasks with the student's answers (#328), as a homework stage does; a stage kept before has «Все задания».
+  z
+    .object({
+      type: z.literal("material"),
+      materialId: z.uuid(),
+      minutes,
+      done: z.boolean(),
+      filter: z.enum(HOMEWORK_FILTERS).default("all"),
+      shown: z.array(z.number().int().min(0).max(MAX_TASK_INDEX)).max(MAX_TASK_INDEX + 1).default([]),
+    })
+    .strict(),
   // The homework under review (#153): which tasks the stage shows, and the tasks whose right answer the teacher has shown.
   z
     .object({
@@ -80,6 +90,7 @@ export type LessonState = z.infer<typeof lessonStateSchema>;
 export type StateStage = z.infer<typeof stage>;
 export type BookStage = Extract<StateStage, { type: "book" }>;
 export type HomeworkStage = Extract<StateStage, { type: "homework" }>;
+export type MaterialStage = Extract<StateStage, { type: "material" }>;
 
 /** A book of the student's set as the lesson mode needs it. */
 export type LessonBook = { kind: BookKind; fileId: string; pageCount: number };
@@ -124,7 +135,7 @@ export function initialState(plan: LessonPlan, lessons: BookLesson[], books: Les
         ? bookStage(s.lessonId, s.minutes, s.skip, lessons, books)
         : s.type === "homework"
           ? { ...s, done: false, filter: "all" as const, shown: [] }
-          : { ...s, done: false },
+          : { ...s, done: false, filter: "all" as const, shown: [] },
     ),
     current: 0,
     layout: "single",
@@ -234,8 +245,8 @@ export function visibleTasks(stage: HomeworkStage, homework: StageHomework): Sta
   return stage.filter === "wrong" ? homework.tasks.filter(isMistake) : homework.tasks;
 }
 
-/** Shows or hides a task's right answer on the stage. */
-export function toggleShown(stage: HomeworkStage, index: number): HomeworkStage {
+/** Shows or hides a task's right answer on the stage: of the homework, or of a video's tasks (#328). */
+export function toggleShown<T extends HomeworkStage | MaterialStage>(stage: T, index: number): T {
   return { ...stage, shown: stage.shown.includes(index) ? stage.shown.filter((i) => i !== index) : [...stage.shown, index].sort((a, b) => a - b) };
 }
 
@@ -252,4 +263,16 @@ export function addWord(words: LessonWord[], added: LessonWord): LessonWord[] {
   const at = words.findIndex((w) => w.word.toLowerCase() === word.toLowerCase());
   if (at === -1) return words.length >= MAX_LESSON_WORDS ? words : [...words, { word, translation }];
   return words.map((w, i) => (i === at && !w.translation && translation ? { ...w, translation } : w));
+}
+
+/**
+ * A video's tasks on its stage (#328): the confirmed tasks with the student's
+ * answers from this lesson, or without answers before they answered. The
+ * stage is the teacher's window: a key shows only when she says.
+ */
+export type StageVideo = { id: string; title: string; answered: boolean; tasks: StageHomeworkTask[] };
+
+/** The tasks a video stage shows under its filter. */
+export function visibleVideoTasks(stage: MaterialStage, video: StageVideo): StageHomeworkTask[] {
+  return stage.filter === "wrong" ? video.tasks.filter(isMistake) : video.tasks;
 }

@@ -13,12 +13,14 @@ import {
   type LessonState,
   lessonStateSchema,
   type StageHomework,
+  type StageVideo,
 } from "../../domain/lesson-state";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
 import { lessonState, libraryMaterial } from "../db/schema";
 import { findTextbook } from "../library/textbooks";
 import { stageHomework, studentHomeworkIds } from "./homework";
+import { stageVideos } from "./video-review";
 import { findPreparation, ownLesson, stageMaterials, studentWithTextbook } from "./prep";
 
 /** The longest note: a lesson's worth of jottings. */
@@ -133,6 +135,22 @@ export async function lessonStage(db: Database, teacherId: string, lessonId: str
   if (!found) return null;
   const { kept } = await keptOrInitial(db, lessonId, found.plan, found.resources);
   return { lessonId, resources: found.resources, kept };
+}
+
+/**
+ * The video stages' tasks with the student's answers from this lesson (#328),
+ * asked again while the lesson goes on: the child answers under the video
+ * after the panel has opened. Null when there is no such lesson.
+ */
+export async function lessonVideos(db: Database, teacherId: string, lessonId: string): Promise<StageVideo[] | null> {
+  const prep = await findPreparation(db, teacherId, lessonId);
+  if (!prep) return null;
+  const [keptRow] = await db.select({ state: lessonState.state }).from(lessonState).where(eq(lessonState.lessonId, lessonId));
+  const keptStages = lessonStateSchema.safeParse(keptRow?.state);
+  const ids = [
+    ...new Set([...prep.launch.stages, ...(keptStages.success ? keptStages.data.stages : [])].flatMap((s) => (s.type === "material" ? [s.materialId] : []))),
+  ];
+  return stageVideos(db, teacherId, prep.studentId, lessonId, ids);
 }
 
 /** The homework a state's stages name that is not the student's own. */
