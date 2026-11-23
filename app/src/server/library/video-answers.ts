@@ -18,8 +18,17 @@ import { checkAnswer, fitsTask } from "../homework/check";
 const verdictOf = (task: Task, answer: Answer | null): boolean | null =>
   task.type === "written" || task.type === "voice" || task.type === "file" ? null : answer !== null && checkAnswer(task, answer);
 
-/** The confirmed tasks as a page showed them: a new confirmation changes it. */
-const tasksRevision = sql<string>`md5(coalesce(${videoTasks.tasks}::text, ''))`;
+/** The confirmed tasks' text hashed: a new confirmation changes it. Never sent as is: it is unkeyed, and the tasks hold their keys. */
+const tasksHash = sql<string>`md5(coalesce(${videoTasks.tasks}::text, ''))`;
+
+/**
+ * The revision a student's page gets for the confirmed tasks: an HMAC of
+ * their hash with the link key, so the keys cannot be found offline by
+ * hashing guesses (AGENTS.md, rule 4).
+ */
+export function videoTasksRevision(materialId: string, hash: string): string {
+  return createHmac("sha256", env().LINK_KEY).update(`video-tasks|${materialId}|${hash}`).digest("base64url");
+}
 
 /** The seed of a task's shuffled options, derived from a secret as for homework (`shuffleSeed`). */
 export function videoShuffleSeed(materialId: string, studentId: string, taskIndex: number): string {
@@ -29,12 +38,12 @@ export function videoShuffleSeed(materialId: string, studentId: string, taskInde
 /** The video open to this student at `now` with its confirmed tasks and the lesson it was opened in; null when it is not open. */
 async function openVideo(database: Database, teacherId: string, studentId: string, materialId: string, now: Date) {
   const [row] = await database
-    .select({ title: libraryMaterial.title, lessonId: gameAccess.lessonId, tasks: videoTasks.tasks, revision: tasksRevision })
+    .select({ title: libraryMaterial.title, lessonId: gameAccess.lessonId, tasks: videoTasks.tasks, hash: tasksHash })
     .from(gameAccess)
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.kind, "video")))
     .leftJoin(videoTasks, and(eq(videoTasks.materialId, libraryMaterial.id), eq(videoTasks.teacherId, teacherId)))
     .where(and(eq(gameAccess.teacherId, teacherId), eq(gameAccess.studentId, studentId), eq(gameAccess.materialId, materialId), gt(gameAccess.until, now)));
-  return row ? { title: row.title, lessonId: row.lessonId, tasks: (row.tasks as Task[] | null) ?? null, revision: row.revision } : null;
+  return row ? { title: row.title, lessonId: row.lessonId, tasks: (row.tasks as Task[] | null) ?? null, revision: videoTasksRevision(materialId, row.hash) } : null;
 }
 
 export type StudentVideoTasks = { tasks: StudentTask[]; revision: string; done: boolean };

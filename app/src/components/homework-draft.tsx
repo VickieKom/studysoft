@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import type { StudentTaskVideo, Task } from "@/domain/homework-format";
 import { HomeworkDraftEditor } from "./homework-draft-editor";
 import { HomeworkPublish } from "./homework-publish";
+import type { DraftSurveyView } from "./homework-survey-box";
 
 /**
  * A draft's page (#99): the publish form and the editor share the version of
@@ -18,6 +19,7 @@ export function HomeworkDraft({
   askFeedback,
   libraryVideos,
   addableVideos,
+  survey,
   children,
 }: {
   homeworkId: string;
@@ -29,6 +31,8 @@ export function HomeworkDraft({
   libraryVideos: Record<string, StudentTaskVideo>;
   /** «Видео из библиотеки»: the teacher's videos with confirmed tasks (#330). */
   addableVideos: { id: string; title: string }[];
+  /** «Опрос по урокам» (#332). */
+  survey: DraftSurveyView;
   /** The heading: the title and the status. */
   children: ReactNode;
 }) {
@@ -43,6 +47,7 @@ export function HomeworkDraft({
           dueDate={null}
           revision={revision}
           askFeedback={askFeedback}
+          survey={survey}
           oneKind={new Set(tasks.map((task) => task.type)).size < 2}
         />
       </header>

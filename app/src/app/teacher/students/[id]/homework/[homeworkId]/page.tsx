@@ -44,6 +44,7 @@ export default async function HomeworkPage({ params }: Props) {
     if (task.video && "library" in task.video && video) libraryVideos[task.video.library] = video;
   });
   for (const added of addable) if (added.video) libraryVideos[added.id] = added.video;
+  const survey = homework.status === "draft" ? await caller.teacher.homework.survey({ id: homework.id }) : null;
 
   const heading = (
     <div className="flex items-center gap-3">
@@ -69,6 +70,7 @@ export default async function HomeworkPage({ params }: Props) {
           askFeedback={homework.askFeedback}
           libraryVideos={libraryVideos}
           addableVideos={addable.map(({ id, title }) => ({ id, title }))}
+          survey={survey}
         >
           {heading}
         </HomeworkDraft>

@@ -14,6 +14,7 @@ import {
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { studentFeedback } from "../../homework/feedback";
+import { surveyFeedback } from "../../homework/survey";
 import { TASK_TYPES } from "../../../domain/homework-format";
 import { ALL_KINDS_ANSWER } from "../../../domain/homework";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
@@ -205,6 +206,25 @@ export const studentsRouter = router({
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
       return (await studentFeedback(ctx.db, ctx.teacherId, input.studentId)).map((f) => ({ ...f, answeredAt: f.answeredAt.toISOString() }));
+    }),
+
+  /** «Фидбэк» (#332): the answered surveys about the lessons, each question with the child's answer, the newest first. */
+  surveyFeedback: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(
+      z.array(
+        z
+          .object({
+            homeworkTitle: z.string(),
+            answeredAt: z.iso.datetime(),
+            answers: z.array(z.object({ question: z.string(), answer: z.string() }).strict()),
+          })
+          .strict(),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      return (await surveyFeedback(ctx.db, ctx.teacherId, input.studentId)).map((s) => ({ ...s, answeredAt: s.answeredAt.toISOString() }));
     }),
 
   /** «Ошибки по темам» (#119): wrong answers of homework and games over the last 30 days, by topic. */
