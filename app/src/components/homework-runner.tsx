@@ -13,8 +13,10 @@ import {
   type StudentAnswer,
   type StudentTableCell,
   type StudentTask,
+  type TaskType,
 } from "@/domain/homework-format";
 import { ChoiceOptionContent, hasPictureOptions, MatchPictures } from "./choice-option";
+import { HomeworkMiniQuestion } from "./homework-mini-question";
 import { HomeworkResult } from "./homework-result";
 import { routerClient } from "./router-client";
 import { TaskExampleLine, TaskPassage } from "./task-parts";
@@ -49,6 +51,8 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
   const [answers, setAnswers] = useState<(StudentAnswer | null)[]>(saved);
   const [unanswered, setUnanswered] = useState<number[] | null>(null);
   const [result, setResult] = useState<{ correct: number; wrong: number; pending: number } | null>(null);
+  // «Мини-вопрос после домашки» (#331), asked once the homework is in.
+  const [question, setQuestion] = useState<{ kinds: TaskType[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // While a recording runs, its upload does not exist yet: nothing moves on or submits until it stops.
@@ -167,7 +171,9 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
         return;
       }
       submitKey.current ??= crypto.randomUUID();
-      setResult(await routerClient.student.homework.submit.mutate({ id: homeworkId, idempotencyKey: submitKey.current }));
+      const submitted = await routerClient.student.homework.submit.mutate({ id: homeworkId, idempotencyKey: submitKey.current });
+      setQuestion(await routerClient.student.homework.miniQuestion.query({ id: homeworkId }).catch(() => null));
+      setResult(submitted);
     } catch (cause) {
       const code = (cause as { data?: { code?: string } } | null)?.data?.code;
       // Submitted from another device, or taken back by the teacher: the page
@@ -179,7 +185,11 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
     }
   }
 
-  if (result) return <HomeworkResult firstName={firstName} />;
+  if (result) {
+    return (
+      <HomeworkResult firstName={firstName}>{question && <HomeworkMiniQuestion homeworkId={homeworkId} kinds={question.kinds} />}</HomeworkResult>
+    );
+  }
 
   if (index < 0) {
     return (
@@ -283,11 +293,6 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
 }
 
 /**
- * One task as the child will see it, for the teacher (#224): the same prompt,
- * parts and controls as in the homework, without the keys. She may try it;
- * nothing is saved and nothing is checked.
- */
-/**
  * One task for the child to answer outside a homework (#327, a video's tasks):
  * the same prompt, parts and controls, the answer kept by the caller. Text
  * answers only: no recording or file is taken here.
@@ -309,6 +314,11 @@ export function TaskToAnswer({ task, answer, onChange }: { task: StudentTask; an
   );
 }
 
+/**
+ * One task as the child will see it, for the teacher (#224): the same prompt,
+ * parts and controls as in the homework, without the keys. She may try it;
+ * nothing is saved and nothing is checked.
+ */
 export function TaskAsStudent({ task }: { task: StudentTask }) {
   const [answer, setAnswer] = useState<StudentAnswer | null>(null);
   return (

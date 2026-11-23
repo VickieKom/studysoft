@@ -9,6 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createPlatform } from "./platform";
 import {
   createTools,
+  assessmentDraftInput,
   draftInput,
   gameDraftInput,
   lessonIdInput,
@@ -93,10 +94,26 @@ server.registerTool(
     description:
       "The homework format the platform accepts, with its version: task types, keys, topic, skill, source; " +
       "the game result format, with which a game reports the student's answers to the platform; " +
-      "and the game words format, in which a game template gets a student's words. " +
-      "Read it before writing a homework or making a game.",
+      "the game words format, in which a game template gets a student's words; " +
+      "and the assessment format of the monthly skills assessment. " +
+      "Read it before writing a homework or an assessment, or making a game.",
   },
   () => tools.getHomeworkFormat(),
+);
+
+server.registerTool(
+  "save_assessment_draft",
+  {
+    title: "Save an assessment draft",
+    description:
+      "Saves the month's skills assessment for a student as a draft in «Замеры» on their card, marked «от ассистента», " +
+      "in the assessment format (get_homework_format). Draft it from assessmentPeriod in get_student_context: the textbook " +
+      "lessons finished and the words added since the last approved assessment, at the student's level. Saving again replaces your " +
+      "draft until the teacher acts on it; after that a new draft is made and hers is kept. Only the teacher uploads the " +
+      "recording and the picture, and approves. An invalid assessment is refused with the section, question and field to fix.",
+    inputSchema: assessmentDraftInput,
+  },
+  (input) => tools.saveAssessmentDraft(input),
 );
 
 server.registerTool(

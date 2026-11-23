@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { handleAuthRequest } from "../access/auth";
 import { logProcedureError, serveRouter } from "./core/errors";
 import { createCallerFactory, createContext, mergeRouters, router } from "./core/trpc";
+import { agentAssessmentsRouter } from "./agent/assessments";
 import { agentHomeworkRouter } from "./agent/homework";
 import { agentLibraryRouter } from "./agent/library";
 import { agentPrepRouter } from "./agent/prep";
@@ -33,6 +34,7 @@ import { sessionRouter } from "./teacher/session";
 import { studentsRouter } from "./teacher/students";
 import { textbooksRouter } from "./teacher/textbooks";
 import { goalRouter } from "./teacher/goal";
+import { requestsRouter } from "./teacher/requests";
 import { homeRouter } from "./teacher/home";
 import { prepRouter } from "./teacher/prep";
 import { reportsRouter } from "./teacher/reports";
@@ -48,7 +50,7 @@ export const appRouter = router({
     router({ homework: studentHomeworkRouter, games: studentGamesRouter, videos: studentVideosRouter, vocabulary: studentVocabularyRouter }),
   ),
   parent: mergeRouters(parentMeRouter, parentProgressRouter, parentReportsRouter),
-  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
+  agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentAssessmentsRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
   teacher: router({
     session: sessionRouter,
     home: homeRouter,
@@ -57,6 +59,7 @@ export const appRouter = router({
     notes: notesRouter,
     progress: progressRouter,
     goal: goalRouter,
+    requests: requestsRouter,
     reports: reportsRouter,
     assessments: assessmentsRouter,
     links: linksTeacherRouter,

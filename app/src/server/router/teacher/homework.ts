@@ -1,5 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_QUESTION_LENGTH as MAX_SURVEY_QUESTION_LENGTH } from "../../../domain/survey";
+import { draftSurvey, editSurvey, setSurvey } from "../../homework/survey";
 import { HOMEWORK_FORMAT_VERSION, parseHomework, taskSchema, validateHomework } from "../../../domain/homework-format";
 import { taskFileRefs, storeTaskFiles } from "../../homework/images";
 import { findStudent } from "../../crm/students";
@@ -25,6 +27,14 @@ const changed = () =>
   });
 // The revision the page has seen, as `get` gave it (an md5 in hex).
 const revision = z.string().max(64);
+
+// «Опрос по урокам» in a draft (#332): the questions with their revision, «уроков за период нет», or off.
+const draftSurveyOutput = z
+  .union([
+    z.object({ questions: z.array(z.object({ text: z.string() }).strict()), revision }).strict(),
+    z.object({ noLessons: z.literal(true) }).strict(),
+  ])
+  .nullable();
 
 const summary = z.object({
   id: z.uuid(),
@@ -70,7 +80,8 @@ export const homeworkRouter = router({
    */
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema), revision }))
+    // «Мини-вопрос после домашки» as the draft has it (#331).
+    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema), revision, askFeedback: z.boolean() }))
     .query(async ({ ctx, input }) => {
       const found = await findHomework(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();
@@ -116,17 +127,54 @@ export const homeworkRouter = router({
       return wordsToPick(ctx.db, ctx.teacherId, draft.studentId);
     }),
 
-  /** Publishes the version of the draft the teacher's page has seen, and no other (#99). */
+  /**
+   * Publishes the version of the draft the teacher's page has seen, and no
+   * other (#99), with «Мини-вопрос после домашки» as she left it (#331).
+   */
   publish: teacherProcedure
-    .input(z.object({ id: z.uuid(), revision, dueDate: z.iso.date() }))
+    .input(z.object({ id: z.uuid(), revision, dueDate: z.iso.date(), askFeedback: z.boolean().default(false) }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.revision, input.dueDate);
+      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.revision, input.dueDate, input.askFeedback);
       if (published === "not_found") throw notFound();
       if (published === "changed") throw changed();
       if (published === "past")
         throw new TRPCError({ code: "BAD_REQUEST", message: "Срок не может быть раньше сегодняшнего дня" });
       return { id: input.id };
+    }),
+
+  /** «Опрос по урокам» in a draft (#332): its questions as the page shows them, or null when the box is off. */
+  survey: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(draftSurveyOutput)
+    .query(async ({ ctx, input }) => draftSurvey(ctx.db, ctx.teacherId, input.id.toLowerCase())),
+
+  /** The box: on gathers the questions from the period's lessons; off removes them. A draft's only. */
+  setSurvey: teacherProcedure
+    .input(z.object({ id: z.uuid(), on: z.boolean() }))
+    .output(draftSurveyOutput)
+    .mutation(async ({ ctx, input }) => {
+      const result = await setSurvey(ctx.db, ctx.teacherId, input.id.toLowerCase(), input.on);
+      if (result === "not_found") throw notFound();
+      return result;
+    }),
+
+  /** «Убрать» a question or «Добавить вопрос» of her own, on the questions the page showed. */
+  editSurvey: teacherProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        revision,
+        edit: z.union([z.object({ remove: z.number().int().min(0) }).strict(), z.object({ add: z.string().trim().min(1).max(MAX_SURVEY_QUESTION_LENGTH) }).strict()]),
+      }),
+    )
+    .output(draftSurveyOutput)
+    .mutation(async ({ ctx, input }) => {
+      const result = await editSurvey(ctx.db, ctx.teacherId, input.id.toLowerCase(), input.revision, input.edit);
+      if (result === "not_found") throw notFound();
+      if (result === "conflict") throw changed();
+      if (result === "too_many") throw new TRPCError({ code: "BAD_REQUEST", message: "Не больше пяти своих вопросов" });
+      return result;
     }),
 
   unpublish: teacherProcedure

@@ -1,9 +1,11 @@
 import { headers } from "next/headers";
+import { HomeworkMiniQuestion } from "@/components/homework-mini-question";
 import { HomeworkResult } from "@/components/homework-result";
 import { HomeworkRunner } from "@/components/homework-runner";
 import { formatDueDate, tasksLabel } from "@/domain/homework";
 import { LinkExchange } from "@/components/link-exchange";
 import { StudentNav } from "@/components/student-nav";
+import { StudentSurvey } from "@/components/student-survey";
 import { createServerCaller, isNotFound, isUnauthorized } from "@/server/router";
 
 export const metadata = { title: "Домашка — StudySoft" };
@@ -22,11 +24,25 @@ export default async function StudentPage() {
   const [games, videos] = await Promise.all([caller.student.games.list(), caller.student.videos.list()]);
   const nav = <StudentNav current="homework" lessonOpen={games.length + videos.length > 0} />;
 
+  // «Опрос про уроки» comes first, above the homework, until answered or skipped (#332).
+  const survey = await caller.student.homework.survey();
+  if (survey) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-task-title font-bold">Привет, {firstName}!</h1>
+        {nav}
+        <StudentSurvey homeworkId={survey.homeworkId} questions={survey.questions} />
+      </div>
+    );
+  }
+
   if (homework?.result) {
+    // Not answered yet, the mini-question waits under the praise (#331).
+    const question = await caller.student.homework.miniQuestion({ id: homework.id });
     return (
       <div className="flex flex-col gap-6">
         {nav}
-        <HomeworkResult firstName={firstName} />
+        <HomeworkResult firstName={firstName}>{question && <HomeworkMiniQuestion homeworkId={homework.id} kinds={question.kinds} />}</HomeworkResult>
       </div>
     );
   }

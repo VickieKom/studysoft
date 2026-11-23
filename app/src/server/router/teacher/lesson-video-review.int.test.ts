@@ -76,7 +76,8 @@ describe("a video stage", () => {
 
     await teacher.teacher.library.openToStudent({ id: videoId, studentId });
     const student = await studentCaller(studentId);
-    await student.student.videos.submitTasks({ id: videoId, answers: [{ type: "single_choice", choice: 0 }, { type: "single_choice", choice: 0 }] });
+    const { revision } = (await student.student.videos.tasks({ id: videoId }))!;
+    await student.student.videos.submitTasks({ id: videoId, revision, answers: [{ type: "single_choice", choice: 0 }, { type: "single_choice", choice: 0 }] });
 
     const [after] = await teacher.teacher.lessonMode.videos({ lessonId });
     expect(after!.answered).toBe(true);
