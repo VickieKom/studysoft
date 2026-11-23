@@ -1152,6 +1152,46 @@ export const clientRequest = pgTable(
   (t) => [index("client_request_teacher_id_idx").on(t.teacherId)],
 );
 
+/**
+ * The survey about the lessons sent with a homework (#332), when the teacher
+ * ticks «Опрос по урокам» in its draft: its questions, gathered from the
+ * lessons held in its period and edited in the draft; the child's answers.
+ * A draft's survey is `draft`; «Опубликовать» opens it, «Снять с публикации»
+ * takes an unanswered one back to `draft`; the child answers or skips it.
+ * Counts for nothing; the teacher's only — the child gets the questions, never
+ * an answer back, and the parent nothing.
+ */
+export const homeworkSurvey = pgTable(
+  "homework_survey",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id, { onDelete: "cascade" }),
+    periodFrom: timestamp("period_from", { withTimezone: true }).notNull(),
+    periodTo: timestamp("period_to", { withTimezone: true }).notNull(),
+    questions: jsonb("questions").notNull(),
+    answers: jsonb("answers"),
+    status: text("status").notNull().default("draft"),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "homework_survey_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("homework_survey_homework_key").on(t.homeworkId),
+    index("homework_survey_student_id_idx").on(t.studentId),
+  ],
+);
+
 /** «Бриф вводного» in «Настройки» (#339): the teacher's questions; none saved means the platform's starting set. */
 export const introBriefTemplate = pgTable("intro_brief_template", {
   teacherId: uuid("teacher_id")

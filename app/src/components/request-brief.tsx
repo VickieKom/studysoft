@@ -25,11 +25,13 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
   const [brief, setBrief] = useState<Brief>(loaded);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed" | "refused">("idle");
   const latest = useRef(brief);
   const dirty = useRef(false);
   const saving = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The page was left: the last change is sent once, never retried.
+  const left = useRef(false);
 
   // Stable for the page: it reads only refs, so the unmount below can call it.
   const flush = useCallback(async function send(): Promise<void> {
@@ -42,13 +44,18 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
       saving.current = false;
       if (dirty.current) void send();
       else setStatus("saved");
-    } catch {
-      // Not saved: still to send, tried again shortly rather than on the next change only.
+    } catch (cause) {
       saving.current = false;
       dirty.current = true;
+      // A refusal (the request deleted elsewhere, a bad answer) is not tried again; a lost connection is, while the page is open.
+      const code = (cause as { data?: { code?: string } } | null)?.data?.code;
+      if (code) {
+        setStatus("refused");
+        return;
+      }
       setStatus("failed");
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => void send(), RETRY_MS);
+      if (!left.current) timer.current = setTimeout(() => void send(), RETRY_MS);
     }
   }, [requestId]);
 
@@ -65,6 +72,7 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
+      left.current = true;
       void flush();
     },
     [flush],
@@ -82,7 +90,7 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-h3 font-semibold">Бриф</h2>
         <span className="text-small text-text-secondary" aria-live="polite">
-          {status === "saved" ? "Сохранено" : status === "saving" ? "Сохраняется…" : status === "failed" ? "Не сохранилось — проверьте интернет" : ""}
+          {status === "saved" ? "Сохранено" : status === "saving" ? "Сохраняется…" : status === "failed" ? "Не сохранилось — проверьте интернет" : status === "refused" ? "Не сохранилось — обновите страницу" : ""}
         </span>
       </div>
       {brief.questions.map((question) => (
