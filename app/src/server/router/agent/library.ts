@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { MAX_GAME_BYTES } from "../../../domain/library";
 import { saveDraft, storeGame, storePicture } from "../../library/library";
+import { libraryVideo, saveAssistantVideoTasks } from "../../library/video-tasks";
 import { agentProcedure, router } from "../core/trpc";
 import { checkedLink, checkedStudents, checkQuestions, linkInput, MAX_PICTURE_BASE64, questions, studentIds, tags } from "../teacher/library";
 import { setMaterialStudents } from "../../library/material-students";
@@ -15,6 +16,9 @@ import { setMaterialStudents } from "../../library/material-students";
 const refuse = (message: string) => new TRPCError({ code: "BAD_REQUEST", message });
 const replace = z.uuid().optional();
 const saved = z.object({ id: z.uuid() }).strict();
+const notFound = () => new TRPCError({ code: "NOT_FOUND" });
+/** A video's tasks as JSON, at most this long: text only, a few minutes of video. */
+const MAX_VIDEO_TASKS_LENGTH = 200_000;
 
 export const agentLibraryRouter = router({
   /** A game: one HTML file as text, at most 5 MB; `vocabulary` marks a game template that gets a student's words (#282). */
@@ -55,5 +59,45 @@ export const agentLibraryRouter = router({
       if (blobId === "too_big") throw refuse("Картинка больше 2 МБ");
       if (blobId === "not_picture") throw refuse("Нужна картинка PNG, JPEG или WebP");
       return { id: await saveDraft(ctx.db, ctx.teacherId, rest, { kind: "warmup", blobId }, id?.toLowerCase()) };
+    }),
+  /**
+   * A video of the teacher's library with its link and the transcript she
+   * typed in «Расшифровка» (#326), to draft its tasks from. Another
+   * teacher's video, and any other material, are NOT_FOUND.
+   */
+  libraryVideo: agentProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.object({ id: z.uuid(), title: z.string(), link: z.string().nullable(), transcript: z.string().nullable() }).strict())
+    .query(async ({ ctx, input }) => {
+      const video = await libraryVideo(ctx.db, ctx.teacherId, input.id.toLowerCase());
+      if (!video) throw notFound();
+      return video;
+    }),
+
+  /**
+   * A library video's tasks in the homework format { version, title, tasks },
+   * checked like an import, saved as the assistant's draft beside the
+   * confirmed tasks (#326). It replaces the draft while the teacher has done
+   * nothing to it; once she has removed a task, the save is refused so that
+   * her edit stays. Confirming is the teacher's only.
+   */
+  saveVideoTasksDraft: agentProcedure
+    .input(
+      z.object({
+        videoId: z.uuid(),
+        tasks: z.unknown().refine((value) => (JSON.stringify(value) ?? "").length <= MAX_VIDEO_TASKS_LENGTH, {
+          message: `The tasks are longer than ${MAX_VIDEO_TASKS_LENGTH} characters as JSON`,
+        }),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const result = await saveAssistantVideoTasks(ctx.db, ctx.teacherId, input.videoId.toLowerCase(), input.tasks);
+      if (result === "not_found") throw notFound();
+      if (result === "edited") {
+        throw new TRPCError({ code: "CONFLICT", message: "Учитель уже правит черновик заданий к этому видео: новый сохранится, когда она его подтвердит" });
+      }
+      if (result !== "saved") throw refuse(result.errors.join("\n"));
+      return { ok: true as const };
     }),
 });

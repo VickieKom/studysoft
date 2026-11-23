@@ -21,6 +21,8 @@ import {
   textbookIdInput,
   textInput,
   upcomingInput,
+  videoIdInput,
+  videoTasksInput,
   warmupDraftInput,
   wordDraftsInput,
 } from "./tools";
@@ -271,6 +273,31 @@ server.registerTool(
     inputSchema: lessonIdInput,
   },
   (input) => tools.listLessonMaterials(input),
+);
+
+server.registerTool(
+  "read_library_video",
+  {
+    title: "A library video with its link and transcript",
+    description:
+      "A video of the teacher's library: its title, its link (none for her own file) and the transcript she typed in «Расшифровка». " +
+      "Draft the video's tasks from the transcript; without one, open the link yourself if you can, or ask her to paste the text.",
+    inputSchema: videoIdInput,
+  },
+  (input) => tools.readLibraryVideo(input),
+);
+
+server.registerTool(
+  "save_video_tasks_draft",
+  {
+    title: "Save a video's tasks as a draft",
+    description:
+      "Saves tasks for a library video, in the homework format, as your draft in «Задания к видео» on the video's page. " +
+      "Saved again, it replaces your draft while the teacher has done nothing to it; once she has removed a task, the save is " +
+      "refused. The confirmed tasks stay until she confirms the draft. Only the teacher confirms.",
+    inputSchema: videoTasksInput,
+  },
+  (input) => tools.saveVideoTasksDraft(input),
 );
 
 server.registerTool(

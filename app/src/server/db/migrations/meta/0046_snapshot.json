@@ -1,5 +1,5 @@
 {
-  "id": "9996e9a8-327d-4789-8dca-f11a1251b4c4",
+  "id": "1e574a39-51c4-4e2b-98f9-81453236721d",
   "prevId": "6fd30414-805c-475c-a9f6-fb1ceee7490a",
   "version": "7",
   "dialect": "postgresql",
@@ -429,56 +429,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "open_lesson_id": {
-          "name": "open_lesson_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "open_until": {
-          "name": "open_until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "answers": {
-          "name": "answers",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "listening_plays": {
-          "name": "listening_plays",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "speaking_recording": {
-          "name": "speaking_recording",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "submitted_at": {
-          "name": "submitted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "scores": {
-          "name": "scores",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -544,32 +494,6 @@
           "tableTo": "blob",
           "columnsFrom": [
             "speaking_picture"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "assessment_open_lesson_id_lesson_id_fk": {
-          "name": "assessment_open_lesson_id_lesson_id_fk",
-          "tableFrom": "assessment",
-          "tableTo": "lesson",
-          "columnsFrom": [
-            "open_lesson_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "assessment_speaking_recording_blob_id_fk": {
-          "name": "assessment_speaking_recording_blob_id_fk",
-          "tableFrom": "assessment",
-          "tableTo": "blob",
-          "columnsFrom": [
-            "speaking_recording"
           ],
           "columnsTo": [
             "id"
@@ -2468,6 +2392,12 @@
         },
         "url": {
           "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transcript": {
+          "name": "transcript",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -4505,6 +4435,119 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.video_tasks": {
+      "name": "video_tasks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "teacher_id": {
+          "name": "teacher_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "material_id": {
+          "name": "material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tasks": {
+          "name": "tasks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft": {
+          "name": "draft",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft_edited_at": {
+          "name": "draft_edited_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "video_tasks_material_key": {
+          "name": "video_tasks_material_key",
+          "columns": [
+            {
+              "expression": "material_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "video_tasks_teacher_id_teacher_id_fk": {
+          "name": "video_tasks_teacher_id_teacher_id_fk",
+          "tableFrom": "video_tasks",
+          "tableTo": "teacher",
+          "columnsFrom": [
+            "teacher_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "video_tasks_material_id_library_material_id_fk": {
+          "name": "video_tasks_material_id_library_material_id_fk",
+          "tableFrom": "video_tasks",
+          "tableTo": "library_material",
+          "columnsFrom": [
+            "material_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

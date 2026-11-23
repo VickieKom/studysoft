@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { HomeworkMiniQuestion } from "@/components/homework-mini-question";
 import { HomeworkResult } from "@/components/homework-result";
 import { HomeworkRunner } from "@/components/homework-runner";
 import { formatDueDate, tasksLabel } from "@/domain/homework";
@@ -23,10 +24,12 @@ export default async function StudentPage() {
   const nav = <StudentNav current="homework" lessonOpen={games.length + videos.length + assessments.length > 0} />;
 
   if (homework?.result) {
+    // Not answered yet, the mini-question waits under the praise (#331).
+    const question = await caller.student.homework.miniQuestion({ id: homework.id });
     return (
       <div className="flex flex-col gap-6">
         {nav}
-        <HomeworkResult firstName={firstName} />
+        <HomeworkResult firstName={firstName}>{question && <HomeworkMiniQuestion homeworkId={homework.id} kinds={question.kinds} />}</HomeworkResult>
       </div>
     );
   }
