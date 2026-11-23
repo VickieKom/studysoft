@@ -251,23 +251,23 @@ test("after the student answers, the «Видео» stage shows each task with t
 }) => {
   const viewer = await createStudent(page, "Разборщик");
   await addLessonNow(page, "Разборщик");
-  const videoId = await uploadVideo(page, "Robot evening clip");
-  await confirmTasks(page, assistant, videoId, "Robot evening clip");
-  await openToStudent(page, "Robot evening clip", "Разборщик");
+  const videoId = await uploadVideo(page, "Robot review clip");
+  await confirmTasks(page, assistant, videoId, "Robot review clip");
+  await openToStudent(page, "Robot review clip", "Разборщик");
 
   // The student answers under the video: right on bedtime, wrong on the book.
   const student = await openAsStudent(browser, viewer.link, "Разборщик");
-  await studentVideo(student, "Robot evening clip");
+  await studentVideo(student, "Robot review clip");
   await task(student, "The robot goes to bed at nine.").getByRole("button", { name: "True", exact: true }).click();
   await task(student, "The robot reads a book.").getByRole("button", { name: "True", exact: true }).click();
   await student.getByRole("region", { name: "Задания к видео" }).getByRole("button", { name: "Готово", exact: true }).click();
   await expect(student.getByRole("region", { name: "Задания к видео" })).toContainText(PRAISE);
   await student.context().close();
 
-  await prepareWithVideo(page, "Разборщик", "Robot evening clip");
+  await prepareWithVideo(page, "Разборщик", "Robot review clip");
   const stage = await launch(page);
   const tabs = stage.getByRole("tablist", { name: "Этапы урока" }).getByRole("tab");
-  await expect(tabs.first()).toContainText("Robot evening clip");
+  await expect(tabs.first()).toContainText("Robot review clip");
 
   const review = stage.getByRole("region", { name: "Видео", exact: true });
   await expect(stageTask(stage, "The robot goes to bed at nine.")).toContainText("True");
