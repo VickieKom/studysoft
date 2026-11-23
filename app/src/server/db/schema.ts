@@ -1192,6 +1192,37 @@ export const homeworkSurvey = pgTable(
   ],
 );
 
+/** «Бриф вводного» in «Настройки» (#339): the teacher's questions; none saved means the platform's starting set. */
+export const introBriefTemplate = pgTable("intro_brief_template", {
+  teacherId: uuid("teacher_id")
+    .primaryKey()
+    .references(() => teacher.id),
+  questions: jsonb("questions").notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * The brief filled in on a request during the intro (#339): the template's
+ * questions as they were when it was first saved, so a later change of the
+ * template leaves it as it was; the answers, quick choices and notes; and
+ * «Удобное время» in the family's time zone. Erased with the request's
+ * personal data by «Удалить заявку».
+ */
+export const clientRequestBrief = pgTable("client_request_brief", {
+  requestId: uuid("request_id")
+    .primaryKey()
+    .references(() => clientRequest.id, { onDelete: "cascade" }),
+  teacherId: uuid("teacher_id")
+    .notNull()
+    .references(() => teacher.id),
+  questions: jsonb("questions").notNull(),
+  answers: jsonb("answers").notNull(),
+  convenientTime: jsonb("convenient_time").notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 /**
  * A student's answers to a library video's tasks (#327), given once per
  * video and lesson under the video behind their link: the confirmed tasks as
