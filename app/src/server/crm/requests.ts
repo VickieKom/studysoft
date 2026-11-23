@@ -7,7 +7,7 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { DeclineReason, RequestSource, RequestStage } from "../../domain/requests";
 import type { Database } from "../db/client";
-import { clientRequest } from "../db/schema";
+import { clientRequest, clientRequestBrief } from "../db/schema";
 
 export type NewRequest = {
   firstName: string;
@@ -84,10 +84,21 @@ export async function moveRequest(
  * anonymous count. False when there is no such request of this teacher.
  */
 export async function deleteRequest(database: Database, teacherId: string, id: string): Promise<boolean> {
-  const rows = await database
-    .update(clientRequest)
-    .set({ firstName: null, age: null, schoolYear: null, contact: null, declineComment: null, deletedAt: new Date(), updatedAt: new Date() })
-    .where(live(teacherId, id))
-    .returning({ id: clientRequest.id });
-  return rows.length > 0;
+  return database.transaction(async (tx) => {
+    const rows = await tx
+      .update(clientRequest)
+      .set({ firstName: null, age: null, schoolYear: null, contact: null, declineComment: null, deletedAt: new Date(), updatedAt: new Date() })
+      .where(live(teacherId, id))
+      .returning({ id: clientRequest.id });
+    if (rows.length === 0) return false;
+    // The brief is the family's own words (#339): it goes with the rest.
+    await tx.delete(clientRequestBrief).where(eq(clientRequestBrief.requestId, id));
+    return true;
+  });
+}
+
+/** One request of this teacher that is not deleted, for its page (#339); null when there is none. */
+export async function findRequest(database: Database, teacherId: string, id: string): Promise<ClientRequest | null> {
+  const [row] = await database.select(columns).from(clientRequest).where(live(teacherId, id));
+  return (row as ClientRequest | undefined) ?? null;
 }
