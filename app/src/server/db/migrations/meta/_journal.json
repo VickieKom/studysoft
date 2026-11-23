@@ -365,6 +365,13 @@
       "when": 1795448415017,
       "tag": "0051_video_answers",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795451720447,
+      "tag": "0052_assessment_lesson",
+      "breakpoints": true
     }
   ]
 }
