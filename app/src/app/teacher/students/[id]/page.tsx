@@ -36,6 +36,7 @@ export default async function StudentCardPage({ params }: Props) {
   const past = await caller.teacher.history.list({ studentId: student.id });
   const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
   const feedback = await caller.teacher.students.feedback({ studentId: student.id });
+  const surveys = await caller.teacher.students.surveyFeedback({ studentId: student.id });
   const vocabulary = await caller.teacher.students.vocabulary({ studentId: student.id });
   const { results, ...totals } = await caller.teacher.progress.get({ studentId: student.id });
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
@@ -146,7 +147,7 @@ export default async function StudentCardPage({ params }: Props) {
       <StudentAssessments studentId={student.id} assessments={assessments} />
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
-      <StudentFeedback entries={feedback} timeZone={timeZone} />
+      <StudentFeedback entries={feedback} surveys={surveys} timeZone={timeZone} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />

@@ -19,6 +19,7 @@ import {
 } from "../../domain/homework-format";
 import type { Database } from "../db/client";
 import { draftOrigin, homework, homeworkAnswer, homeworkSubmission, student } from "../db/schema";
+import { openSurvey, takeBackSurvey } from "./survey";
 import { env } from "../env";
 import { answerFileUrl, homeworkAudioUrl, homeworkImageUrl, homeworkPictureUrl, todayIn } from "../../domain/homework";
 import { missedOutsideTraining } from "../crm/word-training";
@@ -212,6 +213,8 @@ export async function publishHomework(
       .update(homework)
       .set({ status: "published", dueDate, publishedAt: sql`now()`, askFeedback })
       .where(eq(homework.id, id));
+    // «Опрос по урокам» ticked in the draft opens with it (#332).
+    await openSurvey(tx, id);
     return "published";
   });
 }
@@ -235,6 +238,8 @@ export async function unpublishHomework(db: Database, teacherId: string, id: str
     await tx
       .delete(homeworkAnswer)
       .where(and(eq(homeworkAnswer.homeworkId, id), eq(homeworkAnswer.attempt, taken.attempt)));
+    // An unanswered survey goes back with it (#332).
+    await takeBackSurvey(tx, id);
     return true;
   });
 }
