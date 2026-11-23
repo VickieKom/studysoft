@@ -30,7 +30,7 @@ export const FIRST_PERIOD_DAYS = 7;
 export const MAX_PERIOD_DAYS = 14;
 
 /** The period of a new survey of this student: from the end of the previous one sent, or the last week. */
-export async function surveyPeriod(database: Database, teacherId: string, studentId: string, now: Date): Promise<{ from: Date; to: Date }> {
+export async function surveyPeriod(database: Pick<Database, "select">, teacherId: string, studentId: string, now: Date): Promise<{ from: Date; to: Date }> {
   const [previous] = await database
     .select({ to: homeworkSurvey.periodTo })
     .from(homeworkSurvey)
@@ -59,7 +59,7 @@ function distinctTopics(topics: string[]): string[] {
  * the topics of those materials and of the homework published in the period.
  */
 export async function gatherQuestions(
-  database: Database,
+  database: Pick<Database, "select">,
   teacherId: string,
   studentId: string,
   period: { from: Date; to: Date },
@@ -120,7 +120,7 @@ export type DraftSurvey = { questions: { text: string }[]; revision: string } | 
 const revision = sql<string>`md5(${homeworkSurvey.questions}::text)`;
 
 /** «Опрос по урокам» in a draft: its questions, or null when the box is off. */
-export async function draftSurvey(database: Database, teacherId: string, homeworkId: string): Promise<DraftSurvey> {
+export async function draftSurvey(database: Pick<Database, "select">, teacherId: string, homeworkId: string): Promise<DraftSurvey> {
   const [row] = await database
     .select({ questions: homeworkSurvey.questions, revision })
     .from(homeworkSurvey)
@@ -131,12 +131,18 @@ export async function draftSurvey(database: Database, teacherId: string, homewor
   return { questions: (row.questions as SurveyQuestion[]).map((q) => ({ text: shown(q) })), revision: row.revision };
 }
 
-/** A draft of this teacher, with its student; null when there is none. */
-async function ownDraft(database: Database, teacherId: string, homeworkId: string) {
-  const [row] = await database
+/**
+ * A draft of this teacher, with its student, its row locked for the rest of
+ * the transaction; null when there is none. «Опубликовать» locks the same row
+ * (`publishHomework`), so a survey change lands before the publication and
+ * opens with it, or finds the homework published and is refused.
+ */
+async function lockedDraft(tx: Pick<Database, "select">, teacherId: string, homeworkId: string) {
+  const [row] = await tx
     .select({ studentId: homework.studentId })
     .from(homework)
-    .where(and(eq(homework.id, homeworkId), eq(homework.teacherId, teacherId), eq(homework.status, "draft")));
+    .where(and(eq(homework.id, homeworkId), eq(homework.teacherId, teacherId), eq(homework.status, "draft")))
+    .for("update");
   return row ?? null;
 }
 
@@ -152,27 +158,29 @@ export async function setSurvey(
   on: boolean,
   now: Date = new Date(),
 ): Promise<DraftSurvey | "not_found"> {
-  const draft = await ownDraft(database, teacherId, homeworkId);
-  if (!draft) return "not_found";
-  if (!on) {
-    await database.delete(homeworkSurvey).where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
-    return null;
-  }
-  const period = await surveyPeriod(database, teacherId, draft.studentId, now);
-  const questions = await gatherQuestions(database, teacherId, draft.studentId, period);
-  if (!questions) {
-    await database.delete(homeworkSurvey).where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
-    return { noLessons: true };
-  }
-  await database
-    .insert(homeworkSurvey)
-    .values({ teacherId, studentId: draft.studentId, homeworkId, periodFrom: period.from, periodTo: period.to, questions })
-    .onConflictDoUpdate({
-      target: homeworkSurvey.homeworkId,
-      set: { periodFrom: period.from, periodTo: period.to, questions, updatedAt: sql`now()` },
-      setWhere: and(eq(homeworkSurvey.teacherId, teacherId), eq(homeworkSurvey.status, "draft")),
-    });
-  return draftSurvey(database, teacherId, homeworkId);
+  return database.transaction(async (tx) => {
+    const draft = await lockedDraft(tx, teacherId, homeworkId);
+    if (!draft) return "not_found" as const;
+    if (!on) {
+      await tx.delete(homeworkSurvey).where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
+      return null;
+    }
+    const period = await surveyPeriod(tx, teacherId, draft.studentId, now);
+    const questions = await gatherQuestions(tx, teacherId, draft.studentId, period);
+    if (!questions) {
+      await tx.delete(homeworkSurvey).where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
+      return { noLessons: true as const };
+    }
+    await tx
+      .insert(homeworkSurvey)
+      .values({ teacherId, studentId: draft.studentId, homeworkId, periodFrom: period.from, periodTo: period.to, questions })
+      .onConflictDoUpdate({
+        target: homeworkSurvey.homeworkId,
+        set: { periodFrom: period.from, periodTo: period.to, questions, updatedAt: sql`now()` },
+        setWhere: and(eq(homeworkSurvey.teacherId, teacherId), eq(homeworkSurvey.status, "draft")),
+      });
+    return draftSurvey(tx, teacherId, homeworkId);
+  });
 }
 
 /**
@@ -188,31 +196,30 @@ export async function editSurvey(
   seen: string,
   edit: { remove: number } | { add: string },
 ): Promise<DraftSurvey | "not_found" | "conflict" | "too_many"> {
-  const [row] = await database
-    .select({ questions: homeworkSurvey.questions, revision })
-    .from(homeworkSurvey)
-    .innerJoin(homework, eq(homework.id, homeworkSurvey.homeworkId))
-    .where(and(eq(homeworkSurvey.teacherId, teacherId), eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft"), eq(homework.status, "draft")));
-  if (!row) return "not_found";
-  if (row.revision !== seen) return "conflict";
-  const questions = row.questions as SurveyQuestion[];
-  let next: SurveyQuestion[];
-  if ("remove" in edit) {
-    if (edit.remove >= questions.length) return "conflict";
-    next = questions.filter((_, i) => i !== edit.remove);
-  } else {
-    if (questions.filter((q) => q.kind === "own").length >= MAX_OWN_QUESTIONS) return "too_many";
-    const own = surveyQuestionSchema.parse({ kind: "own", text: edit.add.trim() });
-    // Her own questions go before «А ещё я хочу…», which stays last.
-    const wish = questions.findIndex((q) => q.kind === "wish");
-    next = wish < 0 ? [...questions, own] : [...questions.slice(0, wish), own, ...questions.slice(wish)];
-  }
-  const rows = await database
-    .update(homeworkSurvey)
-    .set({ questions: next, updatedAt: sql`now()` })
-    .where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft"), sql`${revision} = ${seen}`))
-    .returning({ id: homeworkSurvey.id });
-  return rows.length > 0 ? draftSurvey(database, teacherId, homeworkId) : "conflict";
+  // Under the draft's lock, as setSurvey: an edit never lands after «Опубликовать» opened the survey.
+  return database.transaction(async (tx) => {
+    if (!(await lockedDraft(tx, teacherId, homeworkId))) return "not_found" as const;
+    const [row] = await tx
+      .select({ questions: homeworkSurvey.questions, revision })
+      .from(homeworkSurvey)
+      .where(and(eq(homeworkSurvey.teacherId, teacherId), eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
+    if (!row) return "not_found" as const;
+    if (row.revision !== seen) return "conflict" as const;
+    const questions = row.questions as SurveyQuestion[];
+    let next: SurveyQuestion[];
+    if ("remove" in edit) {
+      if (edit.remove >= questions.length) return "conflict" as const;
+      next = questions.filter((_, i) => i !== edit.remove);
+    } else {
+      if (questions.filter((q) => q.kind === "own").length >= MAX_OWN_QUESTIONS) return "too_many" as const;
+      const own = surveyQuestionSchema.parse({ kind: "own", text: edit.add.trim() });
+      // Her own questions go before «А ещё я хочу…», which stays last.
+      const wish = questions.findIndex((q) => q.kind === "wish");
+      next = wish < 0 ? [...questions, own] : [...questions.slice(0, wish), own, ...questions.slice(wish)];
+    }
+    await tx.update(homeworkSurvey).set({ questions: next, updatedAt: sql`now()` }).where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
+    return draftSurvey(tx, teacherId, homeworkId);
+  });
 }
 
 export type StudentSurvey = { homeworkId: string; questions: { text: string; choices: string[]; textAnswer: boolean }[] };
@@ -300,9 +307,14 @@ export async function surveyFeedback(database: Database, teacherId: string, stud
   });
 }
 
-/** In «Опубликовать»'s transaction: the draft's survey opens with the homework. */
-export async function openSurvey(tx: Pick<Database, "update">, homeworkId: string): Promise<void> {
-  await tx.update(homeworkSurvey).set({ status: "open", updatedAt: sql`now()` }).where(and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft")));
+/**
+ * In «Опубликовать»'s transaction: the draft's survey opens with the
+ * homework. One with every question removed asks nothing: it goes instead.
+ */
+export async function openSurvey(tx: Pick<Database, "update" | "delete">, homeworkId: string): Promise<void> {
+  const draft = and(eq(homeworkSurvey.homeworkId, homeworkId), eq(homeworkSurvey.status, "draft"));
+  await tx.delete(homeworkSurvey).where(and(draft, sql`jsonb_array_length(${homeworkSurvey.questions}) = 0`));
+  await tx.update(homeworkSurvey).set({ status: "open", updatedAt: sql`now()` }).where(draft);
 }
 
 /** In «Снять с публикации»: an unanswered survey goes back with the homework. */

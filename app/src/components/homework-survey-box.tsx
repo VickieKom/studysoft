@@ -15,7 +15,16 @@ const BOX = "Опрос по урокам";
  * survey; the teacher removes any and adds her own. Each change is saved at
  * once and opens with the homework on «Опубликовать».
  */
-export function HomeworkSurveyBox({ homeworkId, survey: loaded }: { homeworkId: string; survey: DraftSurveyView }) {
+export function HomeworkSurveyBox({
+  homeworkId,
+  survey: loaded,
+  onBusy,
+}: {
+  homeworkId: string;
+  survey: DraftSurveyView;
+  /** While a change is in flight, «Опубликовать» waits: the survey must be saved before it opens. */
+  onBusy?: (busy: boolean) => void;
+}) {
   const [survey, setSurvey] = useState<DraftSurveyView>(loaded);
   // The box follows the click at once; the questions follow the server.
   const [on, setOn] = useState(loaded !== null);
@@ -23,17 +32,21 @@ export function HomeworkSurveyBox({ homeworkId, survey: loaded }: { homeworkId: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(change: () => Promise<DraftSurveyView>) {
+  async function run(change: () => Promise<DraftSurveyView>): Promise<boolean> {
     setBusy(true);
+    onBusy?.(true);
     setError(null);
     try {
       setSurvey(await change());
+      return true;
     } catch (cause) {
       setOn(survey !== null);
       const code = (cause as { data?: { code?: string } } | null)?.data?.code;
       setError((code === "BAD_REQUEST" || code === "CONFLICT") && cause instanceof Error ? cause.message : "Не получилось сохранить. Попробуйте ещё раз");
+      return false;
     } finally {
       setBusy(false);
+      onBusy?.(false);
     }
   }
 
@@ -85,8 +98,8 @@ export function HomeworkSurveyBox({ homeworkId, survey: loaded }: { homeworkId: 
               variant="secondary"
               disabled={busy || own.trim() === ""}
               onClick={async () => {
-                await run(() => routerClient.teacher.homework.editSurvey.mutate({ id: homeworkId, revision: questions.revision, edit: { add: own } }));
-                setOwn("");
+                // The typed question stays when adding it failed.
+                if (await run(() => routerClient.teacher.homework.editSurvey.mutate({ id: homeworkId, revision: questions.revision, edit: { add: own } }))) setOwn("");
               }}
             >
               Добавить вопрос
