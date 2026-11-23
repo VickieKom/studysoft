@@ -1,6 +1,6 @@
 // Acceptance for #333: the child's answers gathered up where the teacher
-// looks anyway. «Фидбэк» on the card shows the week's answers and two
-// ratings «что заходит» (product owner, 2026-11-23): the kinds of homework
+// looks anyway. «Фидбэк» on the card shows the week's answers, and «Что
+// заходит» beside it two ratings (product owner, 2026-11-23): the kinds of homework
 // tasks, from the one-tap question after the homework (#331), and the kinds
 // of lesson materials — games, warm-ups, videos — from the survey's «Что было
 // веселее?» (#332); «3 из 3» is chosen in three answers of three; the topics
@@ -219,9 +219,10 @@ test("two one-tap answers and a survey: «Фидбэк» shows the week and both
   // The card: the week's answers and the two ratings.
   await page.goto(child.card);
   const feedback = page.getByRole("region", { name: "Фидбэк" });
-  const lessons = feedback.getByRole("list", { name: "Что заходит на уроках" }).getByRole("listitem");
+  const rating = page.getByRole("region", { name: "Что заходит" });
+  const lessons = rating.getByRole("list", { name: "Что заходит на уроках" }).getByRole("listitem");
   await expect(lessons.first()).toHaveText("Игры — 3 из 3");
-  const homework = feedback.getByRole("list", { name: "Что заходит в домашке" }).getByRole("listitem");
+  const homework = rating.getByRole("list", { name: "Что заходит в домашке" }).getByRole("listitem");
   await expect(homework.first()).toHaveText("Выбрать ответ — 2 из 2");
   const week = feedback.getByRole("list", { name: "Ответы за неделю" });
   await expect(week).toContainText("Самое интересное: Выбрать ответ");
