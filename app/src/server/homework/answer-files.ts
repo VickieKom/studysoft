@@ -35,7 +35,7 @@ const refused = (status: number, error: string) =>
 const VOICE_TOLERANCE_SECONDS = 1;
 
 /** The body, or null as soon as it grows past the limit: an oversized upload is never held whole. */
-async function readLimited(request: Request, limit: number): Promise<Uint8Array | null> {
+export async function readLimited(request: Request, limit: number): Promise<Uint8Array | null> {
   const declared = Number(request.headers.get("Content-Length") ?? "0");
   if (declared > limit) return null;
   if (!request.body) return new Uint8Array();
