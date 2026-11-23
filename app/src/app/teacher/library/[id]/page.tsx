@@ -4,7 +4,8 @@ import { LibraryAddDraft } from "@/components/library-add-draft";
 import { LibraryDelete } from "@/components/library-delete";
 import { LibraryGameFrame } from "@/components/library-game-frame";
 import { LibraryOpenToStudent } from "@/components/library-open-to-student";
-import { AGE_GROUP_LABELS, MATERIAL_KIND_FILTERS } from "@/domain/library";
+import { YouTubePlayer } from "@/components/youtube-player";
+import { AGE_GROUP_LABELS, MATERIAL_KIND_FILTERS, youTubeEmbedUrl } from "@/domain/library";
 import { timeIn } from "@/domain/schedule";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../caller";
@@ -115,6 +116,11 @@ export default async function MaterialPage({ params }: Props) {
           aria-label={material.title}
           className="max-h-[70vh] w-full rounded-card border border-border bg-bg"
         />
+      ) : material.kind === "video" && material.url && youTubeEmbedUrl(material.url) ? (
+        <div className="flex flex-col gap-2">
+          <YouTubePlayer src={youTubeEmbedUrl(material.url)!} title={material.title} />
+          <span className="break-all text-small text-text-secondary">{material.url}</span>
+        </div>
       ) : material.kind === "video" && material.url ? (
         <p className="flex flex-col gap-2">
           <a
