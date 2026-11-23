@@ -5,6 +5,7 @@ import { FamilyGoal } from "@/components/family-goal";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
+import { StudentFeedback } from "@/components/student-feedback";
 import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentAssessments } from "@/components/student-assessments";
 import { StudentProgress } from "@/components/student-progress";
@@ -34,6 +35,7 @@ export default async function StudentCardPage({ params }: Props) {
   const homework = await caller.teacher.homework.list({ studentId: student.id });
   const past = await caller.teacher.history.list({ studentId: student.id });
   const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
+  const feedback = await caller.teacher.students.feedback({ studentId: student.id });
   const vocabulary = await caller.teacher.students.vocabulary({ studentId: student.id });
   const { results, ...totals } = await caller.teacher.progress.get({ studentId: student.id });
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
@@ -144,6 +146,7 @@ export default async function StudentCardPage({ params }: Props) {
       <StudentAssessments studentId={student.id} assessments={assessments} />
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
+      <StudentFeedback entries={feedback} timeZone={timeZone} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />

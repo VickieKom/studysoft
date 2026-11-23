@@ -15,11 +15,14 @@ export function HomeworkDraft({
   homeworkId,
   tasks,
   revision: loaded,
+  askFeedback,
   children,
 }: {
   homeworkId: string;
   tasks: Task[];
   revision: string;
+  /** «Мини-вопрос после домашки» (#331). */
+  askFeedback: boolean;
   /** The heading: the title and the status. */
   children: ReactNode;
 }) {
@@ -28,7 +31,14 @@ export function HomeworkDraft({
     <>
       <header className="mb-6 flex flex-col gap-3">
         {children}
-        <HomeworkPublish homeworkId={homeworkId} status="draft" dueDate={null} revision={revision} />
+        <HomeworkPublish
+          homeworkId={homeworkId}
+          status="draft"
+          dueDate={null}
+          revision={revision}
+          askFeedback={askFeedback}
+          oneKind={new Set(tasks.map((task) => task.type)).size < 2}
+        />
       </header>
       <HomeworkDraftEditor homeworkId={homeworkId} tasks={tasks} revision={revision} onSaved={setRevision} />
     </>

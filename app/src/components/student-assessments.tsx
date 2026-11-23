@@ -11,9 +11,13 @@ type Assessment = {
   id: string;
   title: string;
   status: "draft" | "approved";
+  /** Saved by the assistant (#313). */
+  fromAssistant: boolean;
   sections: AssessmentSectionView[];
   recording: string | null;
   picture: string | null;
+  /** The version the page shows, sent back by «Убрать» and «Утвердить» (#313). */
+  revision: string;
 };
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
@@ -137,13 +141,16 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
   }
 
   const remove = (section: AssessmentSkill, index: number) =>
-    run(() => routerClient.teacher.assessments.removeQuestion.mutate({ assessmentId: assessment.id, section, index }));
+    run(() => routerClient.teacher.assessments.removeQuestion.mutate({ assessmentId: assessment.id, revision: assessment.revision, section, index }));
 
   return (
     <div role="group" aria-label={assessment.title} className="flex flex-col gap-4 rounded-card border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold">{assessment.title}</p>
-        <span className="rounded-full bg-green-50 px-2 py-0.5 text-caption text-green-700">{ASSESSMENT_STATUS_LABELS[assessment.status]}</span>
+        <span className="flex items-center gap-2">
+          {assessment.fromAssistant && <span className="text-small text-text-secondary">от ассистента</span>}
+          <span className="rounded-full bg-green-50 px-2 py-0.5 text-caption text-green-700">{ASSESSMENT_STATUS_LABELS[assessment.status]}</span>
+        </span>
       </div>
       {assessment.sections.map((section) => (
         <section key={section.skill} aria-label={sectionLabel(section.skill)} className="flex flex-col gap-2 border-t border-border pt-3">
@@ -201,7 +208,7 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
       )}
       {draft && (
         <div>
-          <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.approve.mutate({ assessmentId: assessment.id }))}>
+          <Button disabled={busy} onClick={() => void run(() => routerClient.teacher.assessments.approve.mutate({ assessmentId: assessment.id, revision: assessment.revision }))}>
             Утвердить
           </Button>
         </div>
