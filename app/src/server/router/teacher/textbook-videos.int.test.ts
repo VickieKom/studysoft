@@ -75,6 +75,10 @@ beforeAll(async () => {
     tracks: [],
     videos: [{ name: "1-2-clip", file: video }],
   }));
+  // The structure is checked against rendered pages: wait for the book.
+  for (let i = 0; i < 100 && (await teacher.teacher.textbooks.get({ id: textbookId })).books[0]!.status !== "done"; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   const lesson = (title: string, from: number, videos: string[] = []) => ({ title, pages: { students_book: { from, to: from + 1 } }, tracks: [], videos, words: [] });
   const { revision } = await teacher.teacher.textbooks.structure({ id: textbookId });
   await teacher.teacher.textbooks.saveStructure({
