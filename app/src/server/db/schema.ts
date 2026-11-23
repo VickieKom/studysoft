@@ -1039,6 +1039,15 @@ export const assessment = pgTable(
     listeningRecording: uuid("listening_recording").references(() => blob.id),
     speakingPicture: uuid("speaking_picture").references(() => blob.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    // Who made the draft (#313): "teacher" by import, "agent" by the
+    // assistant, with the period it was drafted from (`assessmentPeriod` of
+    // the student context, nothing else of it). While the teacher
+    // has done nothing to the assistant's draft, its next save replaces it;
+    // her first action (a removal, the recording, the picture) sets
+    // `teacherEditedAt`, and the next save makes a new draft.
+    createdBy: text("created_by").notNull().default("teacher"),
+    context: jsonb("context"),
+    teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { assessmentFileUrl } from "../../../domain/assessment";
 import { ASSESSMENT_SECTIONS, assessmentSectionViewSchema, assessmentView, parseAssessment } from "../../../domain/assessment-format";
-import { approveAssessment, type AssessmentRow, importAssessment, listAssessments, removeQuestion } from "../../assessment/assessments";
+import { approveAssessment, type AssessmentRow, importAssessment, listAssessments, MAX_ASSESSMENT_LENGTH, removeQuestion } from "../../assessment/assessments";
 import { findStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -12,17 +12,20 @@ import { router, teacherProcedure } from "../core/trpc";
 // status and its files' addresses.
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
-/** The JSON of an assessment: text only, its files are uploaded on the card. */
-const MAX_IMPORT_LENGTH = 200_000;
+/** The revision the page has seen, as `list` gave it (an md5 in hex). */
+const revision = z.string().max(64);
+const changed = () => new TRPCError({ code: "CONFLICT", message: "Замер изменился. Обновите страницу" });
 
 const assessmentViewSchema = z
   .object({
     id: z.uuid(),
     title: z.string(),
     status: z.enum(["draft", "approved"]),
+    fromAssistant: z.boolean(),
     sections: z.array(assessmentSectionViewSchema),
     recording: z.string().nullable(),
     picture: z.string().nullable(),
+    revision,
   })
   .strict();
 
@@ -30,9 +33,11 @@ const view = (row: AssessmentRow) => ({
   id: row.id,
   title: row.title,
   status: row.status,
+  fromAssistant: row.fromAssistant,
   sections: assessmentView(row.document),
   recording: row.listeningRecording ? assessmentFileUrl(row.id, "listening") : null,
   picture: row.speakingPicture ? assessmentFileUrl(row.id, "picture") : null,
+  revision: row.revision,
 });
 
 const ok = z.object({ ok: z.literal(true) }).strict();
@@ -49,7 +54,7 @@ export const assessmentsRouter = router({
 
   /** «Импортировать»: the pasted JSON as the student's draft; the message names the section, the question and the field. */
   import: teacherProcedure
-    .input(z.object({ studentId: z.uuid(), json: z.string().max(MAX_IMPORT_LENGTH) }))
+    .input(z.object({ studentId: z.uuid(), json: z.string().max(MAX_ASSESSMENT_LENGTH) }))
     .output(z.object({ id: z.uuid() }).strict())
     .mutation(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
@@ -58,25 +63,29 @@ export const assessmentsRouter = router({
       return { id: await importAssessment(ctx.db, ctx.teacherId, input.studentId, parsed.assessment) };
     }),
 
-  /** «Убрать»: one question of a draft. */
+  /** «Убрать»: one question of the draft the page has seen. */
   removeQuestion: teacherProcedure
-    .input(z.object({ assessmentId: z.uuid(), section: z.enum(ASSESSMENT_SECTIONS), index: z.number().int().min(0) }))
+    .input(z.object({ assessmentId: z.uuid(), revision, section: z.enum(ASSESSMENT_SECTIONS), index: z.number().int().min(0) }))
     .output(ok)
     .mutation(async ({ ctx, input }) => {
-      const result = await removeQuestion(ctx.db, ctx.teacherId, input.assessmentId, input.section, input.index);
+      const result = await removeQuestion(ctx.db, ctx.teacherId, input.assessmentId, input.revision, input.section, input.index);
       if (result === "not_found") throw notFound();
       if (result === "not_removable") throw new TRPCError({ code: "BAD_REQUEST", message: "Этот вопрос убрать нельзя: в замере должен остаться хотя бы один" });
-      if (result === "changed") throw new TRPCError({ code: "CONFLICT", message: "Замер изменился. Обновите страницу" });
+      if (result === "changed") throw changed();
       return { ok: true as const };
     }),
 
-  /** «Утвердить»: the draft is fixed; refused without the recording when it has «Аудирование». */
+  /**
+   * «Утвердить»: the draft the page has seen is fixed; refused when it changed
+   * since, and without the recording when it has «Аудирование».
+   */
   approve: teacherProcedure
-    .input(z.object({ assessmentId: z.uuid() }))
+    .input(z.object({ assessmentId: z.uuid(), revision }))
     .output(ok)
     .mutation(async ({ ctx, input }) => {
-      const result = await approveAssessment(ctx.db, ctx.teacherId, input.assessmentId);
+      const result = await approveAssessment(ctx.db, ctx.teacherId, input.assessmentId, input.revision);
       if (result === "not_found") throw notFound();
+      if (result === "changed") throw changed();
       if (result === "no_recording") throw new TRPCError({ code: "BAD_REQUEST", message: "Нет записи для аудирования. Загрузите её и утвердите снова" });
       return { ok: true as const };
     }),

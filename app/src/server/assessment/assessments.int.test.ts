@@ -98,6 +98,9 @@ async function linkCaller(studentId: string, role: "student" | "parent") {
   return { headers, caller: createServerCaller(headers) };
 }
 
+/** The revision the teacher's page has seen of an assessment, as `list` gives it. */
+const seen = async (id: string) => (await findAssessment(db(), teacherId, id))!.revision;
+
 const listed = async (studentId: string, id: string) => (await teacher.teacher.assessments.list({ studentId })).find((a) => a.id === id)!;
 
 beforeAll(async () => {
@@ -155,20 +158,20 @@ describe("an assessment on the card", () => {
     const { studentId, id } = await imported("Чужой замер");
     await expect(other.teacher.assessments.list({ studentId })).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(other.teacher.assessments.import({ studentId, json: JSON.stringify(document()) })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(other.teacher.assessments.removeQuestion({ assessmentId: id, section: "vocabulary", index: 0 })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(other.teacher.assessments.approve({ assessmentId: id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(other.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "vocabulary", index: 0 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(other.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await listed(studentId, id)).status).toBe("draft");
   });
 
   it("loses a question to «Убрать», the section with its last one, never the grammar text or the last question", async () => {
     const { studentId, id } = await imported("Замер без вопроса");
-    await teacher.teacher.assessments.removeQuestion({ assessmentId: id, section: "vocabulary", index: 0 });
+    await teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "vocabulary", index: 0 });
     const vocabulary = (await listed(studentId, id)).sections.find((s) => s.skill === "vocabulary")!;
     expect(vocabulary.questions).toEqual([{ type: "sentence", text: "A ___ of stones." }]);
-    await teacher.teacher.assessments.removeQuestion({ assessmentId: id, section: "listening", index: 0 });
+    await teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "listening", index: 0 });
     expect((await listed(studentId, id)).sections.map((s) => s.skill)).not.toContain("listening");
-    await expect(teacher.teacher.assessments.removeQuestion({ assessmentId: id, section: "grammar", index: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(teacher.teacher.assessments.removeQuestion({ assessmentId: id, section: "speaking", index: 5 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "grammar", index: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "speaking", index: 5 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("does not undo an approval or another removal that came between the removal's read and its write", async () => {
@@ -176,7 +179,7 @@ describe("an assessment on the card", () => {
     // The removal has read the draft...
     const read = (await findAssessment(db(), teacherId, id))!;
     // ...another removal lands first...
-    await teacher.teacher.assessments.removeQuestion({ assessmentId: id, section: "speaking", index: 0 });
+    await teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "speaking", index: 0 });
     // ...and the stale one must not write its document over it.
     expect(await removeQuestionFrom(db(), teacherId, read, "vocabulary", 0)).toBe("changed");
     const after = await listed(studentId, id);
@@ -186,7 +189,7 @@ describe("an assessment on the card", () => {
     // The same with an approval in between: the approved assessment stays as approved.
     const { studentId: second, id: secondId } = await imported("Гонка с утверждением", { ...document(), sections: document().sections.slice(1) });
     const before = (await findAssessment(db(), teacherId, secondId))!;
-    expect(await approveAssessment(db(), teacherId, secondId)).toBe("ok");
+    expect(await approveAssessment(db(), teacherId, secondId, before.revision)).toBe("ok");
     expect(await removeQuestionFrom(db(), teacherId, before, "vocabulary", 0)).toBe("changed");
     expect((await listed(second, secondId)).sections.find((s) => s.skill === "vocabulary")!.questions).toHaveLength(2);
   });
@@ -195,28 +198,28 @@ describe("an assessment on the card", () => {
 describe("approving an assessment", () => {
   it("wants the recording when it has «Аудирование», then fixes it: no removal, no upload, no new file", async () => {
     const { studentId, id } = await imported("Замер к утверждению");
-    await expect(teacher.teacher.assessments.approve({ assessmentId: id })).rejects.toMatchObject({
+    await expect(teacher.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: expect.stringContaining("Нет записи для аудирования"),
     });
     expect((await listed(studentId, id)).status).toBe("draft");
 
     expect((await put(id, "listening", teacherHeaders, silence(800))).status).toBe(200);
-    await teacher.teacher.assessments.approve({ assessmentId: id });
+    await teacher.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) });
     expect(await listed(studentId, id)).toMatchObject({ status: "approved", recording: `/api/files/assessments/${id}/listening` });
 
-    await expect(teacher.teacher.assessments.removeQuestion({ assessmentId: id, section: "vocabulary", index: 0 })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(teacher.teacher.assessments.removeQuestion({ assessmentId: id, revision: await seen(id), section: "vocabulary", index: 0 })).rejects.toMatchObject({ code: "CONFLICT" });
     expect((await put(id, "listening", teacherHeaders, silence(1600))).status).toBe(409);
     expect((await put(id, "picture", teacherHeaders, PNG)).status).toBe(409);
     expect((await remove(id, "listening", teacherHeaders)).status).toBe(404);
     expect((await get(id, "listening", teacherHeaders)).status).toBe(200);
     // Approving again changes nothing.
-    await teacher.teacher.assessments.approve({ assessmentId: id });
+    await teacher.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) });
   });
 
   it("needs no recording without «Аудирование» and no picture for «Говорение»", async () => {
     const { studentId, id } = await imported("Замер без аудирования", { ...document(), sections: document().sections.slice(1) });
-    await teacher.teacher.assessments.approve({ assessmentId: id });
+    await teacher.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) });
     expect(await listed(studentId, id)).toMatchObject({ status: "approved", picture: null });
   });
 });
@@ -269,7 +272,7 @@ describe("students and parents", () => {
 
     const { studentId, id } = await imported("Замер и ссылки");
     await put(id, "listening", teacherHeaders, silence(800));
-    await teacher.teacher.assessments.approve({ assessmentId: id });
+    await teacher.teacher.assessments.approve({ assessmentId: id, revision: await seen(id) });
     const { caller: student } = await linkCaller(studentId, "student");
     const { caller: parent } = await linkCaller(studentId, "parent");
     const outputs = JSON.stringify([
