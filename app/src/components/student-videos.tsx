@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { youTubeId } from "@/domain/library";
 
 type Video = { id: string; title: string; fileUrl: string | null; link: string | null };
 
@@ -6,8 +7,9 @@ const item = "flex rounded-task border border-border bg-accent-50 px-4 py-3 text
 
 /**
  * «Видео» in the student's «Материалы урока» (#158, #241): the videos the teacher opened during
- * a lesson; nothing when there are none. An own file opens its page and plays
- * there; a link opens in a new tab, where the platform does not control it.
+ * a lesson; nothing when there are none. An own file and a YouTube link (#325)
+ * open their page and play there; any other link opens in a new tab, where
+ * the platform does not control it.
  */
 export function StudentVideos({ videos }: { videos: Video[] }) {
   if (videos.length === 0) return null;
@@ -19,7 +21,7 @@ export function StudentVideos({ videos }: { videos: Video[] }) {
       <ul className="flex flex-col gap-2">
         {videos.map((video) => (
           <li key={video.id}>
-            {video.fileUrl ? (
+            {video.fileUrl || (video.link && youTubeId(video.link)) ? (
               <Link href={`/s/videos/${video.id}`} className={item}>
                 {video.title}
               </Link>

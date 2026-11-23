@@ -12,12 +12,21 @@ type Props = {
   dueDate: string | null;
   /** The version of the draft this page shows; publishing anything newer is refused (#99). */
   revision: string;
+  /** «Мини-вопрос после домашки» as the draft has it (#331); sent with «Опубликовать». */
+  askFeedback?: boolean;
+  /** The draft's tasks are all of one kind: the question would ask nothing. */
+  oneKind?: boolean;
 };
 
-/** Publish a draft with a deadline, or take a published homework back (#32). */
-export function HomeworkPublish({ homeworkId, status, dueDate, revision }: Props) {
+/**
+ * Publish a draft with a deadline, or take a published homework back (#32).
+ * The draft's «Мини-вопрос после домашки» (#331), off by default, is set with
+ * the deadline and saved by «Опубликовать».
+ */
+export function HomeworkPublish({ homeworkId, status, dueDate, revision, askFeedback = false, oneKind = false }: Props) {
   const router = useRouter();
   const [date, setDate] = useState("");
+  const [ask, setAsk] = useState(askFeedback);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +52,7 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision }: Props
   async function onPublish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!date) return;
-    await run(() => routerClient.teacher.homework.publish.mutate({ id: homeworkId, revision, dueDate: date }));
+    await run(() => routerClient.teacher.homework.publish.mutate({ id: homeworkId, revision, dueDate: date, askFeedback: ask }));
   }
 
   if (status === "missed" || status === "submitted") return null;
@@ -68,6 +77,19 @@ export function HomeworkPublish({ homeworkId, status, dueDate, revision }: Props
           <Button type="submit" disabled={pending || !date}>
             Опубликовать
           </Button>
+          <div className="flex basis-full flex-col gap-1">
+            <label className="flex items-center gap-2 text-small">
+              <input type="checkbox" checked={ask} onChange={(event) => setAsk(event.target.checked)} />
+              Мини-вопрос после домашки
+            </label>
+            {ask && (
+              <span className="text-caption text-text-secondary">
+                {oneKind
+                  ? "Все задания одного вида — вопрос не задаётся"
+                  : "После «Сдать» ученик выберет, какое задание было самым интересным; на оценку не влияет"}
+              </span>
+            )}
+          </div>
         </form>
       ) : (
         <div className="flex flex-wrap items-center gap-3">

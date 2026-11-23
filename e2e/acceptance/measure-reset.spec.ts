@@ -130,6 +130,8 @@ test("a renamed measure starts from zero; a change of the goal alone keeps the n
 
   let goal = await setGoal(page, card, { goal: "Больше говорить", name: "на английском", unit: "мин" });
   await goal.getByRole("button", { name: "Сохранить", exact: true }).click();
+  // Saved before the page is left: the form has closed (#358).
+  await expect(goal.getByRole("button", { name: "Настроить", exact: true })).toBeVisible();
   await mark(page, first, name, "Проведён", { label: "на английском, мин", value: "5" });
   await mark(page, second, name, "Проведён", { label: "на английском, мин", value: "12" });
   await page.goto(card);
@@ -139,6 +141,8 @@ test("a renamed measure starts from zero; a change of the goal alone keeps the n
   goal = await setGoal(page, card, { goal: "Говорить свободнее" });
   await expect(goal).not.toContainText("сотрутся");
   await goal.getByRole("button", { name: "Сохранить", exact: true }).click();
+  // Saved before the page is left: the form has closed (#358).
+  await expect(goal.getByRole("button", { name: "Настроить", exact: true })).toBeVisible();
   await page.goto(card);
   await expect(goal).toContainText("на английском: 5 → 12 мин");
 
@@ -146,6 +150,8 @@ test("a renamed measure starts from zero; a change of the goal alone keeps the n
   goal = await setGoal(page, card, { name: "книги", unit: "шт." });
   await expect(goal).toContainText("Числа прежнего показателя сотрутся");
   await goal.getByRole("button", { name: "Сохранить", exact: true }).click();
+  // Saved before the page is left: the form has closed (#358).
+  await expect(goal.getByRole("button", { name: "Настроить", exact: true })).toBeVisible();
   await page.goto(card);
   await expect(goal).toContainText("Пока нет значений");
   await expect(goal).not.toContainText("5 → 12");
