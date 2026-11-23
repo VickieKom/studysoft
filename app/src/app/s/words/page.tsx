@@ -16,11 +16,12 @@ export default async function StudentWordsPage() {
     if (isUnauthorized(error)) return <LinkExchange />;
     throw error;
   }
-  const [words, due, games, videos] = await Promise.all([
+  const [words, due, games, videos, assessments] = await Promise.all([
     caller.student.vocabulary.words(),
     caller.student.vocabulary.dueToday(),
     caller.student.games.list(),
     caller.student.videos.list(),
+    caller.student.assessments.list(),
   ]);
 
   return (
@@ -28,7 +29,7 @@ export default async function StudentWordsPage() {
       <h1 className="text-task-title font-bold">Тренировка слов</h1>
       {words.some((w) => w.translation) && <WordTraining dueCount={due.count} />}
       <StudentWords words={words} />
-      <StudentNav current="words" lessonOpen={games.length + videos.length > 0} />
+      <StudentNav current="words" lessonOpen={games.length + videos.length + assessments.length > 0} />
     </main>
   );
 }

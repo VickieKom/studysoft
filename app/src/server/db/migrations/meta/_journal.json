@@ -369,8 +369,15 @@
     {
       "idx": 52,
       "version": "7",
-      "when": 1795448474415,
-      "tag": "0052_textbook_video_access",
+      "when": 1795451720447,
+      "tag": "0052_assessment_lesson",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795454092551,
+      "tag": "0053_textbook_video_access",
       "breakpoints": true
     }
   ]

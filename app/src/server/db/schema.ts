@@ -1089,6 +1089,21 @@ export const assessment = pgTable(
     createdBy: text("created_by").notNull().default("teacher"),
     context: jsonb("context"),
     teacherEditedAt: timestamp("teacher_edited_at", { withTimezone: true }),
+    // Taken in a lesson (#253): opened to the child while a lesson of theirs
+    // is going on, until that lesson's end; opened again in a later lesson,
+    // the child goes on with the same answers. The answers by section
+    // (`domain/assessment-answers.ts`), how many times «Аудирование» played,
+    // the speaking recording made on the teacher's panel. «Сдать» by the
+    // child or «Завершить замер» by the teacher fixes the answers and
+    // scores the auto-checked sections (`scores`); the child never gets them.
+    openLessonId: uuid("open_lesson_id").references(() => lesson.id, { onDelete: "set null" }),
+    openUntil: timestamp("open_until", { withTimezone: true }),
+    answers: jsonb("answers").notNull().default({}),
+    listeningPlays: bigint("listening_plays", { mode: "number" }).notNull().default(0),
+    speakingRecording: uuid("speaking_recording").references(() => blob.id),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    scores: jsonb("scores"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

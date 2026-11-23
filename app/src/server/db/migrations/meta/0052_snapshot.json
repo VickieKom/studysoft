@@ -1,5 +1,5 @@
 {
-  "id": "c8afa9a9-c8c2-4fef-8279-946d4b0a9721",
+  "id": "d391d2ea-d9f4-4bb5-ad33-b03fbc33dac0",
   "prevId": "aecb0b1b-ea2c-4f9f-abfc-d59e3671436b",
   "version": "7",
   "dialect": "postgresql",
@@ -429,6 +429,56 @@
           "primaryKey": false,
           "notNull": false
         },
+        "open_lesson_id": {
+          "name": "open_lesson_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "open_until": {
+          "name": "open_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "answers": {
+          "name": "answers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "listening_plays": {
+          "name": "listening_plays",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "speaking_recording": {
+          "name": "speaking_recording",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scores": {
+          "name": "scores",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -494,6 +544,32 @@
           "tableTo": "blob",
           "columnsFrom": [
             "speaking_picture"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assessment_open_lesson_id_lesson_id_fk": {
+          "name": "assessment_open_lesson_id_lesson_id_fk",
+          "tableFrom": "assessment",
+          "tableTo": "lesson",
+          "columnsFrom": [
+            "open_lesson_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "assessment_speaking_recording_blob_id_fk": {
+          "name": "assessment_speaking_recording_blob_id_fk",
+          "tableFrom": "assessment",
+          "tableTo": "blob",
+          "columnsFrom": [
+            "speaking_recording"
           ],
           "columnsTo": [
             "id"
@@ -4945,168 +5021,6 @@
           ]
         }
       },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.textbook_video_access": {
-      "name": "textbook_video_access",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "teacher_id": {
-          "name": "teacher_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "student_id": {
-          "name": "student_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "file_id": {
-          "name": "file_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "lesson_id": {
-          "name": "lesson_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tasks": {
-          "name": "tasks",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "until": {
-          "name": "until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "textbook_video_access_lesson_file_key": {
-          "name": "textbook_video_access_lesson_file_key",
-          "columns": [
-            {
-              "expression": "lesson_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "file_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "textbook_video_access_student_id_idx": {
-          "name": "textbook_video_access_student_id_idx",
-          "columns": [
-            {
-              "expression": "student_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "textbook_video_access_teacher_id_teacher_id_fk": {
-          "name": "textbook_video_access_teacher_id_teacher_id_fk",
-          "tableFrom": "textbook_video_access",
-          "tableTo": "teacher",
-          "columnsFrom": [
-            "teacher_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "textbook_video_access_file_id_textbook_file_id_fk": {
-          "name": "textbook_video_access_file_id_textbook_file_id_fk",
-          "tableFrom": "textbook_video_access",
-          "tableTo": "textbook_file",
-          "columnsFrom": [
-            "file_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "textbook_video_access_lesson_id_lesson_id_fk": {
-          "name": "textbook_video_access_lesson_id_lesson_id_fk",
-          "tableFrom": "textbook_video_access",
-          "tableTo": "lesson",
-          "columnsFrom": [
-            "lesson_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "textbook_video_access_student_teacher_fk": {
-          "name": "textbook_video_access_student_teacher_fk",
-          "tableFrom": "textbook_video_access",
-          "tableTo": "student",
-          "columnsFrom": [
-            "student_id",
-            "teacher_id"
-          ],
-          "columnsTo": [
-            "id",
-            "teacher_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
