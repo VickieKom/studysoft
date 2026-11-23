@@ -344,6 +344,13 @@
       "when": 1795437139066,
       "tag": "0048_client_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795438818942,
+      "tag": "0049_intro_brief",
+      "breakpoints": true
     }
   ]
 }
