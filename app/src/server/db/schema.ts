@@ -269,6 +269,8 @@ export const homework = pgTable(
     attempt: bigint("attempt", { mode: "number" }).notNull().default(1),
     // The teacher's one comment on the homework (#36).
     reviewComment: text("review_comment"),
+    // «Мини-вопрос после домашки» (#331): ticked in the draft, off by default.
+    askFeedback: boolean("ask_feedback").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1086,4 +1088,35 @@ export const videoTasks = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("video_tasks_material_key").on(t.materialId)],
+);
+
+/**
+ * The child's answer to «Какое задание было самым интересным?» after a
+ * homework's first «Сдать» (#331): a kind of the homework's tasks, "all" for
+ * «Все классные», or null for «Пропустить». One per homework. Counts for
+ * nothing; the teacher's only — no student or parent procedure returns it.
+ */
+export const homeworkFeedback = pgTable(
+  "homework_feedback",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id, { onDelete: "cascade" }),
+    answer: text("answer"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "homework_feedback_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("homework_feedback_homework_key").on(t.homeworkId),
+    index("homework_feedback_student_id_idx").on(t.studentId),
+  ],
 );

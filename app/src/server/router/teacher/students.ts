@@ -13,6 +13,9 @@ import {
 } from "../../../domain/student";
 import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
+import { studentFeedback } from "../../homework/feedback";
+import { TASK_TYPES } from "../../../domain/homework-format";
+import { ALL_KINDS_ANSWER } from "../../../domain/homework";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
 import { addWord, confirmWordDrafts, deleteWord, draftOf, studentVocabulary, updateWord } from "../../crm/vocabulary";
 import { removeFutureLessons, topUpLessons } from "../../schedule/schedule";
@@ -191,6 +194,17 @@ export const studentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (!(await deleteWord(ctx.db, ctx.teacherId, input.studentId, input.id))) throw new TRPCError({ code: "NOT_FOUND" });
       return { ok: true as const };
+    }),
+
+  /** «Фидбэк» (#331): the child's answers to the mini-question after the homework, the newest first. */
+  feedback: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(
+      z.array(z.object({ homeworkTitle: z.string(), answer: z.enum([...TASK_TYPES, ALL_KINDS_ANSWER]), answeredAt: z.iso.datetime() }).strict()),
+    )
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      return (await studentFeedback(ctx.db, ctx.teacherId, input.studentId)).map((f) => ({ ...f, answeredAt: f.answeredAt.toISOString() }));
     }),
 
   /** «Ошибки по темам» (#119): wrong answers of homework and games over the last 30 days, by topic. */

@@ -70,7 +70,8 @@ export const homeworkRouter = router({
    */
   get: teacherProcedure
     .input(z.object({ id: z.uuid() }))
-    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema), revision }))
+    // «Мини-вопрос после домашки» as the draft has it (#331).
+    .output(summary.extend({ studentId: z.uuid(), tasks: z.array(taskSchema), revision, askFeedback: z.boolean() }))
     .query(async ({ ctx, input }) => {
       const found = await findHomework(ctx.db, ctx.teacherId, input.id);
       if (!found) throw notFound();
@@ -116,12 +117,15 @@ export const homeworkRouter = router({
       return wordsToPick(ctx.db, ctx.teacherId, draft.studentId);
     }),
 
-  /** Publishes the version of the draft the teacher's page has seen, and no other (#99). */
+  /**
+   * Publishes the version of the draft the teacher's page has seen, and no
+   * other (#99), with «Мини-вопрос после домашки» as she left it (#331).
+   */
   publish: teacherProcedure
-    .input(z.object({ id: z.uuid(), revision, dueDate: z.iso.date() }))
+    .input(z.object({ id: z.uuid(), revision, dueDate: z.iso.date(), askFeedback: z.boolean().default(false) }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.revision, input.dueDate);
+      const published = await publishHomework(ctx.db, ctx.teacherId, input.id, input.revision, input.dueDate, input.askFeedback);
       if (published === "not_found") throw notFound();
       if (published === "changed") throw changed();
       if (published === "past")
