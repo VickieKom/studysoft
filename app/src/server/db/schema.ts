@@ -1191,3 +1191,69 @@ export const homeworkSurvey = pgTable(
     index("homework_survey_student_id_idx").on(t.studentId),
   ],
 );
+
+/** «Бриф вводного» in «Настройки» (#339): the teacher's questions; none saved means the platform's starting set. */
+export const introBriefTemplate = pgTable("intro_brief_template", {
+  teacherId: uuid("teacher_id")
+    .primaryKey()
+    .references(() => teacher.id),
+  questions: jsonb("questions").notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * The brief filled in on a request during the intro (#339): the template's
+ * questions as they were when it was first saved, so a later change of the
+ * template leaves it as it was; the answers, quick choices and notes; and
+ * «Удобное время» in the family's time zone. Erased with the request's
+ * personal data by «Удалить заявку».
+ */
+export const clientRequestBrief = pgTable("client_request_brief", {
+  requestId: uuid("request_id")
+    .primaryKey()
+    .references(() => clientRequest.id, { onDelete: "cascade" }),
+  teacherId: uuid("teacher_id")
+    .notNull()
+    .references(() => teacher.id),
+  questions: jsonb("questions").notNull(),
+  answers: jsonb("answers").notNull(),
+  convenientTime: jsonb("convenient_time").notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * A student's answers to a library video's tasks (#327), given once per
+ * video and lesson under the video behind their link: the confirmed tasks as
+ * they were answered, keys included, the answers and the server's verdicts
+ * (null for a task the teacher checks). No foreign key to the video or the
+ * lesson: the student's mistakes outlive a video deleted from the library,
+ * as a game's do (#119). Never sent back to the student.
+ */
+export const videoAnswer = pgTable(
+  "video_answer",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    materialId: uuid("material_id").notNull(),
+    lessonId: uuid("lesson_id").notNull(),
+    title: text("title").notNull(),
+    tasks: jsonb("tasks").notNull(),
+    answers: jsonb("answers").notNull(),
+    verdicts: jsonb("verdicts").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "video_answer_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("video_answer_once_key").on(t.materialId, t.studentId, t.lessonId),
+    index("video_answer_student_id_idx").on(t.studentId),
+  ],
+);

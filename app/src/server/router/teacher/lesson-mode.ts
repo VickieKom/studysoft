@@ -7,13 +7,27 @@ import { keptStateSchema, lessonWordSchema, MAX_LESSON_WORDS } from "../../../do
 import { finishForm, finishLesson } from "../../lesson/finish";
 import { saveStageGameResult } from "../../library/game-results";
 import { BOOK_KINDS } from "../../../domain/textbook";
-import { lessonStage, MAX_NOTE_LENGTH, openLesson, saveLessonNote, saveLessonState } from "../../lesson/mode";
+import { lessonVideos, lessonStage, MAX_NOTE_LENGTH, openLesson, saveLessonNote, saveLessonState } from "../../lesson/mode";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 const range = z.object({ from: z.number().int(), to: z.number().int() }).strict();
 
 // What a lesson can show: the student's textbook and this teacher's library. Nothing in it is the teacher's alone.
+/** A task under review on the stage, keys included: the stage shows one only when the teacher says (#153, #328). */
+const stageTask = z
+  .object({
+    index: z.number().int(),
+    prompt: z.string(),
+    passage: z.string().nullable(),
+    answer: z.string().nullable(),
+    verdict: z.boolean().nullable(),
+    key: z.string().nullable(),
+    sentences: z.array(z.object({ answer: z.string().nullable(), key: z.string(), verdict: z.boolean() }).strict()).nullable(),
+    file: z.object({ kind: z.enum(["audio", "image"]), url: z.string().startsWith("/api/files/answers/") }).strict().nullable(),
+  })
+  .strict();
+
 const resources = z
   .object({
     books: z.array(z.object({ kind: z.enum(BOOK_KINDS), fileId: z.uuid(), pageCount: z.number().int() }).strict()),
@@ -44,20 +58,7 @@ const resources = z
           correct: z.number().int(),
           wrong: z.number().int(),
           pending: z.number().int(),
-          tasks: z.array(
-            z
-              .object({
-                index: z.number().int(),
-                prompt: z.string(),
-                passage: z.string().nullable(),
-                answer: z.string().nullable(),
-                verdict: z.boolean().nullable(),
-                key: z.string().nullable(),
-                sentences: z.array(z.object({ answer: z.string().nullable(), key: z.string(), verdict: z.boolean() }).strict()).nullable(),
-                file: z.object({ kind: z.enum(["audio", "image"]), url: z.string().startsWith("/api/files/answers/") }).strict().nullable(),
-              })
-              .strict(),
-          ),
+          tasks: z.array(stageTask),
         })
         .strict(),
     ),
@@ -104,6 +105,19 @@ export const lessonModeRouter = router({
     .output(z.object({ lessonId: z.uuid(), resources, kept: keptStateSchema }).strict())
     .query(async ({ ctx, input }) => {
       const found = await lessonStage(ctx.db, ctx.teacherId, input.lessonId);
+      if (!found) throw notFound();
+      return found;
+    }),
+
+  /**
+   * The video stages' tasks with the student's answers from this lesson
+   * (#328), asked again by the stage and the panel while a video stage is on.
+   */
+  videos: teacherProcedure
+    .input(z.object({ lessonId: z.uuid() }))
+    .output(z.array(z.object({ id: z.uuid(), title: z.string(), answered: z.boolean(), tasks: z.array(stageTask) }).strict()))
+    .query(async ({ ctx, input }) => {
+      const found = await lessonVideos(ctx.db, ctx.teacherId, input.lessonId);
       if (!found) throw notFound();
       return found;
     }),

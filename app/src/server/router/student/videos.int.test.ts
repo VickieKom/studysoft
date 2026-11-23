@@ -88,8 +88,8 @@ describe("videos opened to a student", () => {
     expect((await teacher.teacher.library.openedTo({ id: own })).students.map((s) => s.studentId)).toEqual([viewer.studentId]);
 
     expect(await viewer.student.student.videos.list()).toEqual([
-      { id: link, title: `Link clip ${run}`, fileUrl: null, link: LINK },
-      { id: own, title: `Own clip ${run}`, fileUrl: `/api/files/library/${own}`, link: null },
+      { id: link, title: `Link clip ${run}`, fileUrl: null, link: LINK, hasTasks: false },
+      { id: own, title: `Own clip ${run}`, fileUrl: `/api/files/library/${own}`, link: null, hasTasks: false },
     ]);
     expect(await viewer.student.student.videos.get({ id: own })).toMatchObject({ fileUrl: `/api/files/library/${own}` });
     expect((await fileOf(viewer.headers, own)).status).toBe(200);

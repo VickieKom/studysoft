@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { youTubeId } from "@/domain/library";
 
-type Video = { id: string; title: string; fileUrl: string | null; link: string | null };
+type Video = { id: string; title: string; fileUrl: string | null; link: string | null; hasTasks: boolean };
 
 const item = "flex rounded-task border border-border bg-accent-50 px-4 py-3 text-answer font-semibold text-accent-900";
 
 /**
  * «Видео» in the student's «Материалы урока» (#158, #241): the videos the teacher opened during
  * a lesson; nothing when there are none. An own file and a YouTube link (#325)
- * open their page and play there; any other link opens in a new tab, where
- * the platform does not control it.
+ * open their page and play there, and so does a video with tasks to answer
+ * under it (#327); any other link opens in a new tab, where the platform does
+ * not control it.
  */
 export function StudentVideos({ videos }: { videos: Video[] }) {
   if (videos.length === 0) return null;
@@ -21,7 +22,7 @@ export function StudentVideos({ videos }: { videos: Video[] }) {
       <ul className="flex flex-col gap-2">
         {videos.map((video) => (
           <li key={video.id}>
-            {video.fileUrl || (video.link && youTubeId(video.link)) ? (
+            {video.fileUrl || video.hasTasks || (video.link && youTubeId(video.link)) ? (
               <Link href={`/s/videos/${video.id}`} className={item}>
                 {video.title}
               </Link>
