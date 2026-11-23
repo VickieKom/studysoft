@@ -2,8 +2,9 @@
 // assessment (#252). The teacher uploads each with PUT to its own address
 // while the assessment is a draft and removes it with DELETE; both are kept
 // in the blob store and served at the same address to the teacher, and to
-// the child while the assessment is open to them in a lesson (#253): the
-// recording while plays are left. The speaking recording (#253) is made on
+// the child while the assessment is open to them in a lesson (#253). The
+// two plays of the recording are counted by «Слушать» and kept by the page;
+// the file itself is served while the assessment is open. The speaking recording (#253) is made on
 // the teacher's lesson panel, at most 5 minutes, while the approved
 // assessment is not ended, and is served to the teacher only. Everyone else
 // gets the same 404 as a missing file (architecture 8.1).

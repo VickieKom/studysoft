@@ -182,7 +182,12 @@ export async function startListening(db: Database, teacherId: string, studentId:
   return row ? row.plays : null;
 }
 
-/** Whether the child may still fetch the recording of «Аудирование»: open, and the plays not over the limit. */
+/**
+ * Whether the child may fetch the recording of «Аудирование»: while the
+ * assessment is open to them and not handed in. The two plays are counted by
+ * `startListening` and kept by the page, not here: a play fetches the file in
+ * byte ranges, any number of requests.
+ */
 export async function listeningOpenToChild(db: Database, teacherId: string, studentId: string, id: string, now: Date = new Date()): Promise<string | null> {
   const [row] = await db
     .select({ blob: assessment.listeningRecording })
@@ -192,7 +197,6 @@ export async function listeningOpenToChild(db: Database, teacherId: string, stud
         openToChild(teacherId, studentId, now),
         eq(assessment.id, id),
         isNull(assessment.submittedAt),
-        sql`${assessment.listeningPlays} <= ${MAX_LISTENING_PLAYS}`,
       ),
     );
   return row?.blob ?? null;

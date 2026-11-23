@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssessmentAnswers } from "@/domain/assessment-answers";
 import { type AssessmentSectionView, type AssessmentSkill, GAP, sectionLabel, TRUE_FALSE, TRUE_FALSE_LABELS } from "@/domain/assessment-format";
 import { Button } from "./button";
+import { answerQueue } from "./answer-queue";
 import { routerClient } from "./router-client";
 
 type ChildAssessment = {
@@ -77,27 +78,22 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
   const [submitted, setSubmitted] = useState(assessment.submitted);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // One saver for the page's life: answers in order, the failed ones kept to send again on «Сдать».
+  const [saver] = useState(() =>
+    answerQueue<AssessmentSkill>((answer) => routerClient.student.assessments.answer.mutate({ id: assessment.id, section: answer.skill, index: answer.index, value: answer.value }), {
+      saved: (key, answer) => {
+        setError(null);
+        // Kept on the server: no longer pending, unless a newer answer to the same question is.
+        writePending(assessment.id, (pending) => {
+          if (pending[key]?.value === answer.value) delete pending[key];
+        });
+      },
+      failed: () => setError("Не получилось сохранить ответ. Проверьте интернет"),
+    }),
+  );
   const typing = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; send: () => void }>>(new Map());
 
-  const send = useCallback(
-    (skill: AssessmentSkill, index: number, value: string | null) => {
-      const key = `${skill}:${index}`;
-      queue.current = queue.current
-        .then(() => routerClient.student.assessments.answer.mutate({ id: assessment.id, section: skill, index, value }))
-        .then(
-          () => {
-            setError(null);
-            // Kept on the server: no longer pending, unless a newer answer to the same question is.
-            writePending(assessment.id, (pending) => {
-              if (pending[key]?.value === value) delete pending[key];
-            });
-          },
-          () => setError("Не получилось сохранить ответ. Проверьте интернет"),
-        );
-    },
-    [assessment.id],
-  );
+  const send = useCallback((skill: AssessmentSkill, index: number, value: string | null) => saver.send({ skill, index, value }), [saver]);
 
   // After a reload the child comes back to the section they were on.
   useEffect(() => {
@@ -123,8 +119,8 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
       pending();
     }
     typing.current.clear();
-    await queue.current;
-  }, []);
+    await saver.settled();
+  }, [saver]);
 
   function answer(skill: AssessmentSkill, index: number, value: string | null, typed = false) {
     setAnswers((before) => withValue(before, skill, index, value));
@@ -161,6 +157,11 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     setBusy(true);
     try {
       await flush();
+      // What failed, or was left from before a reload, is sent again; nothing is submitted unsaved.
+      if (!(await saver.saveAll(Object.values(readPending(assessment.id))))) {
+        setError("Не все ответы сохранились. Проверьте интернет и нажмите «Сдать» ещё раз");
+        return;
+      }
       await routerClient.student.assessments.submit.mutate({ id: assessment.id });
       writePending(assessment.id, (pending) => {
         for (const key of Object.keys(pending)) delete pending[key];

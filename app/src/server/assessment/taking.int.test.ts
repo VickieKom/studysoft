@@ -180,7 +180,7 @@ describe("the child taking it", () => {
       await expect(child.student.assessments.answer({ id, ...wrong })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     }
 
-    // The recording: served while plays are left, two plays, then no more.
+    // The recording: served while open; two plays counted, then no more.
     expect((await get(id, "listening", headers)).status).toBe(200);
     expect(await child.student.assessments.play({ id })).toEqual({ playsLeft: 1 });
     expect(await child.student.assessments.play({ id })).toEqual({ playsLeft: 0 });
