@@ -152,7 +152,8 @@ export const videoTasksInput = {
     .record(z.string(), z.unknown())
     .describe(
       "The video's tasks as one homework in the format from get_homework_format: { version, title, tasks }, up to 20 tasks, " +
-        "text only — no pictures or recordings. For true / false use single_choice with the options «True» and «False».",
+        "text only — no pictures or recordings, and no voice or file answers: the child answers under the video in text. " +
+        "For true / false use single_choice with the options «True» and «False».",
     ),
 };
 

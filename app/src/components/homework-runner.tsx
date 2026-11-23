@@ -293,6 +293,28 @@ export function HomeworkRunner({ homeworkId, firstName, dueLabel, tasksLabel, ta
 }
 
 /**
+ * One task for the child to answer outside a homework (#327, a video's tasks):
+ * the same prompt, parts and controls, the answer kept by the caller. Text
+ * answers only: no recording or file is taken here.
+ */
+export function TaskToAnswer({ task, answer, onChange }: { task: StudentTask; answer: Answer | null; onChange: (answer: Answer | null) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="whitespace-pre-line text-answer font-bold">{task.prompt}</p>
+      {task.passage && <TaskPassage passage={task.passage} />}
+      {task.example && <TaskExampleLine example={task.example} />}
+      <TaskBody
+        task={task}
+        answer={answer as StudentAnswer | null}
+        onChange={(next) => onChange(next)}
+        upload={() => Promise.resolve("Здесь запись и файл не принимаются")}
+        onRecording={() => undefined}
+      />
+    </div>
+  );
+}
+
+/**
  * One task as the child will see it, for the teacher (#224): the same prompt,
  * parts and controls as in the homework, without the keys. She may try it;
  * nothing is saved and nothing is checked.
