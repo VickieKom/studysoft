@@ -270,7 +270,7 @@ test("a homework taken back before the survey is answered takes the survey with 
 });
 
 test("with no lessons in the period, the box says so", async ({ page }) => {
-  const idle = await createStudent(page, "Без уроков");
+  const idle = await createStudent(page, "Безопросная");
   await importDraft(page, idle.card);
   await page.getByRole("checkbox", { name: BOX }).check();
   await expect(page.getByRole("region", { name: BOX })).toContainText("уроков за период нет");
