@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { STARTING_BRIEF } from "../../../domain/brief";
 import { closeDb, db } from "../../db/client";
-import { clientRequestBrief, introBriefTemplate } from "../../db/schema";
+import { clientRequest, clientRequestBrief, introBriefTemplate } from "../../db/schema";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller } from "../index";
 
@@ -92,5 +92,36 @@ describe("a request's brief", () => {
     await teacher.teacher.requests.remove({ id });
     expect(await db().select({ id: clientRequestBrief.requestId }).from(clientRequestBrief).where(eq(clientRequestBrief.requestId, id))).toEqual([]);
     await expect(teacher.teacher.requests.brief({ id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("is not brought back by an autosave that waits on «Удалить заявку» in progress", async () => {
+    const id = await newRequest("Поздний автосейв");
+    const { questions } = await teacher.teacher.requests.brief({ id });
+    let locked!: () => void;
+    let release!: () => void;
+    const isLocked = new Promise<void>((resolve) => (locked = resolve));
+    const released = new Promise<void>((resolve) => (release = resolve));
+    // The erasure holds the request row, as deleteRequest's update does.
+    const erasing = db().transaction(async (tx) => {
+      await tx.update(clientRequest).set({ firstName: null, deletedAt: new Date() }).where(eq(clientRequest.id, id));
+      locked();
+      await released;
+      await tx.delete(clientRequestBrief).where(eq(clientRequestBrief.requestId, id));
+    });
+    await isLocked;
+
+    const saving = teacher.teacher.requests
+      .saveBrief({ id, questions, answers: { [questions[0]!.id]: { choices: [], note: "Слова семьи" } }, convenientTime: time })
+      .then(
+        () => "saved",
+        (error: unknown) => error,
+      );
+    const waiting = await Promise.race([saving, new Promise((resolve) => setTimeout(() => resolve("waiting"), 300))]);
+    expect(waiting).toBe("waiting");
+
+    release();
+    await erasing;
+    expect(await saving).toMatchObject({ code: "NOT_FOUND" });
+    expect(await db().select({ id: clientRequestBrief.requestId }).from(clientRequestBrief).where(eq(clientRequestBrief.requestId, id))).toEqual([]);
   });
 });

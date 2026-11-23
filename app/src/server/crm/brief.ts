@@ -70,22 +70,33 @@ export async function saveRequestBrief(
   requestId: string,
   brief: { questions: BriefQuestion[]; answers: Record<string, BriefAnswer>; convenientTime: ConvenientTime },
 ): Promise<"saved" | "not_found" | "invalid"> {
-  if (!(await ownRequest(database, teacherId, requestId))) return "not_found";
-  const [existing] = await database.select({ questions: clientRequestBrief.questions }).from(clientRequestBrief).where(eq(clientRequestBrief.requestId, requestId));
-  const questions = (existing?.questions as BriefQuestion[] | undefined) ?? brief.questions;
-  const byId = new Map(questions.map((q) => [q.id, q]));
-  const fits = Object.entries(brief.answers).every(([id, answer]) => {
-    const question = byId.get(id);
-    return question !== undefined && answer.choices.every((c) => question.options.includes(c));
-  });
-  if (!fits) return "invalid";
-  await database
-    .insert(clientRequestBrief)
-    .values({ requestId, teacherId, questions, answers: brief.answers, convenientTime: brief.convenientTime })
-    .onConflictDoUpdate({
-      target: clientRequestBrief.requestId,
-      set: { answers: brief.answers, convenientTime: brief.convenientTime, updatedAt: sql`now()` },
-      setWhere: eq(clientRequestBrief.teacherId, teacherId),
+  // One transaction that locks the request row: «Удалить заявку» updates the
+  // same row, so an autosave either lands before the erasure (and the brief
+  // goes with it) or sees the request deleted — never brings the family's
+  // words back after it.
+  return database.transaction(async (tx) => {
+    const [own] = await tx
+      .select({ id: clientRequest.id })
+      .from(clientRequest)
+      .where(and(eq(clientRequest.id, requestId), eq(clientRequest.teacherId, teacherId), isNull(clientRequest.deletedAt)))
+      .for("update");
+    if (!own) return "not_found" as const;
+    const [existing] = await tx.select({ questions: clientRequestBrief.questions }).from(clientRequestBrief).where(eq(clientRequestBrief.requestId, requestId));
+    const questions = (existing?.questions as BriefQuestion[] | undefined) ?? brief.questions;
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    const fits = Object.entries(brief.answers).every(([id, answer]) => {
+      const question = byId.get(id);
+      return question !== undefined && answer.choices.every((c) => question.options.includes(c));
     });
-  return "saved";
+    if (!fits) return "invalid" as const;
+    await tx
+      .insert(clientRequestBrief)
+      .values({ requestId, teacherId, questions, answers: brief.answers, convenientTime: brief.convenientTime })
+      .onConflictDoUpdate({
+        target: clientRequestBrief.requestId,
+        set: { answers: brief.answers, convenientTime: brief.convenientTime, updatedAt: sql`now()` },
+        setWhere: eq(clientRequestBrief.teacherId, teacherId),
+      });
+    return "saved" as const;
+  });
 }

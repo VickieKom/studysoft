@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type BriefAnswer, type BriefQuestion, type ConvenientTime, MAX_BRIEF_NOTE, MAX_TIME_RANGES, WEEKDAYS } from "@/domain/brief";
 import { TIME_ZONES } from "@/domain/student";
 import { Button } from "./button";
@@ -10,6 +10,9 @@ type Brief = { questions: BriefQuestion[]; answers: Record<string, BriefAnswer>;
 
 const field = "h-10 rounded-control border border-border bg-bg px-3";
 const empty: BriefAnswer = { choices: [], note: "" };
+
+/** A failed save is tried again after this pause. */
+const RETRY_MS = 5000;
 
 /**
  * «Бриф» on a request (#339), filled in during the intro: each question of
@@ -28,7 +31,8 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
   const saving = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function flush() {
+  // Stable for the page: it reads only refs, so the unmount below can call it.
+  const flush = useCallback(async function send(): Promise<void> {
     if (saving.current || !dirty.current) return;
     saving.current = true;
     dirty.current = false;
@@ -36,13 +40,17 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
     try {
       await routerClient.teacher.requests.saveBrief.mutate({ id: requestId, ...latest.current });
       saving.current = false;
-      if (dirty.current) void flush();
+      if (dirty.current) void send();
       else setStatus("saved");
     } catch {
+      // Not saved: still to send, tried again shortly rather than on the next change only.
       saving.current = false;
+      dirty.current = true;
       setStatus("failed");
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => void send(), RETRY_MS);
     }
-  }
+  }, [requestId]);
 
   function change(next: Brief, now = true) {
     latest.current = next;
@@ -53,9 +61,14 @@ export function RequestBrief({ requestId, brief: loaded }: { requestId: string; 
     timer.current = setTimeout(() => void flush(), now ? 0 : 500);
   }
 
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  // Leaving the page within the pause still sends the last note.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      void flush();
+    },
+    [flush],
+  );
 
   // Shown from the state; changed from the latest, so two quick changes never drop one.
   const answer = (id: string) => brief.answers[id] ?? empty;
