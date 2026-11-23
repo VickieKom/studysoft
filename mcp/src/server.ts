@@ -9,6 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createPlatform } from "./platform";
 import {
   createTools,
+  assessmentDraftInput,
   draftInput,
   gameDraftInput,
   lessonIdInput,
@@ -20,6 +21,8 @@ import {
   textbookIdInput,
   textInput,
   upcomingInput,
+  videoIdInput,
+  videoTasksInput,
   warmupDraftInput,
   wordDraftsInput,
 } from "./tools";
@@ -91,10 +94,26 @@ server.registerTool(
     description:
       "The homework format the platform accepts, with its version: task types, keys, topic, skill, source; " +
       "the game result format, with which a game reports the student's answers to the platform; " +
-      "and the game words format, in which a game template gets a student's words. " +
-      "Read it before writing a homework or making a game.",
+      "the game words format, in which a game template gets a student's words; " +
+      "and the assessment format of the monthly skills assessment. " +
+      "Read it before writing a homework or an assessment, or making a game.",
   },
   () => tools.getHomeworkFormat(),
+);
+
+server.registerTool(
+  "save_assessment_draft",
+  {
+    title: "Save an assessment draft",
+    description:
+      "Saves the month's skills assessment for a student as a draft in «Замеры» on their card, marked «от ассистента», " +
+      "in the assessment format (get_homework_format). Draft it from assessmentPeriod in get_student_context: the textbook " +
+      "lessons finished and the words added since the last approved assessment, at the student's level. Saving again replaces your " +
+      "draft until the teacher acts on it; after that a new draft is made and hers is kept. Only the teacher uploads the " +
+      "recording and the picture, and approves. An invalid assessment is refused with the section, question and field to fix.",
+    inputSchema: assessmentDraftInput,
+  },
+  (input) => tools.saveAssessmentDraft(input),
 );
 
 server.registerTool(
@@ -254,6 +273,31 @@ server.registerTool(
     inputSchema: lessonIdInput,
   },
   (input) => tools.listLessonMaterials(input),
+);
+
+server.registerTool(
+  "read_library_video",
+  {
+    title: "A library video with its link and transcript",
+    description:
+      "A video of the teacher's library: its title, its link (none for her own file) and the transcript she typed in «Расшифровка». " +
+      "Draft the video's tasks from the transcript; without one, open the link yourself if you can, or ask her to paste the text.",
+    inputSchema: videoIdInput,
+  },
+  (input) => tools.readLibraryVideo(input),
+);
+
+server.registerTool(
+  "save_video_tasks_draft",
+  {
+    title: "Save a video's tasks as a draft",
+    description:
+      "Saves tasks for a library video, in the homework format, as your draft in «Задания к видео» on the video's page. " +
+      "Saved again, it replaces your draft while the teacher has done nothing to it; once she has removed a task, the save is " +
+      "refused. The confirmed tasks stay until she confirms the draft. Only the teacher confirms.",
+    inputSchema: videoTasksInput,
+  },
+  (input) => tools.saveVideoTasksDraft(input),
 );
 
 server.registerTool(

@@ -38,6 +38,8 @@ export type Material = Omit<MaterialTags, "topic"> & {
   textbookLessonId: string | null;
   /** A video link's address; null for every other material. */
   url: string | null;
+  /** A video's transcript (#326); null when none was typed, and for every other material. */
+  transcript: string | null;
   /** Whether a file is served for it: a game's page, a warm-up's picture or an own video. */
   hasFile: boolean;
   /** Saved by the assistant and not yet added to the library (#120). */
@@ -58,6 +60,7 @@ const columns = {
   textbookId: libraryMaterial.textbookId,
   textbookLessonId: libraryMaterial.textbookLessonId,
   url: libraryMaterial.url,
+  transcript: libraryMaterial.transcript,
   draft: libraryMaterial.draft,
   blobId: libraryMaterial.blobId,
   createdAt: libraryMaterial.createdAt,
@@ -198,11 +201,12 @@ export async function createVideoLink(
   teacherId: string,
   tags: MaterialTags,
   url: string,
+  transcript: string | null = null,
 ): Promise<{ id: string } | "not_a_link"> {
   if (!isVideoLink(url)) return "not_a_link";
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "video", ...tagColumns(tags), url })
+    .values({ teacherId, kind: "video", ...tagColumns(tags), url, transcript })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createVideoLink: insert returned no row");
   return row;
@@ -219,12 +223,13 @@ export async function createVideoFile(
   teacherId: string,
   tags: MaterialTags,
   blobId: string,
+  transcript: string | null = null,
 ): Promise<{ id: string } | "no_file"> {
   const [file] = await db.select({ teacherId: blob.teacherId, contentType: blob.contentType }).from(blob).where(eq(blob.id, blobId));
   if (!file || file.teacherId !== teacherId || !file.contentType.startsWith("video/")) return "no_file";
   const [row] = await db
     .insert(libraryMaterial)
-    .values({ teacherId, kind: "video", ...tagColumns(tags), blobId })
+    .values({ teacherId, kind: "video", ...tagColumns(tags), blobId, transcript })
     .returning({ id: libraryMaterial.id });
   if (!row) throw new Error("createVideoFile: insert returned no row");
   return row;
@@ -364,9 +369,9 @@ export async function findMaterial(db: Database, teacherId: string, id: string):
 
 /**
  * What an edit may change besides the tags: whether a game is also a
- * warm-up, and a questions warm-up's questions (#116).
+ * warm-up, a questions warm-up's questions (#116), and a video's transcript (#326).
  */
-export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: boolean; link?: LessonLink | null; questions?: string[] };
+export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: boolean; link?: LessonLink | null; questions?: string[]; transcript?: string | null };
 
 /**
  * Renames and retags a material of this teacher; false when there is none.
@@ -375,7 +380,7 @@ export type MaterialChanges = MaterialTags & { warmup?: boolean; vocabulary?: bo
  * does not fit the material is not applied to it.
  */
 export async function updateMaterial(db: Database, teacherId: string, id: string, changes: MaterialChanges): Promise<boolean> {
-  const { warmup, vocabulary, link, questions, ...tags } = changes;
+  const { warmup, vocabulary, link, questions, transcript, ...tags } = changes;
   const own = and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId));
   return db.transaction(async (tx) => {
     // Her edit of a draft keeps the assistant from replacing it (#120).
@@ -387,6 +392,9 @@ export async function updateMaterial(db: Database, teacherId: string, id: string
         .update(libraryMaterial)
         .set({ ...(warmup !== undefined ? { warmup } : {}), ...(vocabulary !== undefined ? { vocabulary } : {}), ...(link !== undefined ? linkColumns(link) : {}) })
         .where(and(own, eq(libraryMaterial.kind, "game")));
+    }
+    if (transcript !== undefined) {
+      await tx.update(libraryMaterial).set({ transcript }).where(and(own, eq(libraryMaterial.kind, "video")));
     }
     if (questions !== undefined) {
       await tx

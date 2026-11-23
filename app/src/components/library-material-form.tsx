@@ -10,6 +10,7 @@ import {
   MAX_PICTURE_BYTES,
   MAX_TOPIC_LENGTH,
   MAX_TOPICS,
+  MAX_TRANSCRIPT_LENGTH,
   MAX_URL_LENGTH,
   MAX_VIDEO_BYTES,
   type MaterialKind,
@@ -52,6 +53,8 @@ export type EditedMaterial = Tags & {
   /** The students a game is made for (#292). */
   students: { id: string; name: string }[];
   questions: string[] | null;
+  /** A video's «Расшифровка» (#326). */
+  transcript: string | null;
 };
 type LinkableTextbook = { id: string; title: string; lessons: { id: string; label: string }[] };
 
@@ -101,6 +104,7 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [questions, setQuestions] = useState((material?.questions ?? []).join("\n"));
+  const [transcript, setTranscript] = useState(material?.transcript ?? "");
   const [warmup, setWarmup] = useState(material?.warmup ?? false);
   // A game template (#282): the platform sends it a student's words.
   const [vocabulary, setVocabulary] = useState(material?.vocabulary ?? false);
@@ -152,6 +156,7 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
           ...tags,
           ...(material.kind === "game" ? { warmup, vocabulary, ...link, studentIds: [...marked] } : {}),
           ...(material.questions !== null ? { questions: toQuestions(questions) } : {}),
+          ...(material.kind === "video" ? { transcript } : {}),
         });
         router.push(`/teacher/library/${material.id}`);
       } else if (kind === "game") {
@@ -159,13 +164,13 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
         await routerClient.teacher.library.addGame.mutate({ ...tags, html: await file.text(), vocabulary, ...link, studentIds: [...marked] });
         router.push("/teacher/library?type=game");
       } else if (kind === "video" && source === "link") {
-        await routerClient.teacher.library.addVideoLink.mutate({ ...tags, url });
+        await routerClient.teacher.library.addVideoLink.mutate({ ...tags, url, transcript });
         router.push("/teacher/library?type=video");
       } else if (kind === "video") {
         if (!file) throw new Error("no file");
         setUploading(true);
         const uploaded = await uploadVideo(file);
-        await routerClient.teacher.library.addVideoFile.mutate({ ...tags, file: uploaded });
+        await routerClient.teacher.library.addVideoFile.mutate({ ...tags, file: uploaded, transcript });
         router.push("/teacher/library?type=video");
       } else {
         if (format === "questions") {
@@ -292,6 +297,19 @@ export function LibraryMaterialForm({ material }: { material?: EditedMaterial })
             </Labelled>
           )}
         </>
+      )}
+      {(material ? material.kind === "video" : kind === "video") && (
+        <Labelled id="material-transcript" label="Расшифровка">
+          <textarea
+            id="material-transcript"
+            rows={6}
+            maxLength={MAX_TRANSCRIPT_LENGTH}
+            value={transcript}
+            onChange={(event) => setTranscript(event.target.value)}
+            placeholder="Текст видео: по нему ассистент составит задания"
+            className="rounded-control border border-border bg-bg px-3 py-2"
+          />
+        </Labelled>
       )}
       {editsQuestions && (
         <Labelled id="material-questions" label="Вопросы">

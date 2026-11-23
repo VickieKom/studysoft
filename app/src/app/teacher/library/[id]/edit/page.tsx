@@ -44,6 +44,7 @@ export default async function EditMaterialPage({ params }: Props) {
           textbookLesson: material.textbookLesson,
           students: material.students,
           questions: material.questions,
+          transcript: material.transcript,
         }}
       />
     </main>
