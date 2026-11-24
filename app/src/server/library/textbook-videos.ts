@@ -7,7 +7,7 @@
 // ends the access — with the picked tasks copied as they are then. The student
 // watches it among the lesson's videos and answers its tasks as under a
 // library video (#327); the answers go to `video_answer` under the file's id.
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Task } from "../../domain/homework-format";
 import type { LessonPlan } from "../../domain/lesson-plan";
 import type { TextbookStructure } from "../../domain/textbook-structure";
@@ -130,7 +130,12 @@ export async function openedFromLesson(database: Pick<Database, "select">, teach
 
 export type OpenTextbookVideo = { id: string; title: string; lessonId: string; tasks: Task[] };
 
-/** The textbook videos open to this student at `now`, by name; a video open from two lessons is the one of the lesson that started last. */
+/**
+ * The textbook videos open to this student at `now`, by name. A video open
+ * from two lessons is the one of the lesson that started last by `now` — the
+ * lesson going on before a later one opened in its preparation (#382) — or,
+ * none started yet, of the one that starts first.
+ */
 export async function openTextbookVideos(database: Pick<Database, "select">, teacherId: string, studentId: string, now: Date = new Date()): Promise<OpenTextbookVideo[]> {
   const rows = await database
     .select({ id: textbookVideoAccess.fileId, title: textbookFile.name, lessonId: textbookVideoAccess.lessonId, tasks: textbookVideoAccess.tasks })
@@ -138,7 +143,11 @@ export async function openTextbookVideos(database: Pick<Database, "select">, tea
     .innerJoin(textbookFile, eq(textbookFile.id, textbookVideoAccess.fileId))
     .innerJoin(lesson, eq(lesson.id, textbookVideoAccess.lessonId))
     .where(and(eq(textbookVideoAccess.teacherId, teacherId), eq(textbookVideoAccess.studentId, studentId), stillOpen(now)))
-    .orderBy(desc(lesson.startsAt));
+    .orderBy(
+      sql`${lesson.startsAt} > ${now.toISOString()}`,
+      sql`CASE WHEN ${lesson.startsAt} <= ${now.toISOString()} THEN ${lesson.startsAt} END DESC NULLS LAST`,
+      asc(lesson.startsAt),
+    );
   const seen = new Set<string>();
   return rows
     .filter((r) => !seen.has(r.id) && seen.add(r.id))

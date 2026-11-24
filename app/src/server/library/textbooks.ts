@@ -73,6 +73,10 @@ export async function createTextbook(db: Database, teacherId: string, input: New
   if (input.videos.length > MAX_TEXTBOOK_VIDEOS) return { error: `Не больше ${MAX_TEXTBOOK_VIDEOS} видео` };
   const ids = [...input.books.map((b) => b.file), ...input.tracks.map((t) => t.file), ...input.videos.map((v) => v.file)];
   if (new Set(ids).size !== ids.length) return { error: "Один и тот же файл добавлен дважды" };
+  // The structure marks a video on its lesson by name (#382): two of one name — «clip.mp4» and «clip.mov» — could not be told apart.
+  const videoNames = input.videos.map((v) => v.name);
+  const twice = [...new Set(videoNames.filter((name, i) => videoNames.indexOf(name) !== i))];
+  if (twice.length > 0) return { error: `Два видео с одним названием: ${twice.map((n) => `«${n}»`).join(", ")}. Переименуйте одно из них` };
 
   const created = await db.transaction(async (tx) => {
     const files = await tx
