@@ -96,6 +96,20 @@ const audio = z
   })
   .refine((value) => (audioDataUrl(value)?.bytes ?? 0) <= MAX_AUDIO_BYTES, { error: "запись больше 10 МБ" });
 
+/**
+ * The video a task is about (#330): a library video of the teacher's, by its
+ * id, or a link. Tasks about one video each carry it, as a shared recording
+ * does; the student sees it above each of them.
+ */
+const video = z.union([
+  // Kept in lower case, so that the file's permission check finds it in the stored homework.
+  z.object({ library: z.uuid().transform((id) => id.toLowerCase()) }).strict(),
+  z
+    .object({ url: z.url({ protocol: /^https?$/, error: "видео — ссылка http или https" }).max(2000) })
+    .strict(),
+]);
+export type TaskVideo = z.infer<typeof video>;
+
 const common = {
   prompt: text,
   // A reading text of its own (#131): a passage, a blog post, a dialogue, notes; shown in regular type with its lines.
@@ -109,6 +123,8 @@ const common = {
   image: image.optional(),
   // The vocabulary words the task asks (#281), set by «Из словаря»; never in the student's view.
   vocabularyWords: z.array(z.uuid()).min(1).max(10).optional(),
+  // The video the task is about (#330), shown above it.
+  video: video.optional(),
 };
 
 /** The most pictures one answer option holds (#129). */
@@ -526,7 +542,16 @@ export type StudentTask = (
   example?: TaskExample;
   /** The address of the task's recording (#127), served the same way. */
   audio?: string;
+  /** The video the task is about (#330), as the server resolves it. */
+  video?: StudentTaskVideo;
 };
+
+/**
+ * A task's video as the student gets it (#330): a library video's own file by
+ * the address it is served at, a YouTube link as its embedded player (#325),
+ * or any other link to open in a new tab.
+ */
+export type StudentTaskVideo = { title: string; file?: string; embed?: string; link?: string };
 
 /** A body cell as the student gets it (#186): its text, or a blank to fill, without the key. */
 export type StudentTableCell = string | { blank: "text" | "mark" };

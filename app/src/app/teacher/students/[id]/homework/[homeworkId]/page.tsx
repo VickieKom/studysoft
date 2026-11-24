@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { HomeworkDraft } from "@/components/homework-draft";
 import { HomeworkPublish } from "@/components/homework-publish";
 import { HomeworkTaskPreview } from "@/components/homework-task-preview";
+import { TaskVideo } from "@/components/task-video";
+import type { StudentTaskVideo } from "@/domain/homework-format";
+import { startsVideo } from "@/domain/homework-video";
 import { HOMEWORK_STATUS_LABELS } from "@/domain/homework";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../../../caller";
@@ -32,6 +35,15 @@ export default async function HomeworkPage({ params }: Props) {
     throw error;
   }
   if (homework.studentId !== student.id) notFound();
+  // The videos the tasks are about (#330), as the student will watch them, and the library's to add.
+  const taskVideos = await caller.teacher.homework.taskVideos({ id: homeworkId });
+  const addable = homework.status === "draft" ? await caller.teacher.homework.videosToAdd() : [];
+  const libraryVideos: Record<string, StudentTaskVideo> = {};
+  homework.tasks.forEach((task, index) => {
+    const video = taskVideos[index];
+    if (task.video && "library" in task.video && video) libraryVideos[task.video.library] = video;
+  });
+  for (const added of addable) if (added.video) libraryVideos[added.id] = added.video;
   const survey = homework.status === "draft" ? await caller.teacher.homework.survey({ id: homework.id }) : null;
 
   const heading = (
@@ -51,7 +63,15 @@ export default async function HomeworkPage({ params }: Props) {
         </Link>
       </p>
       {homework.status === "draft" ? (
-        <HomeworkDraft homeworkId={homework.id} tasks={homework.tasks} revision={homework.revision} askFeedback={homework.askFeedback} survey={survey}>
+        <HomeworkDraft
+          homeworkId={homework.id}
+          tasks={homework.tasks}
+          revision={homework.revision}
+          askFeedback={homework.askFeedback}
+          libraryVideos={libraryVideos}
+          addableVideos={addable.map(({ id, title }) => ({ id, title }))}
+          survey={survey}
+        >
           {heading}
         </HomeworkDraft>
       ) : (
@@ -67,7 +87,8 @@ export default async function HomeworkPage({ params }: Props) {
           </header>
           <ol className="flex flex-col gap-4">
             {homework.tasks.map((task, index) => (
-              <li key={index} className="rounded-card border border-border p-4">
+              <li key={index} className="flex flex-col gap-3 rounded-card border border-border p-4">
+                {startsVideo(homework.tasks, index) && taskVideos[index] && <TaskVideo video={taskVideos[index]} />}
                 <HomeworkTaskPreview task={task} number={index + 1} homeworkId={homework.id} />
               </li>
             ))}
