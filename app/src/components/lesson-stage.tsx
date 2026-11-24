@@ -379,21 +379,36 @@ function StageGame({
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // Results posted and not saved yet: closing the stage window asks first, so a result is not lost unsaid (#369).
+  const unsaved = useRef(0);
   // A game template gets the lesson's student's words (#282); for any other game the server says not found and nothing is sent.
   useGameWords(frame, { kind: "stage", lessonId, materialId });
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow || !looksLikeGameResult(event.data)) return;
       const result: unknown = event.data;
+      unsaved.current += 1;
       queue.current = queue.current.then(() =>
-        routerClient.teacher.lessonMode.saveGameResult.mutate({ lessonId, materialId, result }).then(
-          () => onResult(true),
-          () => onResult(false),
-        ),
+        routerClient.teacher.lessonMode.saveGameResult
+          .mutate({ lessonId, materialId, result })
+          .then(
+            () => onResult(true),
+            () => onResult(false),
+          )
+          .finally(() => {
+            unsaved.current -= 1;
+          }),
       );
     }
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (unsaved.current > 0) event.preventDefault();
+    }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
   }, [lessonId, materialId, onResult]);
 
   return (
