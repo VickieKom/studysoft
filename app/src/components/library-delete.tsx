@@ -17,8 +17,14 @@ export function LibraryDelete({ id }: { id: string }) {
       await routerClient.teacher.library.remove.mutate({ id });
       router.push("/teacher/library");
       router.refresh();
-    } catch {
-      setError("Не получилось удалить. Обновите страницу и попробуйте ещё раз");
+    } catch (cause) {
+      const code = (cause as { data?: { code?: string } } | null)?.data?.code;
+      // A video a homework uses is refused with the homework named (#330).
+      setError(
+        code === "CONFLICT" && cause instanceof Error
+          ? cause.message
+          : "Не получилось удалить. Обновите страницу и попробуйте ещё раз",
+      );
       setPending(false);
     }
   }
