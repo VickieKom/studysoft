@@ -5,19 +5,23 @@
 // newest one «Фидбэк» showed her (product owner, 2026-11-24: seen once she
 // scrolls to it; answers before the release count as seen). The teacher's
 // only — no student or parent procedure reads it.
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   type FunAnswer,
   RATED_MATERIAL_KINDS,
   type Rated,
   type RatedMaterialKind,
   rateMaterialKinds,
+  rateMehKinds,
   rateTaskKinds,
   rateTopics,
 } from "../../domain/feedback-rating";
 import type { ALL_KINDS_ANSWER } from "../../domain/homework";
 import type { HomeworkDocument, TaskType } from "../../domain/homework-format";
-import { BOTH_FUN, BOTH_MEH, type SurveyQuestion } from "../../domain/survey";
+import { BOTH_FUN, BOTH_MEH, CLARITY_FACES, type SurveyQuestion } from "../../domain/survey";
+
+/** «пока путаюсь»: a topic the child finds hard. */
+const STRUGGLING = CLARITY_FACES[2];
 import type { Database } from "../db/client";
 import { homework, homeworkFeedback, homeworkSurvey, libraryMaterial, student } from "../db/schema";
 import { taskKinds } from "./feedback";
@@ -30,6 +34,15 @@ export type FeedbackRating = {
 
 /** The answers of these students (all of the teacher's when `studentIds` is null), as the ratings count them. */
 async function ratingOf(database: Database, teacherId: string, studentIds: string[] | null): Promise<FeedbackRating> {
+  return (await ratingWithPairs(database, teacherId, studentIds)).rating;
+}
+
+/** The ratings, and the survey's pairs by kind as the child answered them. */
+async function ratingWithPairs(
+  database: Database,
+  teacherId: string,
+  studentIds: string[] | null,
+): Promise<{ rating: FeedbackRating; funAnswers: FunAnswer[] }> {
   const whose = <T extends typeof homeworkFeedback | typeof homeworkSurvey>(table: T) =>
     studentIds ? inArray(table.studentId, studentIds) : undefined;
   const mini = await database
@@ -70,13 +83,14 @@ async function ratingOf(database: Database, teacherId: string, studentIds: strin
     b: kindOf.get(f.b) ?? null,
     picked: f.answer === BOTH_FUN ? "both" : f.answer === BOTH_MEH ? "neither" : f.answer === f.titles[0] ? "a" : "b",
   }));
-  return {
+  const rating = {
     tasks: rateTaskKinds(
       mini.map((m) => ({ answer: m.answer as TaskType | typeof ALL_KINDS_ANSWER, kinds: taskKinds(m.document as HomeworkDocument) })),
     ),
     materials: rateMaterialKinds(funAnswers),
     topics: rateTopics(topics),
   };
+  return { rating, funAnswers };
 }
 
 /** «Что заходит» for one student of this teacher. */
@@ -140,4 +154,43 @@ export async function studentsWithNewFeedback(database: Database, teacherId: str
       ),
     )
     .orderBy(student.firstName);
+}
+
+/** At most this many «А ещё я хочу…» texts go to the assistant, the newest first. */
+export const CONTEXT_WISHES = 5;
+
+/**
+ * The child's feedback for the assistant's student context (#335): «что
+ * заходит» as the card rates it, the kinds in pairs answered «Оба так себе», the topics whose latest «Насколько понятно»
+ * is «пока путаюсь», and the latest «А ещё я хочу…» texts.
+ */
+export async function feedbackForAssistant(database: Database, teacherId: string, studentId: string) {
+  const { rating, funAnswers } = await ratingWithPairs(database, teacherId, [studentId]);
+  const surveys = await database
+    .select({ questions: homeworkSurvey.questions, answers: homeworkSurvey.answers })
+    .from(homeworkSurvey)
+    .where(and(eq(homeworkSurvey.teacherId, teacherId), eq(homeworkSurvey.studentId, studentId), eq(homeworkSurvey.status, "answered")))
+    .orderBy(desc(homeworkSurvey.answeredAt));
+  const latestClarity = new Map<string, string>();
+  const wishes: string[] = [];
+  for (const row of surveys) {
+    const questions = row.questions as SurveyQuestion[];
+    const answers = (row.answers as (string | null)[] | null) ?? [];
+    questions.forEach((q, i) => {
+      const answer = answers[i];
+      if (!answer) return;
+      // Newest first: the first answer met for a topic is its latest.
+      if (q.kind === "clear" && !latestClarity.has(q.topic)) latestClarity.set(q.topic, answer);
+      if (q.kind === "wish" && wishes.length < CONTEXT_WISHES) wishes.push(answer);
+    });
+  }
+  return {
+    lessonMaterials: rating.materials.map((r) => ({ kind: r.key, chosen: r.chosen, of: r.of })),
+    // «Оба так себе» names no kind, so the ratings leave it out; the assistant gets it as its own list.
+    lessonMaterialsMeh: rateMehKinds(funAnswers).map((r) => ({ kind: r.key, meh: r.meh, of: r.of })),
+    homeworkTasks: rating.tasks.map((r) => ({ kind: r.key, chosen: r.chosen, of: r.of })),
+    topics: rating.topics,
+    struggling: [...latestClarity].filter(([, answer]) => answer === STRUGGLING).map(([topic]) => topic),
+    wishes,
+  };
 }

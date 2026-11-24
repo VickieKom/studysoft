@@ -45,6 +45,24 @@ export function rateMaterialKinds(answers: FunAnswer[]): Rated<RatedMaterialKind
   return byChosen([...chosen].map(([key, n]) => ({ key, chosen: n, of: answers.length })));
 }
 
+/**
+ * For the assistant (#335): the lesson materials' kinds in pairs the child
+ * answered «Оба так себе», with how many such pairs and how many pairs the
+ * kind was in; the most such first. A kind never in such a pair is left out.
+ */
+export function rateMehKinds(answers: FunAnswer[]): { key: RatedMaterialKind; meh: number; of: number }[] {
+  const meh = new Map<RatedMaterialKind, number>();
+  const of = new Map<RatedMaterialKind, number>();
+  for (const { a, b, picked } of answers) {
+    for (const kind of new Set([a, b])) {
+      if (!kind) continue;
+      of.set(kind, (of.get(kind) ?? 0) + 1);
+      if (picked === "neither") meh.set(kind, (meh.get(kind) ?? 0) + 1);
+    }
+  }
+  return [...meh].map(([key, n]) => ({ key, meh: n, of: of.get(key)! })).sort((x, y) => y.meh - x.meh || x.key.localeCompare(y.key));
+}
+
 /** The topics «Про что хочется ещё?» chose, the most chosen first. */
 export function rateTopics(chosen: string[]): { topic: string; chosen: number }[] {
   const counts = new Map<string, number>();

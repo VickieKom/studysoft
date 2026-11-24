@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { likedMost, newestAnswer, rateMaterialKinds, rateTaskKinds, rateTopics, ratedLine, splitFeedback } from "./feedback-rating";
+import { likedMost, newestAnswer, rateMaterialKinds, rateMehKinds, rateTaskKinds, rateTopics, ratedLine, splitFeedback } from "./feedback-rating";
 
 // «Что заходит» (#333): two ratings and the topics, «3 из 3» chosen in three answers of three.
 
@@ -68,5 +68,20 @@ describe("what «Фидбэк» shows", () => {
   it("is seen up to the newest answer it shows", () => {
     expect(newestAnswer([day(9), day(1), day(3)])).toBe(day(1).answeredAt);
     expect(newestAnswer([])).toBeNull();
+  });
+});
+
+describe("the kinds of «Оба так себе», for the assistant", () => {
+  it("counts each kind of a pair answered so, of the pairs it was in, a kind never so left out", () => {
+    expect(
+      rateMehKinds([
+        { a: "game", b: "video", picked: "neither" },
+        { a: "game", b: "warmup", picked: "a" },
+        { a: "video", b: "video", picked: "neither" },
+      ]),
+    ).toEqual([
+      { key: "video", meh: 2, of: 2 },
+      { key: "game", meh: 1, of: 2 },
+    ]);
   });
 });
