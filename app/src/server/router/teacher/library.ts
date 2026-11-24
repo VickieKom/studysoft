@@ -435,7 +435,7 @@ export const libraryRouter = router({
       if (removed === "not_found") throw notFound();
       if (removed !== "deleted") {
         const used = removed.usedBy.map((h) => `«${h.title}» (${h.student})`).join(", ");
-        throw new TRPCError({ code: "CONFLICT", message: `Видео есть в домашке: ${used}. Уберите его из домашки, потом удаляйте` });
+        throw new TRPCError({ code: "CONFLICT", message: `Видео есть в домашке: ${used}. Уберите его из заданий (опубликованную домашку сначала снимите с публикации), потом удаляйте` });
       }
       return { id: input.id };
     }),

@@ -16,7 +16,7 @@ import {
   unpublishHomework,
   updateDraftTasks,
 } from "../../homework/homework";
-import { studentTaskVideos, taskVideoErrors, videosToAdd, videoTasksForHomework } from "../../homework/videos";
+import { MissingVideoError, studentTaskVideos, taskVideoErrors, videosToAdd, videoTasksForHomework } from "../../homework/videos";
 import { taskVideoSchema } from "../../../domain/student-task-schema";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -53,6 +53,16 @@ const summary = z.object({
 // Room for three or four recordings of up to 10 MB with their pictures, as base64 (#127).
 const MAX_IMPORT_LENGTH = 40_000_000;
 
+/** A library video deleted between the check and the save (#330): refused as the check refuses it. */
+async function refusingMissingVideo<T>(save: () => Promise<T>): Promise<T> {
+  try {
+    return await save();
+  } catch (error) {
+    if (error instanceof MissingVideoError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+    throw error;
+  }
+}
+
 export const homeworkRouter = router({
   /** Validates the pasted JSON and saves it as a draft; the message names the task and the field. */
   import: teacherProcedure
@@ -67,7 +77,7 @@ export const homeworkRouter = router({
       // Pictures arrive as data URLs only: a pasted reference to a stored file is refused.
       const stored = await storeTaskFiles(ctx.db, ctx.teacherId, parsed.homework, new Set());
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
-      return { id: await importDraft(ctx.db, ctx.teacherId, input.studentId, stored.homework) };
+      return { id: await refusingMissingVideo(() => importDraft(ctx.db, ctx.teacherId, input.studentId, stored.homework)) };
     }),
 
   list: teacherProcedure
@@ -117,7 +127,7 @@ export const homeworkRouter = router({
       const homework = { ...checked.homework, tasks: withKnownWords(checked.homework.tasks, known) };
       const stored = await storeTaskFiles(ctx.db, ctx.teacherId, homework, keep);
       if (!stored.ok) throw new TRPCError({ code: "BAD_REQUEST", message: stored.errors.join("\n") });
-      const saved = await updateDraftTasks(ctx.db, ctx.teacherId, input.id, input.revision, stored.homework);
+      const saved = await refusingMissingVideo(() => updateDraftTasks(ctx.db, ctx.teacherId, input.id, input.revision, stored.homework));
       if (saved === "not_found") throw notFound();
       if (saved === "changed") throw changed();
       return { tasks: stored.homework.tasks, revision: saved.revision };

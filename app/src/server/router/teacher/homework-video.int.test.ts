@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, db } from "../../db/client";
-import { homework as homeworkTable } from "../../db/schema";
+import { homework as homeworkTable, libraryMaterial, student as studentTable } from "../../db/schema";
+import type { HomeworkDocument } from "../../../domain/homework-format";
+import { lockTaskVideos } from "../../homework/videos";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleLibraryFileRequest, handleLibraryVideoUpload, handleRouterRequest } from "../index";
@@ -28,6 +30,9 @@ const trueFalse = (prompt: string, answer: 0 | 1) => ({ type: "single_choice", p
 const VIDEO_TASKS = { version: 1, title: "Robot homework", tasks: [trueFalse("The robot sleeps at nine.", 0), trueFalse("The robot reads a book.", 1)] };
 const homework = (tasks: unknown[]) =>
   JSON.stringify({ version: 1, title: `Video homework ${run}`, tasks: [{ type: "single_choice", prompt: "Pick the sky.", options: ["blue", "green"], answer: 0 }, ...tasks] });
+/** Whether `promise` settles within `ms`. */
+const settledWithin = (promise: Promise<unknown>, ms: number) =>
+  Promise.race([promise.then(() => true, () => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms))]);
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
 /** An own library video with confirmed tasks, uploaded by `caller`; returns its id. */
@@ -140,10 +145,10 @@ describe("a video in homework", () => {
     await expect(assistant.agent.saveHomeworkDraft({ studentId, homework: JSON.parse(homework([foreign])) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("is not deleted while a homework uses it, a draft or a published one, and the refusal names the homework; once no homework uses it, it is", async () => {
+  it("is not deleted while a homework not yet submitted uses it, and the refusal names the homework; once submitted, or with no homework using it, it is", async () => {
     const videoId = await videoWithTasks(teacher, teacherHeaders, `Kept clip ${run}`);
     await confirm(videoId, VIDEO_TASKS);
-    const { studentId } = await student("Держит видео");
+    const { studentId, caller } = await student("Держит видео");
     const withVideo = async () => {
       const { id } = await teacher.teacher.homework.import({ studentId, json: homework([]) });
       const draft = await teacher.teacher.homework.get({ id });
@@ -169,9 +174,62 @@ describe("a video in homework", () => {
     await expect(teacher.teacher.library.remove({ id: videoId })).rejects.toMatchObject(refused);
     expect((await teacher.teacher.homework.taskVideos({ id: published.id }))[1]).toEqual({ title: `Kept clip ${run}`, file: `/api/files/library/${videoId}` });
 
+    // Submitted, the homework keeps its tasks and answers, not the video (product owner, 2026-11-24).
+    for (const taskIndex of [0, 1, 2]) {
+      await caller.student.homework.saveAnswer({ id: published.id, taskIndex, answer: { type: "single_choice", choice: 0 } });
+    }
+    await caller.student.homework.submit({ id: published.id, idempotencyKey: crypto.randomUUID() });
+    await expect(teacher.teacher.library.remove({ id: videoId })).resolves.toEqual({ id: videoId });
+    expect((await teacher.teacher.homework.get({ id: published.id })).tasks).toHaveLength(3);
+    expect((await teacher.teacher.homework.taskVideos({ id: published.id }))[1]).toBeNull();
+
     // A video no homework uses is deleted.
     const unused = await videoWithTasks(teacher, teacherHeaders, `Unused clip ${run}`);
     await expect(teacher.teacher.library.remove({ id: unused })).resolves.toEqual({ id: unused });
+  });
+
+  it("a save holding the video makes a deletion wait, and the deletion then sees the homework and is refused", async () => {
+    const videoId = await videoWithTasks(teacher, teacherHeaders, `Raced clip ${run}`);
+    await confirm(videoId, VIDEO_TASKS);
+    const { studentId } = await student("Гонка сохранения");
+    const [{ teacherId }] = (await db().select({ teacherId: studentTable.teacherId }).from(studentTable).where(eq(studentTable.id, studentId))) as [{ teacherId: string }];
+    const document = { version: 1, title: `Raced homework ${run}`, tasks: [{ ...trueFalse("About the raced clip.", 0), video: { library: videoId } }] } as HomeworkDocument;
+
+    let deletion: Promise<unknown> | undefined;
+    await db().transaction(async (tx) => {
+      // The save's read: the video is held.
+      await lockTaskVideos(tx, teacherId, document);
+      // The competing deletion waits for it.
+      deletion = teacher.teacher.library.remove({ id: videoId });
+      deletion.catch(() => undefined);
+      expect(await settledWithin(deletion, 300)).toBe(false);
+      // The save's write.
+      await tx.insert(homeworkTable).values({ teacherId, studentId, title: document.title, document });
+    });
+    await expect(deletion).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("a deletion holding the video makes a save wait, and the save then finds the video gone and is refused", async () => {
+    const videoId = await videoWithTasks(teacher, teacherHeaders, `Deleted while saved ${run}`);
+    await confirm(videoId, VIDEO_TASKS);
+    const { studentId } = await student("Гонка удаления");
+    const { id } = await teacher.teacher.homework.import({ studentId, json: homework([]) });
+    const draft = await teacher.teacher.homework.get({ id });
+    const tasks = [...draft.tasks, ...(await teacher.teacher.homework.videoTasks({ id, materialId: videoId }))];
+
+    let save: Promise<unknown> | undefined;
+    await db().transaction(async (tx) => {
+      // The deletion's lock and its check found no homework.
+      await tx.select({ id: libraryMaterial.id }).from(libraryMaterial).where(eq(libraryMaterial.id, videoId)).for("update");
+      // The competing save passes its early check and waits at the lock.
+      save = teacher.teacher.homework.updateTasks({ id, revision: draft.revision, tasks });
+      save.catch(() => undefined);
+      expect(await settledWithin(save, 300)).toBe(false);
+      // The deletion's write.
+      await tx.delete(libraryMaterial).where(eq(libraryMaterial.id, videoId));
+    });
+    await expect(save).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("в библиотеке нет такого видео") });
+    expect((await teacher.teacher.homework.get({ id })).tasks).toHaveLength(1);
   });
 
   it("serves a homework's library id to the student only when it is a video and not a draft", async () => {

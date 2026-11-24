@@ -47,6 +47,45 @@ export async function taskVideoErrors(database: Pick<Database, "select">, teache
   );
 }
 
+/** A homework names a library video that is gone: the save is refused. */
+export class MissingVideoError extends Error {
+  constructor(readonly errors: string[]) {
+    super(errors.join("\n"));
+  }
+}
+
+/**
+ * In the transaction that writes a homework: takes the library videos its
+ * tasks name `FOR SHARE` and throws `MissingVideoError` when one is gone.
+ * A deletion takes the video's row `FOR UPDATE` before it looks for homework
+ * (`deleteMaterial`), so one of the two waits for the other: the homework is
+ * written about a video still there, or the deletion sees it and is refused.
+ * Taken after the homework row, as every save locks it first.
+ */
+export async function lockTaskVideos(tx: Pick<Database, "select">, teacherId: string, document: HomeworkDocument): Promise<void> {
+  const ids = libraryIds(document.tasks);
+  if (ids.length === 0) return;
+  const rows = await tx
+    .select({ id: libraryMaterial.id })
+    .from(libraryMaterial)
+    .where(
+      and(
+        eq(libraryMaterial.teacherId, teacherId),
+        eq(libraryMaterial.kind, "video"),
+        eq(libraryMaterial.draft, false),
+        inArray(libraryMaterial.id, ids),
+      ),
+    )
+    .for("share");
+  const known = new Set(rows.map((r) => r.id));
+  const errors = document.tasks.flatMap((task, index) =>
+    task.video && "library" in task.video && !known.has(task.video.library.toLowerCase())
+      ? [`Задание ${index + 1}, поле video: в библиотеке нет такого видео`]
+      : [],
+  );
+  if (errors.length > 0) throw new MissingVideoError(errors);
+}
+
 /** What the student gets of a link: YouTube as its embedded player (#325), anything else to open in a new tab. */
 function ofLink(title: string, url: string): StudentTaskVideo {
   const embed = youTubeEmbedUrl(url);

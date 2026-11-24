@@ -26,7 +26,7 @@ import { missedOutsideTraining } from "../crm/word-training";
 import { studentWords } from "../crm/vocabulary-homework";
 import { taskWordIds } from "../../domain/vocabulary-homework";
 import { checkAnswer, checkSentences, fitsTask, missedWords } from "./check";
-import { studentTaskVideos } from "./videos";
+import { lockTaskVideos, studentTaskVideos } from "./videos";
 
 export const HOMEWORK_STATUSES = ["draft", "published", "submitted", "missed"] as const;
 export type HomeworkStatus = (typeof HOMEWORK_STATUSES)[number];
@@ -93,12 +93,15 @@ export async function importDraft(
   studentId: string,
   document: HomeworkDocument,
 ): Promise<string> {
-  const [row] = await db
-    .insert(homework)
-    .values({ teacherId, studentId, title: document.title, document: homeworkSchema.parse(document) })
-    .returning({ id: homework.id });
-  if (!row) throw new Error("importDraft: insert returned no row");
-  return row.id;
+  return db.transaction(async (tx) => {
+    await lockTaskVideos(tx, teacherId, document);
+    const [row] = await tx
+      .insert(homework)
+      .values({ teacherId, studentId, title: document.title, document: homeworkSchema.parse(document) })
+      .returning({ id: homework.id });
+    if (!row) throw new Error("importDraft: insert returned no row");
+    return row.id;
+  });
 }
 
 /** The student's homework, newest first. */
@@ -156,6 +159,7 @@ export async function updateDraftTasks(
       .for("update");
     if (!draft) return "not_found";
     if (draft.revision !== seen) return "changed";
+    await lockTaskVideos(tx, teacherId, document);
     const [saved] = await tx
       .update(homework)
       .set({ document: homeworkSchema.parse(document), title: document.title })

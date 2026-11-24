@@ -3,7 +3,7 @@
 // another teacher's material is the same as a missing one. The assistant saves
 // games and warm-ups as drafts, which stay out of the library until the
 // teacher adds them (#120; AGENTS.md, rule 5).
-import { and, arrayContains, desc, eq, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, arrayContains, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { type AgeGroup, MAX_GAME_BYTES, MAX_PICTURE_BYTES, MAX_URL_LENGTH, type MaterialKind } from "../../domain/library";
 import type { Level } from "../../domain/student";
 import { type BlobReader, openBlob, saveBlob } from "../blob/store";
@@ -408,43 +408,41 @@ export async function updateMaterial(db: Database, teacherId: string, id: string
 
 /**
  * Removes a material of this teacher: "not_found" when there is none, and the
- * homework that use it when it is a video a homework is about (#330; product
- * owner, 2026-11-24: refused while any homework uses it). One statement checks
- * and deletes, so a homework saved after the check cannot lose its video.
- * Its file stops being served at once; the stored file goes with the cleanup
- * of files nothing refers to (#73).
+ * homework that keep it when it is a video a homework not yet submitted is
+ * about (#330; product owner, 2026-11-24: a draft or a published homework
+ * before «Сдать», of a student not deleted). The material's row is taken
+ * `FOR UPDATE` first and the homework looked for in a statement of its own,
+ * which sees every homework committed by then: a save holding the video
+ * `FOR SHARE` (`lockTaskVideos`) finishes first, or waits and finds the
+ * video gone. Its file stops being served at once; the stored file goes with
+ * the cleanup of files nothing refers to (#73).
  */
 export async function deleteMaterial(
   db: Database,
   teacherId: string,
   id: string,
 ): Promise<"deleted" | "not_found" | { usedBy: { title: string; student: string }[] }> {
-  // A homework of a deleted student is out of sight, and does not keep the video.
-  const usesIt = and(
-    eq(homework.teacherId, teacherId),
-    sql`${homework.document}->'tasks' @> ${JSON.stringify([{ video: { library: id.toLowerCase() } }])}::jsonb`,
-    sql`EXISTS (SELECT 1 FROM ${student} WHERE ${student.id} = ${homework.studentId} AND ${student.deletedAt} IS NULL)`,
-  );
-  const rows = await db
-    .delete(libraryMaterial)
-    .where(
-      and(
-        eq(libraryMaterial.id, id),
-        eq(libraryMaterial.teacherId, teacherId),
-        notExists(db.select({ id: homework.id }).from(homework).where(usesIt)),
-      ),
-    )
-    .returning({ id: libraryMaterial.id });
-  if (rows.length > 0) return "deleted";
-  const usedBy = await db
-    .select({ title: homework.title, firstName: student.firstName, lastName: student.lastName })
-    .from(homework)
-    .innerJoin(student, eq(student.id, homework.studentId))
-    .where(usesIt)
-    .orderBy(desc(homework.createdAt))
-    .limit(5);
-  if (usedBy.length === 0) return "not_found";
-  return { usedBy: usedBy.map((r) => ({ title: r.title, student: r.lastName ? `${r.firstName} ${r.lastName}` : r.firstName })) };
+  return db.transaction(async (tx) => {
+    const own = and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId));
+    const [found] = await tx.select({ id: libraryMaterial.id }).from(libraryMaterial).where(own).for("update");
+    if (!found) return "not_found";
+    const usedBy = await tx
+      .select({ title: homework.title, firstName: student.firstName, lastName: student.lastName })
+      .from(homework)
+      .innerJoin(student, and(eq(student.id, homework.studentId), isNull(student.deletedAt)))
+      .where(
+        and(
+          eq(homework.teacherId, teacherId),
+          inArray(homework.status, ["draft", "published"]),
+          sql`${homework.document}->'tasks' @> ${JSON.stringify([{ video: { library: id.toLowerCase() } }])}::jsonb`,
+        ),
+      )
+      .orderBy(desc(homework.createdAt))
+      .limit(5);
+    if (usedBy.length > 0) return { usedBy: usedBy.map((r) => ({ title: r.title, student: r.lastName ? `${r.firstName} ${r.lastName}` : r.firstName })) };
+    await tx.delete(libraryMaterial).where(own);
+    return "deleted";
+  });
 }
 
 /** The file of a material of this teacher, open for reading in pieces, or null — a video link has none. */

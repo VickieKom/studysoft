@@ -6,6 +6,7 @@ import { type HomeworkDocument, homeworkSchema } from "../../domain/homework-for
 import type { StudentContext } from "../crm/context";
 import type { Database } from "../db/client";
 import { draftOrigin, homework } from "../db/schema";
+import { lockTaskVideos } from "./videos";
 
 /**
  * The assistant's latest draft of this student that it may replace: still a
@@ -54,6 +55,8 @@ export async function saveAssistantDraft(
   context: StudentContext,
 ): Promise<string> {
   return db.transaction(async (tx) => {
+    // The draft row first, then the videos its tasks name (lockTaskVideos).
+    const lockVideos = () => lockTaskVideos(tx, teacherId, document);
     if (candidate) {
       const [draft] = await tx
         .select({ id: homework.id })
@@ -67,11 +70,13 @@ export async function saveAssistantDraft(
             .where(eq(draftOrigin.homeworkId, candidate.id))
         : [];
       if (origin && origin.teacherEditedAt === null) {
+        await lockVideos();
         await tx.update(homework).set({ document, title: document.title }).where(eq(homework.id, candidate.id));
         await tx.update(draftOrigin).set({ context }).where(eq(draftOrigin.homeworkId, candidate.id));
         return candidate.id;
       }
     }
+    await lockVideos();
     const [created] = await tx
       .insert(homework)
       .values({ teacherId, studentId, title: document.title, document: homeworkSchema.parse(document) })
