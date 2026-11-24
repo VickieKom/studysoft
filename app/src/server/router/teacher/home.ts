@@ -59,8 +59,9 @@ export const homeRouter = router({
     }),
 
   /**
-   * «Новый фидбэк» (#333): the students with answers after the teacher last
-   * opened their card, and what her children like across students.
+   * «Новый фидбэк» (#333): the students with an answer newer than the newest
+   * one their «Фидбэк» showed the teacher, and what her children like across
+   * students.
    */
   feedback: teacherProcedure
     .output(

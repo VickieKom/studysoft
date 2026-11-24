@@ -113,7 +113,7 @@ describe("«Новый фидбэк»", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     await survey(studentId, games.map((g) => g.title), null);
     expect(await marked()).toBe(true);
-    // Another teacher neither sees the student nor opens their card.
+    // Another teacher neither sees the student nor marks their feedback seen.
     expect((await other.teacher.home.feedback()).newFeedback.some((s) => s.id === studentId)).toBe(false);
     await expect(other.teacher.students.seeFeedback({ studentId, upTo: new Date().toISOString() })).rejects.toMatchObject({ code: "NOT_FOUND" });
 
