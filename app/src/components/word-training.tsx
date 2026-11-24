@@ -1,8 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
-import type { ExerciseType } from "@/domain/word-training";
+import { type ExerciseType, spokenWord } from "@/domain/word-training";
 import { routerClient } from "./router-client";
+import { speak, useCanSpeak } from "./speech";
 
 type Exercise = { wordId: string; type: ExerciseType; prompt: string; options: string[] | null };
 type Result = { right: boolean; correct: string };
@@ -22,7 +23,8 @@ const QUESTION: Record<ExerciseType, (prompt: string) => string> = {
  * «Тренировка» (#238): today's words, one exercise each, checked on the
  * server; after an answer the child sees at once whether it was right and the
  * right answer. Then «На сегодня всё», and «Ещё разок» for more of their
- * words, which moves nothing in the schedule.
+ * words, which moves nothing in the schedule. «Послушать» plays the English
+ * word where it does not give the answer away (#323).
  */
 export function WordTraining({ dueCount }: { dueCount: number }) {
   const [due, setDue] = useState(dueCount);
@@ -73,7 +75,9 @@ export function WordTraining({ dueCount }: { dueCount: number }) {
     }
   }
 
+  const canSpeak = useCanSpeak();
   const exercise = session?.exercises[session.index];
+  const spoken = exercise ? spokenWord(exercise.type, exercise.prompt, result?.correct ?? null) : null;
   return (
     <section aria-label="Тренировка" className="flex flex-col gap-4 rounded-task border border-border bg-accent-50 p-5">
       {exercise ? (
@@ -84,6 +88,16 @@ export function WordTraining({ dueCount }: { dueCount: number }) {
           <h2 className="text-task-title font-bold text-accent-900">{QUESTION[exercise.type](exercise.prompt)}</h2>
           {/* The word's example with the word as a gap (#239). */}
           {exercise.type === "fill_gap" && <p className="text-answer text-text">{exercise.prompt}</p>}
+          {/* The English word, where hearing it does not give the answer away (#323). */}
+          {canSpeak && spoken && (
+            <button
+              type="button"
+              onClick={() => speak(spoken)}
+              className="h-10 self-start rounded-task border-2 border-border bg-bg px-3 text-small font-semibold hover:bg-surface"
+            >
+              Послушать
+            </button>
+          )}
           <ExerciseBody key={`${session!.index}:${exercise.wordId}`} exercise={exercise} disabled={busy || result !== null} onAnswer={(value) => answer(exercise, value)} />
           {result && (
             <>

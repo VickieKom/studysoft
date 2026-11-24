@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { todayIn } from "./homework";
-import { addDays, afterAnswer, exerciseFor, GAP_STEP, gapSentence, isDue, isMastered, MASTERED_STEP, wordMark } from "./word-training";
+import { addDays, afterAnswer, exerciseFor, GAP_STEP, gapSentence, isDue, isMastered, MASTERED_STEP, spokenWord, wordMark } from "./word-training";
 
 describe("the word training's schedule (#238)", () => {
   it("moves a right answer on through 1, 2, 4, 8 and 16 days, learnt after five on different days", () => {
@@ -91,5 +91,16 @@ describe("«Вставь слово в предложение» (#239)", () => {
     expect(exerciseFor(2, false, true)).toBe("fill_gap");
     expect([0, 1, 2, 3].map((step) => exerciseFor(step, true, false, true))).toEqual(["choose_translation", "choose_word", "type_word", "type_word"]);
     expect(exerciseFor(2, false, false)).toBe("type_word");
+  });
+});
+
+describe("«Послушать» in an exercise (#323)", () => {
+  it("plays the word shown at once, and the word asked for only once answered", () => {
+    expect(spokenWord("choose_translation", "teapot", null)).toBe("teapot");
+    expect(spokenWord("choose_translation", "teapot", "чайник")).toBe("teapot");
+    for (const type of ["choose_word", "fill_gap", "type_word"] as const) {
+      expect(spokenWord(type, "чайник", null)).toBeNull();
+      expect(spokenWord(type, "чайник", "teapot")).toBe("teapot");
+    }
   });
 });
