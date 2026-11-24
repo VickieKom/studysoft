@@ -11,21 +11,10 @@ export type FeedbackRatingView = {
   topics: { topic: string; chosen: number }[];
 };
 
-/**
- * «Что заходит» beside «Фидбэк» (#333): the two ratings and the topics,
- * «Игры — 3 из 3», the most chosen first; nothing before any answer.
- */
-export function FeedbackRating({ rating }: { rating: FeedbackRatingView }) {
-  if (rating.materials.length + rating.tasks.length + rating.topics.length === 0) return null;
-  return (
-    <section aria-label="Что заходит" className="mt-6 flex flex-col gap-2 rounded-card border border-border p-6">
-      <h2 className="text-h3 font-semibold">Что заходит</h2>
-      <FeedbackRatingLists rating={rating} />
-    </section>
-  );
-}
+/** Whether a rating has nothing to show. */
+export const emptyRating = (rating: FeedbackRatingView) => rating.materials.length + rating.tasks.length + rating.topics.length === 0;
 
-function FeedbackRatingLists({ rating }: { rating: FeedbackRatingView }) {
+export function FeedbackRatingLists({ rating }: { rating: FeedbackRatingView }) {
   const list = (label: string, lines: string[]) =>
     lines.length > 0 && (
       <div className="flex flex-col gap-1">
