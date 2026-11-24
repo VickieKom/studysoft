@@ -15,6 +15,8 @@ import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { studentFeedback } from "../../homework/feedback";
 import { surveyFeedback } from "../../homework/survey";
+import { seeFeedback, studentRating } from "../../homework/feedback-rating";
+import { feedbackRatingSchema } from "./feedback-rating-schema";
 import { TASK_TYPES } from "../../../domain/homework-format";
 import { ALL_KINDS_ANSWER } from "../../../domain/homework";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
@@ -225,6 +227,28 @@ export const studentsRouter = router({
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
       return (await surveyFeedback(ctx.db, ctx.teacherId, input.studentId)).map((s) => ({ ...s, answeredAt: s.answeredAt.toISOString() }));
+    }),
+
+  /**
+   * «Что заходит» (#333): the kinds of homework tasks from the one-tap
+   * question, the kinds of lesson materials from the surveys, «3 из 3» chosen
+   * in three answers of three, and the topics chosen.
+   */
+  feedbackRating: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(feedbackRatingSchema)
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      return studentRating(ctx.db, ctx.teacherId, input.studentId);
+    }),
+
+  /** The card was opened (#333): its feedback is seen, and the student leaves «Новый фидбэк». */
+  seeFeedback: teacherProcedure
+    .input(z.object({ studentId: z.uuid() }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await seeFeedback(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      return { ok: true as const };
     }),
 
   /** «Ошибки по темам» (#119): wrong answers of homework and games over the last 30 days, by topic. */

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { likedMost } from "@/domain/feedback-rating";
 import { formatPastDate, HOMEWORK_STATUS_LABELS } from "@/domain/homework";
 import { SKILL_LABELS, trendLabel } from "@/domain/progress";
 import { dateIn, timeIn } from "@/domain/schedule";
@@ -15,6 +16,8 @@ export default async function TeacherHome() {
   const { caller } = await teacherCaller();
   const { timeZone, lessons, students } = await caller.teacher.home.get();
   const attention = students.filter((s) => s.slips.length > 0 || s.homeworkNotSubmitted || s.runningOut);
+  const feedback = await caller.teacher.home.feedback();
+  const liked = likedMost(feedback.across.materials, feedback.across.tasks);
 
   return (
     <main className="flex flex-col gap-8">
@@ -54,6 +57,28 @@ export default async function TeacherHome() {
           </ul>
         )}
       </section>
+
+      {(feedback.newFeedback.length > 0 || liked) && (
+        <section aria-labelledby="new-feedback" className="flex flex-col gap-3">
+          <h2 id="new-feedback" className="text-h2 font-semibold">
+            Новый фидбэк
+          </h2>
+          {feedback.newFeedback.length === 0 ? (
+            <p className="text-text-secondary">Все ответы детей просмотрены</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {feedback.newFeedback.map((s) => (
+                <li key={s.id} className={card}>
+                  <Link href={`/teacher/students/${s.id}`} className="font-semibold text-green-700 hover:text-green-800">
+                    {s.firstName}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {liked && <p className="text-small text-text-secondary">Детям больше всего нравится: {liked}</p>}
+        </section>
+      )}
 
       <section aria-labelledby="attention" className="flex flex-col gap-3">
         <h2 id="attention" className="text-h2 font-semibold">
