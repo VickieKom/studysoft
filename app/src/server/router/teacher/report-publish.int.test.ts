@@ -69,7 +69,9 @@ describe("publishing a report", () => {
     const [shown] = await parent.parent.reports();
     expect(shown).toMatchObject({ id: reportId, blocks: [{ title: "Что получается", text: "Читает вслух." }] });
     expect(shown!.numbers.skills).toEqual([{ skill: "reading", percent: 75, trend: null }]);
-    expect(JSON.stringify(await parent.parent.reports())).not.toMatch(/Осталось|1\s?500|3\s?000|showPayments|balance/);
+    // Ids are random and may hold «1500» or «3000» (#355): they are left out of the check.
+    const withoutIds = JSON.stringify(await parent.parent.reports()).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>");
+    expect(withoutIds).not.toMatch(/Осталось|1\s?500|3\s?000|showPayments|balance/);
     expect((await teacher.teacher.reports.get({ reportId })).numbers.skills).toEqual([{ skill: "reading", percent: 75, trend: null }]);
     expect((await teacher.teacher.reports.get({ reportId })).status).toBe("published");
   });
