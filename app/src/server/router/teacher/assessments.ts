@@ -4,6 +4,8 @@ import { assessmentFileUrl } from "../../../domain/assessment";
 import { ASSESSMENT_SECTIONS, assessmentSectionViewSchema, assessmentView, parseAssessment } from "../../../domain/assessment-format";
 import { approveAssessment, type AssessmentRow, importAssessment, listAssessments, MAX_ASSESSMENT_LENGTH, removeQuestion } from "../../assessment/assessments";
 import { finishAssessment, lessonStudent, openAssessmentToStudent, TAKING_STATUSES, takingStatus } from "../../assessment/taking";
+import { type ReviewRefusal, scoreSection, writeToProgress } from "../../assessment/review";
+import { CRITERIA_SECTIONS, criteriaComplete, criteriaScoresSchema, sectionCriteriaSchema, skillPercents } from "../../../domain/assessment-review";
 import { findStudent } from "../../crm/students";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -31,8 +33,32 @@ const assessmentViewSchema = z
     taking: z.enum(TAKING_STATUSES),
     openUntil: z.iso.datetime().nullable(),
     speakingRecording: z.string().nullable(),
+    // Once ended (#254): the child's text, the teacher's criteria, the percents, and whether they went into «Прогресс».
+    review: z
+      .object({
+        writing: z.string().nullable(),
+        criteria: criteriaScoresSchema,
+        percents: z.array(z.object({ skill: z.enum(ASSESSMENT_SECTIONS), percent: z.number().int().min(0).max(100) }).strict()),
+        complete: z.boolean(),
+        written: z.boolean(),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
+
+/** The check of an ended assessment (#254); null before it ends. */
+const review = (row: AssessmentRow) => {
+  if (!row.finishedAt) return null;
+  const skills = row.document.sections.map((s) => s.skill);
+  return {
+    writing: row.answers.writing?.[0] ?? null,
+    criteria: row.criteria,
+    percents: skillPercents(skills, row.scores ?? {}, row.criteria),
+    complete: criteriaComplete(skills, row.criteria),
+    written: row.progressWrittenAt !== null,
+  };
+};
 
 const view = (row: AssessmentRow) => ({
   id: row.id,
@@ -46,9 +72,21 @@ const view = (row: AssessmentRow) => ({
   taking: takingStatus(row),
   openUntil: row.openUntil?.toISOString() ?? null,
   speakingRecording: row.speakingRecording ? assessmentFileUrl(row.id, "speaking") : null,
+  review: review(row),
 });
 
 const ok = z.object({ ok: z.literal(true) }).strict();
+
+const reviewError = (refusal: ReviewRefusal) =>
+  refusal === "not_found"
+    ? notFound()
+    : refusal === "written"
+      ? new TRPCError({ code: "CONFLICT", message: "Уже записано в прогресс: правьте результаты в «Прогрессе»" })
+      : new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            refusal === "not_ended" ? "Сначала завершите замер" : refusal === "no_section" ? "В замере нет такого раздела" : "Оцените письмо и говорение",
+        });
 
 export const assessmentsRouter = router({
   /** The student's assessments, the newest first. */
@@ -120,6 +158,26 @@ export const assessmentsRouter = router({
       if (result === "not_found") throw notFound();
       if (result === "ended") throw new TRPCError({ code: "BAD_REQUEST", message: "Замер уже завершён" });
       return { ok: true as const };
+    }),
+
+  /** A section scored by the criteria (#254), once the assessment is ended and before «Записать в прогресс». */
+  score: teacherProcedure
+    .input(z.object({ assessmentId: z.uuid(), section: z.enum(CRITERIA_SECTIONS), scores: sectionCriteriaSchema }))
+    .output(ok)
+    .mutation(async ({ ctx, input }) => {
+      const result = await scoreSection(ctx.db, ctx.teacherId, input.assessmentId, input.section, input.scores);
+      if (result !== "scored") throw reviewError(result);
+      return { ok: true as const };
+    }),
+
+  /** «Записать в прогресс» (#254): the percents as the skill results of the day the assessment was ended. */
+  writeToProgress: teacherProcedure
+    .input(z.object({ assessmentId: z.uuid() }))
+    .output(z.object({ date: z.iso.date() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const result = await writeToProgress(ctx.db, ctx.teacherId, input.assessmentId);
+      if (typeof result === "string") throw reviewError(result);
+      return result;
     }),
 
   /**
