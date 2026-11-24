@@ -5,7 +5,9 @@ import { FamilyGoal } from "@/components/family-goal";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
-import { StudentFeedback } from "@/components/student-feedback";
+import { FeedbackSeen } from "@/components/feedback-seen";
+import { FeedbackRating, StudentFeedback } from "@/components/student-feedback";
+import { likedMost } from "@/domain/feedback-rating";
 import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentAssessments } from "@/components/student-assessments";
 import { StudentProgress } from "@/components/student-progress";
@@ -37,6 +39,10 @@ export default async function StudentCardPage({ params }: Props) {
   const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
   const feedback = await caller.teacher.students.feedback({ studentId: student.id });
   const surveys = await caller.teacher.students.surveyFeedback({ studentId: student.id });
+  const rating = await caller.teacher.students.feedbackRating({ studentId: student.id });
+  // «Фидбэк» lists the week's answers (#333); the ratings count them all.
+  const weekAgo = new Date().getTime() - 7 * 86_400_000;
+  const thisWeek = <T extends { answeredAt: string }>(list: T[]) => list.filter((a) => Date.parse(a.answeredAt) >= weekAgo);
   const vocabulary = await caller.teacher.students.vocabulary({ studentId: student.id });
   const { results, ...totals } = await caller.teacher.progress.get({ studentId: student.id });
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
@@ -143,11 +149,14 @@ export default async function StudentCardPage({ params }: Props) {
           )}
         </section>
       </div>
-      <StudentProgress studentId={student.id} results={results} totals={totals} />
+      <StudentProgress studentId={student.id} results={results} totals={totals} likedMost={likedMost(rating.materials, rating.tasks)} />
       <StudentAssessments studentId={student.id} assessments={assessments} />
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
-      <StudentFeedback entries={feedback} surveys={surveys} timeZone={timeZone} />
+      <FeedbackSeen studentId={student.id}>
+        <StudentFeedback entries={thisWeek(feedback)} surveys={thisWeek(surveys)} timeZone={timeZone} />
+      </FeedbackSeen>
+      <FeedbackRating rating={rating} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />
