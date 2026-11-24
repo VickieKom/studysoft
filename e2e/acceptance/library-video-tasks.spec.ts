@@ -182,6 +182,8 @@ test("after confirmation the assistant's save is a new draft beside the confirme
   await expect(draft).toContainText("The robot gets up at seven.");
 
   await draft.getByRole("button", { name: "Подтвердить", exact: true }).click();
+  // Saved before the reload checks it is kept: a reload at once could cut the confirmation off (#384).
+  await expect(videoTasks(page).getByRole("region", { name: "Черновик от ассистента" })).toHaveCount(0);
   await page.reload();
   await expect(videoTasks(page).getByRole("region", { name: "Черновик от ассистента" })).toHaveCount(0);
   const replaced = videoTasks(page).getByRole("listitem");
