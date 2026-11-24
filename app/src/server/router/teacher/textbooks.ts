@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { LEVELS } from "../../../domain/student";
-import { BOOK_KINDS, MAX_TRACKS, RENDER_STATUSES } from "../../../domain/textbook";
+import { BOOK_KINDS, MAX_TEXTBOOK_VIDEOS, MAX_TRACKS, RENDER_STATUSES } from "../../../domain/textbook";
 import { taskSchema } from "../../../domain/homework-format";
 import { DRAFT_AUTHORS, structureSchema } from "../../../domain/textbook-structure";
 import { studentTaskSchema } from "../../../domain/student-task-schema";
@@ -46,6 +46,8 @@ export const textbooksRouter = router({
               .strict(),
           ),
           tracks: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
+          // The set's videos (#329), played on its page from their address.
+          videos: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
         })
         .strict(),
     )
@@ -63,6 +65,7 @@ export const textbooksRouter = router({
         level: z.enum(LEVELS),
         books: z.array(z.object({ kind: z.enum(BOOK_KINDS), name: fileName, file: z.uuid() })).max(BOOK_KINDS.length),
         tracks: z.array(z.object({ name: fileName, file: z.uuid() })).max(MAX_TRACKS),
+        videos: z.array(z.object({ name: fileName, file: z.uuid() })).max(MAX_TEXTBOOK_VIDEOS).default([]),
       }),
     )
     .output(z.object({ id: z.uuid() }).strict())
@@ -121,6 +124,7 @@ export const textbooksRouter = router({
           title: z.string(),
           pages: z.array(z.object({ fileId: z.uuid(), kind: z.enum(BOOK_KINDS), from: z.number().int(), to: z.number().int() }).strict()),
           tracks: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
+          videos: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
           words: z.array(z.string()),
         })
         .strict(),

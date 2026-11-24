@@ -874,6 +874,45 @@ export const gameResult = pgTable(
   ],
 );
 
+/**
+ * A textbook video opened to a student from a lesson's preparation (#329):
+ * at once, until an hour after that lesson's end (product owner,
+ * 2026-11-23), with the tasks of the lesson's bank the plan's video stage
+ * picked, copied as they were when opened. The end is read from the lesson,
+ * so moving the lesson moves it and cancelling the lesson ends it. Opening it
+ * again copies the tasks anew. The answers go to `video_answer` as a library video's do,
+ * under the file's id.
+ */
+export const textbookVideoAccess = pgTable(
+  "textbook_video_access",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => textbookFile.id),
+    // A lesson removed from the schedule takes the access it gave with it.
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => lesson.id, { onDelete: "cascade" }),
+    tasks: jsonb("tasks").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "textbook_video_access_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("textbook_video_access_lesson_file_key").on(t.lessonId, t.fileId),
+    index("textbook_video_access_student_id_idx").on(t.studentId),
+  ],
+);
+
 // The preparation of a lesson (#151, domain/lesson-plan.ts): the approved
 // plan by stages — the lesson is «подготовлен» once it has one — and a draft
 // the assistant saved for the teacher to approve; the homework draft prepared

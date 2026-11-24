@@ -8,6 +8,7 @@
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { GAME_ACCESS_AFTER_LESSON_MS } from "../../domain/library";
 import type { Database } from "../db/client";
+import { openTextbookVideoFor, openTextbookVideos } from "./textbook-videos";
 import { gameAccess, libraryMaterial, student } from "../db/schema";
 
 /** Lessons that count: a cancelled or missed one is not going on. */
@@ -134,7 +135,8 @@ export async function studentGame(
   return row ?? null;
 }
 
-export type StudentVideo = { id: string; title: string; link: string | null; hasFile: boolean };
+/** A video open to the student: a library video (#158), or a textbook's opened from a lesson's preparation (#329). */
+export type StudentVideo = { id: string; title: string; link: string | null; hasFile: boolean; textbook?: true };
 
 const videoColumns = {
   id: libraryMaterial.id,
@@ -145,12 +147,16 @@ const videoColumns = {
 
 /** The videos open to this student at `now`, by title (#158): an own file, or a link. */
 export async function studentVideos(db: Database, teacherId: string, studentId: string, now: Date = new Date()): Promise<StudentVideo[]> {
-  return db
+  const library = await db
     .select(videoColumns)
     .from(gameAccess)
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
     .where(openMaterials(teacherId, studentId, now, "video"))
     .orderBy(asc(libraryMaterial.title));
+  const textbook = (await openTextbookVideos(db, teacherId, studentId, now)).map(
+    (v): StudentVideo => ({ id: v.id, title: v.title, link: null, hasFile: true, textbook: true }),
+  );
+  return [...library, ...textbook].sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** One video open to this student at `now`, or null: missing, not opened, closed and another's are the same. */
@@ -166,7 +172,9 @@ export async function studentVideo(
     .from(gameAccess)
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId)))
     .where(and(openMaterials(teacherId, studentId, now, "video"), eq(gameAccess.materialId, id)));
-  return row ?? null;
+  if (row) return row;
+  const textbook = await openTextbookVideoFor(db, teacherId, studentId, id, now);
+  return textbook ? { id: textbook.id, title: textbook.title, link: null, hasFile: true, textbook: true } : null;
 }
 
 /** Whether this game or video is open to this student at `now`: their file is served to them (files.ts). */

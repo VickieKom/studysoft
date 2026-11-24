@@ -19,6 +19,7 @@ import {
   pageLabel,
   shownPages,
   type MaterialStage,
+  type TextbookVideoStage,
   type StageHomework,
   type StageVideo,
   stageKey,
@@ -122,7 +123,8 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
 
   const current = state.stages[state.current];
   // A video stage reviews its tasks with the student's answers (#328), asked again while it is on.
-  const onVideo = current?.type === "material" && resources.materials.find((m) => m.id === current.materialId)?.kind === "video";
+  const onVideo =
+    current?.type === "textbook_video" || (current?.type === "material" && resources.materials.find((m) => m.id === current.materialId)?.kind === "video");
   const videos = useLessonVideos(lessonId, onVideo);
 
   // «Завершить урок» on the panel (#154): nothing of the lesson stays on the screen.
@@ -155,7 +157,9 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
                 ? bookStageLabel(lessonOf(stage.lessonId))
                 : stage.type === "homework"
                   ? homeworkStageLabel(homeworkOf(stage.homeworkId))
-                  : (materialOf(stage.materialId)?.title ?? "")}
+                  : stage.type === "textbook_video"
+                    ? (resources.videos.find((v) => v.id === stage.fileId)?.title ?? "")
+                    : (materialOf(stage.materialId)?.title ?? "")}
             </span>
           ))}
         </div>
@@ -182,6 +186,13 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
               );
             })()}
           {current?.type === "homework" && <HomeworkReview stage={current} homework={homeworkOf(current.homeworkId)} />}
+          {current?.type === "textbook_video" && (
+            <VideoReview
+              stage={current}
+              title={resources.videos.find((v) => v.id === current.fileId)?.title ?? ""}
+              video={videos.find((v) => v.id === current.fileId)}
+            />
+          )}
           {current?.type === "material" &&
             (() => {
               const material = materialOf(current.materialId);
@@ -251,7 +262,7 @@ const verdictClass = (verdict: boolean | null) => (verdict === null ? "text-text
  * the teacher shows it from the panel. Before the child has answered, the
  * tasks alone. The video does not play here: it stutters over screen sharing.
  */
-function VideoReview({ stage, title, video }: { stage: MaterialStage; title: string; video: StageVideo | undefined }) {
+function VideoReview({ stage, title, video }: { stage: MaterialStage | TextbookVideoStage; title: string; video: StageVideo | undefined }) {
   if (!video) return <p className="p-6 text-h2 font-semibold">{title}</p>;
   const tasks = visibleVideoTasks(stage, video);
   return (
