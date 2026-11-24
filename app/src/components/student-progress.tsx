@@ -21,7 +21,18 @@ const field = "rounded-control border border-border bg-bg px-3 py-2";
  * monthly assessment writes them; the homework submitted, the textbook
  * covered and the words beside it.
  */
-export function StudentProgress({ studentId, results, totals }: { studentId: string; results: SkillResult[]; totals: Totals }) {
+export function StudentProgress({
+  studentId,
+  results,
+  totals,
+  likedMost = null,
+}: {
+  studentId: string;
+  results: SkillResult[];
+  totals: Totals;
+  /** What the child likes most (#333), from «Что заходит»; null before any answer. */
+  likedMost?: string | null;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +69,7 @@ export function StudentProgress({ studentId, results, totals }: { studentId: str
           </Button>
         )}
       </div>
+      {likedMost && <p className="text-small">Больше всего нравится: {likedMost}</p>}
 
       <ProgressView view={{ results, ...totals }} />
       {editing === "new" && <ResultsForm busy={busy} error={error} onSave={(date, values) => save(date, values, null)} onCancel={() => setEditing(null)} />}

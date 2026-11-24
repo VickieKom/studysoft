@@ -5,7 +5,9 @@ import { FamilyGoal } from "@/components/family-goal";
 import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
-import { StudentFeedback } from "@/components/student-feedback";
+import { FeedbackSeen } from "@/components/feedback-seen";
+import { FeedbackRating, StudentFeedback } from "@/components/student-feedback";
+import { likedMost, newestAnswer, splitFeedback } from "@/domain/feedback-rating";
 import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentAssessments } from "@/components/student-assessments";
 import { StudentProgress } from "@/components/student-progress";
@@ -37,6 +39,12 @@ export default async function StudentCardPage({ params }: Props) {
   const mistakes = await caller.teacher.students.mistakes({ studentId: student.id });
   const feedback = await caller.teacher.students.feedback({ studentId: student.id });
   const surveys = await caller.teacher.students.surveyFeedback({ studentId: student.id });
+  const rating = await caller.teacher.students.feedbackRating({ studentId: student.id });
+  // «Фидбэк» lists the week's answers and those not seen yet (#333), the rest under «Все ответы»; the ratings count them all.
+  const { seenAt } = await caller.teacher.students.feedbackSeen({ studentId: student.id });
+  const now = new Date().getTime();
+  const answers = splitFeedback(feedback, seenAt, now);
+  const surveyAnswers = splitFeedback(surveys, seenAt, now);
   const vocabulary = await caller.teacher.students.vocabulary({ studentId: student.id });
   const { results, ...totals } = await caller.teacher.progress.get({ studentId: student.id });
   const book = await caller.teacher.prep.studentTextbook({ studentId: student.id });
@@ -143,11 +151,20 @@ export default async function StudentCardPage({ params }: Props) {
           )}
         </section>
       </div>
-      <StudentProgress studentId={student.id} results={results} totals={totals} />
+      <StudentProgress studentId={student.id} results={results} totals={totals} likedMost={likedMost(rating.materials, rating.tasks)} />
       <StudentAssessments studentId={student.id} assessments={assessments} />
       <StudentHomework studentId={student.id} homework={homework} />
       <StudentMistakes topics={mistakes} timeZone={timeZone} />
-      <StudentFeedback entries={feedback} surveys={surveys} timeZone={timeZone} />
+      <FeedbackSeen studentId={student.id} upTo={newestAnswer([...answers.shown, ...surveyAnswers.shown])}>
+        <StudentFeedback
+          entries={answers.shown}
+          surveys={surveyAnswers.shown}
+          olderEntries={answers.older}
+          olderSurveys={surveyAnswers.older}
+          timeZone={timeZone}
+        />
+      </FeedbackSeen>
+      <FeedbackRating rating={rating} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />
