@@ -13,6 +13,7 @@ import { agentTextbooksRouter } from "./agent/textbooks";
 import { agentStudentsRouter } from "./agent/students";
 import { healthRouter } from "./public/health";
 import { linksRouter } from "./public/links";
+import { studentAssessmentsRouter } from "./student/assessments";
 import { studentGamesRouter } from "./student/games";
 import { studentVideosRouter } from "./student/videos";
 import { studentVocabularyRouter } from "./student/vocabulary";
@@ -47,7 +48,7 @@ export const appRouter = router({
   links: linksRouter,
   student: mergeRouters(
     studentMeRouter,
-    router({ homework: studentHomeworkRouter, games: studentGamesRouter, videos: studentVideosRouter, vocabulary: studentVocabularyRouter }),
+    router({ homework: studentHomeworkRouter, assessments: studentAssessmentsRouter, games: studentGamesRouter, videos: studentVideosRouter, vocabulary: studentVocabularyRouter }),
   ),
   parent: mergeRouters(parentMeRouter, parentProgressRouter, parentReportsRouter),
   agent: mergeRouters(agentStudentsRouter, agentHomeworkRouter, agentAssessmentsRouter, agentLibraryRouter, agentTextbooksRouter, agentPrepRouter),
