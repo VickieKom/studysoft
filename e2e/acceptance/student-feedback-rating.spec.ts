@@ -6,7 +6,8 @@
 // веселее?» (#332); «3 из 3» is chosen in three answers of three; the topics
 // in a list of their own. «Прогресс» on the card says what the child likes
 // most. The teacher's general screen marks the student «Новый фидбэк» until
-// she opens the card. The parent sees none of it, and the topics and the
+// she scrolls to «Фидбэк» on the card (product owner, 2026-11-24): opening
+// the card is not enough. The parent sees none of it, and the topics and the
 // rating across students are pinned by integration tests.
 //
 // The teacher starts signed in (sessions.setup.ts); her time zone and the
@@ -188,7 +189,7 @@ test.beforeAll(async ({ browser }) => {
   await page.context().close();
 });
 
-test("two one-tap answers and a survey: «Фидбэк» shows the week and both ratings, games «3 из 3»; «Прогресс» says what the child likes most; the general screen marks the new feedback until the card is opened", async ({
+test("two one-tap answers and a survey: «Фидбэк» shows the week and both ratings, games «3 из 3»; «Прогресс» says what the child likes most; the general screen marks the new feedback until «Фидбэк» is scrolled to", async ({
   page,
   browser,
 }) => {
@@ -229,6 +230,13 @@ test("two one-tap answers and a survey: «Фидбэк» shows the week and both
   await expect(week).toContainText("Опрос по урокам");
   await expect(page.getByRole("region", { name: "Прогресс" })).toContainText("Больше всего нравится: игры");
 
-  // Opened: the mark is gone.
-  await expect((await newFeedback(page)).getByRole("link", { name: FIRST_NAME, exact: true })).toHaveCount(0);
+  // The card opened at its top: «Фидбэк» was not on the screen, the mark stays.
+  await expect((await newFeedback(page)).getByRole("link", { name: FIRST_NAME, exact: true })).toBeVisible();
+
+  // Scrolled to «Фидбэк»: the mark is gone.
+  await page.goto(child.card);
+  await page.getByRole("region", { name: "Фидбэк" }).scrollIntoViewIfNeeded();
+  await expect(async () => {
+    await expect((await newFeedback(page)).getByRole("link", { name: FIRST_NAME, exact: true })).toHaveCount(0, { timeout: 1_000 });
+  }).toPass();
 });
