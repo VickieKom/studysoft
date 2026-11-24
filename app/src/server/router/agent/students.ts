@@ -1,3 +1,4 @@
+import { RATED_MATERIAL_KINDS } from "../../../domain/feedback-rating";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { SKILLS, TASK_TYPES, taskSourceSchema } from "../../../domain/homework-format";
@@ -84,6 +85,17 @@ const studentContext = z
         since: z.iso.datetime(),
         coveredUnits: z.array(z.object({ unit: z.string(), heldAt: z.iso.datetime() }).strict()),
         words: z.array(z.object({ id: z.uuid(), word: z.string(), translation: z.string().nullable() }).strict()),
+      })
+      .strict(),
+    // The child's feedback (#335): «что заходит» by kind of lesson material and of homework task, «3 из 3» chosen
+    // in three answers of three; the topics «Про что хочется ещё?» chose; the topics «пока путаюсь»; the latest wishes.
+    feedback: z
+      .object({
+        lessonMaterials: z.array(z.object({ kind: z.enum(RATED_MATERIAL_KINDS), chosen: z.number().int(), of: z.number().int() }).strict()),
+        homeworkTasks: z.array(z.object({ kind: z.enum(TASK_TYPES), chosen: z.number().int(), of: z.number().int() }).strict()),
+        topics: z.array(z.object({ topic: z.string(), chosen: z.number().int() }).strict()),
+        struggling: z.array(z.string()),
+        wishes: z.array(z.string()),
       })
       .strict(),
   })

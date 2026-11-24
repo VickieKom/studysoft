@@ -3,7 +3,7 @@
 // gathered into the ratings of `domain/feedback-rating.ts`. «Новый фидбэк» on
 // the teacher's general screen: a student with answers after she last opened
 // their card. The teacher's only — no student or parent procedure reads it.
-import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
   type FunAnswer,
   RATED_MATERIAL_KINDS,
@@ -15,7 +15,10 @@ import {
 } from "../../domain/feedback-rating";
 import type { ALL_KINDS_ANSWER } from "../../domain/homework";
 import type { HomeworkDocument, TaskType } from "../../domain/homework-format";
-import { BOTH_FUN, BOTH_MEH, type SurveyQuestion } from "../../domain/survey";
+import { BOTH_FUN, BOTH_MEH, CLARITY_FACES, type SurveyQuestion } from "../../domain/survey";
+
+/** «пока путаюсь»: a topic the child finds hard. */
+const STRUGGLING = CLARITY_FACES[2];
 import type { Database } from "../db/client";
 import { homework, homeworkFeedback, homeworkSurvey, libraryMaterial, student } from "../db/schema";
 import { taskKinds } from "./feedback";
@@ -118,4 +121,41 @@ export async function studentsWithNewFeedback(database: Database, teacherId: str
       ),
     )
     .orderBy(student.firstName);
+}
+
+/** At most this many «А ещё я хочу…» texts go to the assistant, the newest first. */
+export const CONTEXT_WISHES = 5;
+
+/**
+ * The child's feedback for the assistant's student context (#335): «что
+ * заходит» as the card rates it, the topics whose latest «Насколько понятно»
+ * is «пока путаюсь», and the latest «А ещё я хочу…» texts.
+ */
+export async function feedbackForAssistant(database: Database, teacherId: string, studentId: string) {
+  const rating = await studentRating(database, teacherId, studentId);
+  const surveys = await database
+    .select({ questions: homeworkSurvey.questions, answers: homeworkSurvey.answers })
+    .from(homeworkSurvey)
+    .where(and(eq(homeworkSurvey.teacherId, teacherId), eq(homeworkSurvey.studentId, studentId), eq(homeworkSurvey.status, "answered")))
+    .orderBy(desc(homeworkSurvey.answeredAt));
+  const latestClarity = new Map<string, string>();
+  const wishes: string[] = [];
+  for (const row of surveys) {
+    const questions = row.questions as SurveyQuestion[];
+    const answers = (row.answers as (string | null)[] | null) ?? [];
+    questions.forEach((q, i) => {
+      const answer = answers[i];
+      if (!answer) return;
+      // Newest first: the first answer met for a topic is its latest.
+      if (q.kind === "clear" && !latestClarity.has(q.topic)) latestClarity.set(q.topic, answer);
+      if (q.kind === "wish" && wishes.length < CONTEXT_WISHES) wishes.push(answer);
+    });
+  }
+  return {
+    lessonMaterials: rating.materials.map((r) => ({ kind: r.key, chosen: r.chosen, of: r.of })),
+    homeworkTasks: rating.tasks.map((r) => ({ kind: r.key, chosen: r.chosen, of: r.of })),
+    topics: rating.topics,
+    struggling: [...latestClarity].filter(([, answer]) => answer === STRUGGLING).map(([topic]) => topic),
+    wishes,
+  };
 }

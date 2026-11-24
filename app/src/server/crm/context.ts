@@ -6,6 +6,7 @@
 // Never in the context: the last name, contacts, payments, links (#18), and
 // the keys of homework tasks.
 import { type AssessmentPeriod, assessmentPeriod } from "../assessment/assessments";
+import { feedbackForAssistant } from "../homework/feedback-rating";
 import { gamesForStudent } from "../library/material-students";
 import type { Database } from "../db/client";
 import type { GameAnswer } from "../../domain/game-result-format";
@@ -47,6 +48,8 @@ export type StudentContext = {
   gamesForStudent: { id: string; title: string }[];
   /** What the next monthly assessment is drafted from (#313): since the last approved one, the units held and the words added. */
   assessmentPeriod: AssessmentPeriod;
+  /** The child's feedback (#335): «что заходит», the topics «пока путаюсь», the latest «А ещё я хочу…». */
+  feedback: Awaited<ReturnType<typeof feedbackForAssistant>>;
 };
 
 /** The context of one student of this teacher, or null — another teacher's student is the same as a missing one. */
@@ -82,5 +85,6 @@ export async function buildStudentContext(
       .map(({ word, translation }) => ({ word, translation })),
     gamesForStudent: await gamesForStudent(db, teacherId, studentId),
     assessmentPeriod: await assessmentPeriod(db, teacherId, studentId),
+    feedback: await feedbackForAssistant(db, teacherId, studentId),
   };
 }
