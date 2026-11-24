@@ -27,7 +27,7 @@ afterAll(closeDb);
 describe("a request", () => {
   it("is added under «Заявка» with its fields; the first name is required, the rest optional", async () => {
     const { id } = await teacher.teacher.requests.create(avito("  Заявкина  "));
-    expect(await listed(id)).toEqual({ id, ...avito("Заявкина"), stage: "request", declineReason: null, declineComment: null });
+    expect(await listed(id)).toEqual({ id, ...avito("Заявкина"), stage: "request", declineReason: null, declineComment: null, introLevel: null, introNotes: null });
 
     const { id: bare } = await teacher.teacher.requests.create({ firstName: "Безконтактный", age: null, schoolYear: "", contact: " ", source: "profi", requestedOn: today });
     expect(await listed(bare)).toMatchObject({ age: null, schoolYear: null, contact: null, source: "profi" });
@@ -46,7 +46,7 @@ describe("a request", () => {
     expect(await listed(id)).toMatchObject({ stage: "declined", declineReason: "expensive", declineComment: "Вернутся весной" });
 
     await teacher.teacher.requests.move({ id, stage: "request" });
-    expect(await listed(id)).toMatchObject({ stage: "request", declineReason: null, declineComment: null });
+    expect(await listed(id)).toMatchObject({ stage: "request", declineReason: null, declineComment: null, introLevel: null, introNotes: null });
 
     // «Отказ» without a reason is refused.
     await expect(teacher.teacher.requests.move({ id, stage: "declined" } as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });

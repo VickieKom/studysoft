@@ -128,7 +128,7 @@ describe("«Завершить урок»", () => {
       { word: "orange", translation: "апельсин" },
       { word: "LANTERN", translation: "фонарь" },
     ]);
-    expect(await teacher.teacher.lessonMode.finish(input)).toEqual({ studentId });
+    expect(await teacher.teacher.lessonMode.finish(input)).toEqual({ studentId, requestId: null });
 
     const [held] = await db().select().from(lesson).where(eq(lesson.id, lessonId));
     expect(held).toMatchObject({ status: "held", charged: true, unit: "Unit 1 · 1.2", note: "A synthetic note" });
@@ -195,7 +195,7 @@ describe("«Завершить урок»", () => {
     const [kept] = await db().select({ passed: student.passedLessonId }).from(student).where(eq(student.id, studentId));
     expect(kept!.passed).toBe(lessons["1.1"]);
     // Nothing applied, so it can be done again.
-    expect(await teacher.teacher.lessonMode.finish({ ...input, words: [] })).toEqual({ studentId });
+    expect(await teacher.teacher.lessonMode.finish({ ...input, words: [] })).toEqual({ studentId, requestId: null });
   });
 
   it("refuses a homework changed since the form opened, and waits for a finish already holding the lesson", async () => {

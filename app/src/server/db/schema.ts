@@ -1201,11 +1201,25 @@ export const clientRequest = pgTable(
     stage: text("stage").notNull().default("request"),
     declineReason: text("decline_reason"),
     declineComment: text("decline_comment"),
+    // The child's hidden card (#338), made by the first «Записать на
+    // вводный»: the intro lesson belongs to it.
+    studentId: uuid("student_id"),
+    // «Итог вводного» (#338): the CEFR level and the teacher's notes.
+    introLevel: text("intro_level"),
+    introNotes: text("intro_notes"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("client_request_teacher_id_idx").on(t.teacherId)],
+  (t) => [
+    index("client_request_teacher_id_idx").on(t.teacherId),
+    foreignKey({
+      name: "client_request_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("client_request_student_id_key").on(t.studentId),
+  ],
 );
 
 /**

@@ -701,7 +701,7 @@ function FinishLesson({
     setSaving(true);
     setError(null);
     try {
-      const { studentId } = await routerClient.teacher.lessonMode.finish.mutate({
+      const { studentId, requestId } = await routerClient.teacher.lessonMode.finish.mutate({
         lessonId,
         charged,
         note,
@@ -710,7 +710,8 @@ function FinishLesson({
         words: allWords,
       });
       onFinished();
-      router.push(`/teacher/students/${studentId}`);
+      // An intro lesson goes back to its request: the child has no card (#338).
+      router.push(requestId ? `/teacher/requests/${requestId}` : `/teacher/students/${studentId}`);
     } catch (caught) {
       const code = (caught as { data?: { code?: string } })?.data?.code;
       const message = (caught as { message?: string })?.message;

@@ -6,6 +6,7 @@ import { bookSourceSchema, MAX_LESSON_TASKS } from "../../../domain/task-bank";
 import { studentTaskSchema } from "../../../domain/student-task-schema";
 import { buildHomeworkFromBank, prepBankTasks } from "../../lesson/bank-homework";
 import { findPreparation, savePlan, setStudentTextbook, studentTextbook, studentWithTextbook, upcomingLessons } from "../../lesson/prep";
+import { requestOfLesson } from "../../crm/requests";
 import { openTextbookVideo } from "../../library/textbook-videos";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -86,6 +87,8 @@ export const prepRouter = router({
           ),
           // The videos opened to the student from this preparation, still open.
           openedVideos: z.array(z.uuid()),
+          // An intro lesson's request (#338): its hidden card has no card page to choose a textbook on.
+          requestId: z.uuid().nullable(),
         })
         .strict(),
     )
@@ -95,6 +98,7 @@ export const prepRouter = router({
       const { launch: _, ...prep } = found;
       return {
         ...prep,
+        requestId: await requestOfLesson(ctx.db, ctx.teacherId, input.lessonId),
         startsAt: prep.startsAt.toISOString(),
         materials: prep.materials.map((m) => ({ ...m, kind: m.kind as (typeof MATERIAL_KINDS)[number] })),
       };

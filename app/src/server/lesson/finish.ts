@@ -10,6 +10,7 @@ import { todayIn } from "../../domain/homework";
 import type { LessonPlan } from "../../domain/lesson-plan";
 import { type LessonWord, lessonStateSchema } from "../../domain/lesson-state";
 import { addDays, dateIn } from "../../domain/schedule";
+import { followIntroLesson } from "../crm/requests";
 import type { Database } from "../db/client";
 import { homework, lesson, lessonPlan, lessonState, student, vocabularyWord } from "../db/schema";
 import { orderedLessons, passedLesson, studentWithTextbook } from "./prep";
@@ -193,6 +194,8 @@ export async function finishLesson(
         on conflict (student_id, lower(word))
         do update set translation = coalesce(${vocabularyWord.translation}, excluded.translation), updated_at = ${now.toISOString()}`);
     }
+    // An intro lesson moves its request with the rest (#338).
+    await followIntroLesson(tx, teacherId, lessonId);
     return { finished: { studentId: found.studentId } };
   });
 }
