@@ -2,11 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import short from "../../../../../deploy/seed/homework/demo-short.json";
 import { closeDb, db } from "../../db/client";
 import { homeworkFeedback, homeworkSurvey } from "../../db/schema";
+import { BOTH_MEH } from "../../../domain/survey";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller } from "../index";
 
 // The child's feedback in the assistant's student context (#335): «что
-// заходит» as the card rates it (#333), the topics whose latest «Насколько
+// заходит» as the card rates it (#333), the kinds in pairs answered «Оба
+// так себе», which the ratings leave out, the topics whose latest «Насколько
 // понятно» is «пока путаюсь», and the latest «А ещё я хочу…». Another
 // student's answers never show. The answers are synthetic.
 
@@ -46,17 +48,23 @@ beforeAll(async () => {
 afterAll(closeDb);
 
 describe("the child's feedback in the student context", () => {
-  it("holds «что заходит», the topics the latest answer finds hard, and the latest wishes, newest first", async () => {
+  it("holds «что заходит», the kinds of «Оба так себе», the topics the latest answer finds hard, and the latest wishes, newest first", async () => {
     const studentId = await newStudent("Контекст обратной связи");
     // Earlier: comets hard, rivers hard; later: rivers understood — only comets stays hard.
     await survey(studentId, [`Context game ${run}`, "пока путаюсь", "пока путаюсь", "Про планеты"], 60);
     await survey(studentId, [`Context game ${run}`, "пока путаюсь", "могу объяснить", "Больше игр"], 10);
+    // The same pair once more, «Оба так себе»: no kind chosen, both kinds in a pair found so.
+    await survey(studentId, [BOTH_MEH, null, null, null], 30);
     const { id } = await teacher.teacher.homework.import({ studentId, json: JSON.stringify(short) });
     await db().insert(homeworkFeedback).values({ teacherId, studentId, homeworkId: id, answer: "written" });
 
     const { feedback } = await assistant.agent.studentContext({ studentId });
     expect(feedback).toEqual({
-      lessonMaterials: [{ kind: "game", chosen: 2, of: 2 }],
+      lessonMaterials: [{ kind: "game", chosen: 2, of: 3 }],
+      lessonMaterialsMeh: [
+        { kind: "game", meh: 1, of: 3 },
+        { kind: "video", meh: 1, of: 3 },
+      ],
       homeworkTasks: [{ kind: "written", chosen: 1, of: 1 }],
       topics: [],
       struggling: ["comets"],
@@ -69,7 +77,7 @@ describe("the child's feedback in the student context", () => {
     const quiet = await newStudent("Не отвечал");
     await survey(answered, [`Context game ${run}`, "пока путаюсь", null, "Секретное желание"], 5);
     const { feedback } = await assistant.agent.studentContext({ studentId: quiet });
-    expect(feedback).toEqual({ lessonMaterials: [], homeworkTasks: [], topics: [], struggling: [], wishes: [] });
+    expect(feedback).toEqual({ lessonMaterials: [], lessonMaterialsMeh: [], homeworkTasks: [], topics: [], struggling: [], wishes: [] });
     expect(JSON.stringify(await assistant.agent.studentContext({ studentId: quiet }))).not.toContain("Секретное желание");
   });
 });

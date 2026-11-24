@@ -107,8 +107,8 @@ export const student = pgTable(
     textbookId: uuid("textbook_id").references((): AnyPgColumn => textbook.id),
     passedLessonId: text("passed_lesson_id"),
     passedLessonSetAt: timestamp("passed_lesson_set_at", { withTimezone: true }),
-    // When «Фидбэк» last came on the teacher's screen (#333): answers after it are «Новый фидбэк» on the general screen.
-    feedbackSeenAt: timestamp("feedback_seen_at", { withTimezone: true }),
+    // The newest answer «Фидбэк» showed the teacher (#333): newer ones are «Новый фидбэк» on the general screen. Now by default: answers before the release, or before the student was added, count as seen.
+    feedbackSeenAt: timestamp("feedback_seen_at", { withTimezone: true }).defaultNow(),
     // The family's goal and a personal measure of the teacher's own (#266): a
     // name and a unit, counted when a lesson is marked. Teacher only, like the
     // profile; the assistant does not see them yet.
@@ -871,6 +871,45 @@ export const gameResult = pgTable(
       foreignColumns: [student.id, student.teacherId],
     }),
     index("game_result_student_created_idx").on(t.studentId, t.createdAt),
+  ],
+);
+
+/**
+ * A textbook video opened to a student from a lesson's preparation (#329):
+ * at once, until an hour after that lesson's end (product owner,
+ * 2026-11-23), with the tasks of the lesson's bank the plan's video stage
+ * picked, copied as they were when opened. The end is read from the lesson,
+ * so moving the lesson moves it and cancelling the lesson ends it. Opening it
+ * again copies the tasks anew. The answers go to `video_answer` as a library video's do,
+ * under the file's id.
+ */
+export const textbookVideoAccess = pgTable(
+  "textbook_video_access",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teacher.id),
+    studentId: uuid("student_id").notNull(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => textbookFile.id),
+    // A lesson removed from the schedule takes the access it gave with it.
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => lesson.id, { onDelete: "cascade" }),
+    tasks: jsonb("tasks").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "textbook_video_access_student_teacher_fk",
+      columns: [t.studentId, t.teacherId],
+      foreignColumns: [student.id, student.teacherId],
+    }),
+    uniqueIndex("textbook_video_access_lesson_file_key").on(t.lessonId, t.fileId),
+    index("textbook_video_access_student_id_idx").on(t.studentId),
   ],
 );
 

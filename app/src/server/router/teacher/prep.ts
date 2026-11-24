@@ -5,7 +5,8 @@ import { MATERIAL_KINDS } from "../../../domain/library";
 import { bookSourceSchema, MAX_LESSON_TASKS } from "../../../domain/task-bank";
 import { studentTaskSchema } from "../../../domain/student-task-schema";
 import { buildHomeworkFromBank, prepBankTasks } from "../../lesson/bank-homework";
-import { findPreparation, savePlan, setStudentTextbook, studentTextbook, upcomingLessons } from "../../lesson/prep";
+import { findPreparation, savePlan, setStudentTextbook, studentTextbook, studentWithTextbook, upcomingLessons } from "../../lesson/prep";
+import { openTextbookVideo } from "../../library/textbook-videos";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -70,6 +71,21 @@ export const prepRouter = router({
               .strict(),
           ),
           homeworkDrafts: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
+          // The textbook's lesson videos the plan may take (#329), each with its lesson's bank tasks fit for a video, by position, and the bank's revision.
+          textbookVideos: z.array(
+            z
+              .object({
+                fileId: z.uuid(),
+                name: z.string(),
+                lessonId: z.uuid(),
+                lessonTitle: z.string(),
+                tasks: z.array(z.object({ index: z.number().int(), prompt: z.string() }).strict()),
+                revision: z.string(),
+              })
+              .strict(),
+          ),
+          // The videos opened to the student from this preparation, still open.
+          openedVideos: z.array(z.uuid()),
         })
         .strict(),
     )
@@ -93,6 +109,26 @@ export const prepRouter = router({
       if (saved === "not_found") throw notFound();
       if (saved === "conflict") throw new TRPCError({ code: "CONFLICT", message: "Пока вы правили, ассистент прислал новый план. Обновите страницу" });
       if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
+      return { ok: true as const };
+    }),
+
+  /**
+   * «Открыть ученику» on a textbook video stage of the saved plan (#329):
+   * open to the student at once, until an hour after the lesson's end, with
+   * the stage's bank tasks copied as they are now.
+   */
+  openTextbookVideo: teacherProcedure
+    .input(z.object({ lessonId: z.uuid(), fileId: z.uuid() }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const found = await findPreparation(ctx.db, ctx.teacherId, input.lessonId);
+      if (!found) throw notFound();
+      const book = await studentWithTextbook(ctx.db, ctx.teacherId, found.studentId);
+      const textbook = book?.textbookId ? { id: book.textbookId, structure: book.structure } : null;
+      const opened = await openTextbookVideo(ctx.db, ctx.teacherId, input.lessonId, input.fileId.toLowerCase(), textbook);
+      if (opened === "not_found") throw new TRPCError({ code: "NOT_FOUND", message: "Сначала сохраните план с этим видео; после урока видео не открыть" });
+      if (opened === "bank_changed")
+        throw new TRPCError({ code: "CONFLICT", message: "Задания урока учебника изменились. Обновите страницу, отметьте задания к видео заново и сохраните план" });
       return { ok: true as const };
     }),
 

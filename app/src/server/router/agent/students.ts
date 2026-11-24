@@ -92,6 +92,8 @@ const studentContext = z
     feedback: z
       .object({
         lessonMaterials: z.array(z.object({ kind: z.enum(RATED_MATERIAL_KINDS), chosen: z.number().int(), of: z.number().int() }).strict()),
+        // The kinds in pairs answered «Оба так себе»: `meh` such pairs of `of` the kind was in.
+        lessonMaterialsMeh: z.array(z.object({ kind: z.enum(RATED_MATERIAL_KINDS), meh: z.number().int(), of: z.number().int() }).strict()),
         homeworkTasks: z.array(z.object({ kind: z.enum(TASK_TYPES), chosen: z.number().int(), of: z.number().int() }).strict()),
         topics: z.array(z.object({ topic: z.string(), chosen: z.number().int() }).strict()),
         struggling: z.array(z.string()),

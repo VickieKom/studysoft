@@ -1,5 +1,5 @@
 // A textbook's structure (#150): units, and lessons with their page ranges
-// in each book, their tracks (by name) and their words. The assistant saves
+// in each book, their tracks and videos (by name, #329) and their words. The assistant saves
 // one as a draft; the teacher corrects and confirms it, or enters it by hand.
 // Only a confirmed structure is used by lessons. Plain data and zod only.
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { BOOK_KINDS } from "./textbook";
 export const MAX_UNITS = 60;
 export const MAX_LESSONS_PER_UNIT = 30;
 export const MAX_LESSON_TRACKS = 30;
+export const MAX_LESSON_VIDEOS = 10;
 export const MAX_LESSON_WORDS = 200;
 
 const name = z.string().trim().min(1).max(200);
@@ -25,6 +26,8 @@ const lesson = z
     title: name,
     pages: z.partialRecord(z.enum(BOOK_KINDS), range),
     tracks: z.array(name).max(MAX_LESSON_TRACKS),
+    // The set's videos the lesson has (#329), by name as tracks are; a structure saved before has none.
+    videos: z.array(name).max(MAX_LESSON_VIDEOS).optional(),
     words: z.array(name).max(MAX_LESSON_WORDS),
   })
   .strict();

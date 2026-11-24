@@ -20,7 +20,7 @@ import type { Database } from "../db/client";
 import { lessonState, libraryMaterial } from "../db/schema";
 import { findTextbook } from "../library/textbooks";
 import { stageHomework, studentHomeworkIds } from "./homework";
-import { stageVideos } from "./video-review";
+import { stageVideos, textbookStageVideos } from "./video-review";
 import { findPreparation, ownLesson, stageMaterials, studentWithTextbook } from "./prep";
 
 /** The longest note: a lesson's worth of jottings. */
@@ -38,6 +38,8 @@ export type LessonResources = {
   materials: StageMaterial[];
   /** The submitted homework the plan's homework stages review (#153). The stage is the teacher's window: the keys are shown only when she says. */
   homework: StageHomework[];
+  /** The student's textbook videos (#329), by file, for the labels of their stages. */
+  videos: { id: string; title: string }[];
 };
 
 /** The student's textbook as the lesson shows it: the rendered books, the confirmed lessons and the tracks. */
@@ -50,6 +52,7 @@ async function textbookResources(db: Database, teacherId: string, studentId: str
     books: (book?.books ?? []).map((b) => ({ kind: b.kind, fileId: b.id, pageCount: b.pageCount })),
     lessons: (structure?.units ?? []).flatMap((u) => u.lessons.map((l) => ({ id: l.id!, title: l.title, pages: l.pages, tracks: l.tracks }))),
     tracks: (book?.tracks ?? []).map((t) => ({ name: t.name, url: `/api/files/textbooks/${t.id}` })),
+    videos: (book?.videos ?? []).map((v) => ({ id: v.id, title: v.name })),
   };
 }
 
@@ -89,6 +92,7 @@ export async function lessonResources(db: Database, teacherId: string, lessonId:
     tracks: book.tracks,
     materials: await materials(db, teacherId),
     homework: await stageHomework(db, teacherId, prep.studentId, homeworkIds),
+    videos: book.videos,
   };
   return {
     lessonId,
@@ -147,10 +151,13 @@ export async function lessonVideos(db: Database, teacherId: string, lessonId: st
   if (!prep) return null;
   const [keptRow] = await db.select({ state: lessonState.state }).from(lessonState).where(eq(lessonState.lessonId, lessonId));
   const keptStages = lessonStateSchema.safeParse(keptRow?.state);
-  const ids = [
-    ...new Set([...prep.launch.stages, ...(keptStages.success ? keptStages.data.stages : [])].flatMap((s) => (s.type === "material" ? [s.materialId] : []))),
+  const stages = [...prep.launch.stages, ...(keptStages.success ? keptStages.data.stages : [])];
+  const ids = [...new Set(stages.flatMap((s) => (s.type === "material" ? [s.materialId] : [])))];
+  const textbookStages = stages.flatMap((s) => (s.type === "textbook_video" ? [s] : []));
+  return [
+    ...(await stageVideos(db, teacherId, prep.studentId, lessonId, ids)),
+    ...(await textbookStageVideos(db, teacherId, prep.studentId, lessonId, textbookStages)),
   ];
-  return stageVideos(db, teacherId, prep.studentId, lessonId, ids);
 }
 
 /** The homework a state's stages name that is not the student's own. */
@@ -169,12 +176,15 @@ function checkState(input: unknown, resources: LessonResources): { ok: true; sta
   const lessons = new Set(resources.lessons.map((l) => l.id));
   const known = new Set(resources.materials.map((m) => m.id));
   const tracks = new Set(resources.tracks.map((t) => t.name));
+  const videos = new Set(resources.videos.map((v) => v.id));
   const errors = parsed.data.stages.flatMap((s, i) =>
     s.type === "book" && !lessons.has(s.lessonId)
       ? [`этап ${i + 1}: такого урока нет в учебнике ученика`]
       : s.type === "material" && !known.has(s.materialId)
         ? [`этап ${i + 1}: такого материала нет в библиотеке`]
-        : [],
+        : s.type === "textbook_video" && !videos.has(s.fileId)
+          ? [`этап ${i + 1}: такого видео нет в учебнике ученика`]
+          : [],
   );
   if (parsed.data.track && !tracks.has(parsed.data.track.name)) errors.push("такого трека нет в учебнике ученика");
   return errors.length > 0 ? { ok: false, errors } : { ok: true, state: parsed.data };

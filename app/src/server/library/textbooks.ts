@@ -11,7 +11,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { and, asc, desc, eq, inArray, ne, or } from "drizzle-orm";
-import { type BookKind, MAX_TRACKS, MAX_TRACKS_BYTES, type RenderStatus } from "../../domain/textbook";
+import { BOOK_KINDS, type BookKind, MAX_TEXTBOOK_VIDEOS, MAX_TRACKS, MAX_TRACKS_BYTES, type RenderStatus } from "../../domain/textbook";
 import { openBlob, saveBlob } from "../blob/store";
 import type { Database } from "../db/client";
 import { blob, textbook, textbookFile, textbookPage } from "../db/schema";
@@ -56,6 +56,8 @@ export type NewTextbook = {
   level: string;
   books: { kind: BookKind; name: string; file: string }[];
   tracks: { name: string; file: string }[];
+  /** The set's videos (#329), each uploaded as a library video is: MP4, WebM or MOV, at most 200 MB. */
+  videos: { name: string; file: string }[];
 };
 
 /**
@@ -68,7 +70,8 @@ export async function createTextbook(db: Database, teacherId: string, input: New
   if (input.books.length === 0) return { error: "Добавьте хотя бы одну книгу в PDF" };
   if (new Set(input.books.map((b) => b.kind)).size !== input.books.length) return { error: "Каждая книга — один файл" };
   if (input.tracks.length > MAX_TRACKS) return { error: `Не больше ${MAX_TRACKS} треков` };
-  const ids = [...input.books.map((b) => b.file), ...input.tracks.map((t) => t.file)];
+  if (input.videos.length > MAX_TEXTBOOK_VIDEOS) return { error: `Не больше ${MAX_TEXTBOOK_VIDEOS} видео` };
+  const ids = [...input.books.map((b) => b.file), ...input.tracks.map((t) => t.file), ...input.videos.map((v) => v.file)];
   if (new Set(ids).size !== ids.length) return { error: "Один и тот же файл добавлен дважды" };
 
   const created = await db.transaction(async (tx) => {
@@ -79,11 +82,11 @@ export async function createTextbook(db: Database, teacherId: string, input: New
       .where(and(inArray(blob.id, ids), eq(blob.teacherId, teacherId)))
       .for("update", { of: blob });
     const byId = new Map(files.map((f) => [f.id, f]));
-    const fits = (id: string, pdf: boolean) => {
+    const fits = (id: string, type: "pdf" | "audio" | "video") => {
       const file = byId.get(id);
-      return file && !file.used && (pdf ? file.contentType === "application/pdf" : file.contentType.startsWith("audio/"));
+      return file && !file.used && (type === "pdf" ? file.contentType === "application/pdf" : file.contentType.startsWith(`${type}/`));
     };
-    if (!input.books.every((b) => fits(b.file, true)) || !input.tracks.every((t) => fits(t.file, false))) {
+    if (!input.books.every((b) => fits(b.file, "pdf")) || !input.tracks.every((t) => fits(t.file, "audio")) || !input.videos.every((v) => fits(v.file, "video"))) {
       return { error: "Файл не найден: загрузите его ещё раз" };
     }
     const tracksSize = input.tracks.reduce((sum, t) => sum + Number(byId.get(t.file)!.size), 0);
@@ -112,6 +115,11 @@ export async function createTextbook(db: Database, teacherId: string, input: New
         .insert(textbookFile)
         .values(input.tracks.map((t, position) => ({ textbookId: row!.id, kind: "track", name: t.name, blobId: t.file, position })));
     }
+    if (input.videos.length > 0) {
+      await tx
+        .insert(textbookFile)
+        .values(input.videos.map((v, position) => ({ textbookId: row!.id, kind: "video", name: v.name, blobId: v.file, position })));
+    }
     return { id: row!.id, books: books.map((b) => b.id) };
   });
   if ("error" in created) return created;
@@ -128,7 +136,7 @@ export async function listTextbooks(db: Database, teacherId: string) {
     .orderBy(desc(textbook.createdAt));
 }
 
-/** One set of this teacher with its books (status and pages) and tracks, or null. */
+/** One set of this teacher with its books (status and pages), tracks and videos (#329), or null. */
 export async function findTextbook(db: Database, teacherId: string, id: string) {
   const [row] = await db
     .select({ id: textbook.id, title: textbook.title, level: textbook.level })
@@ -150,12 +158,13 @@ export async function findTextbook(db: Database, teacherId: string, id: string) 
   return {
     ...row,
     books: files
-      .filter((f) => f.kind !== "track")
+      .filter((f) => (BOOK_KINDS as readonly string[]).includes(f.kind))
       .map((f) => {
         const status = statusOf(f);
         return { id: f.id, kind: f.kind as BookKind, name: f.name, status, pageCount: status === "done" ? (f.pageCount ?? 0) : 0 };
       }),
     tracks: files.filter((f) => f.kind === "track").map((f) => ({ id: f.id, name: f.name })),
+    videos: files.filter((f) => f.kind === "video").map((f) => ({ id: f.id, name: f.name })),
   };
 }
 
@@ -181,7 +190,7 @@ async function takeBook(db: Database, teacherId: string, fileId: string): Promis
     .where(
       and(
         eq(textbookFile.id, fileId),
-        ne(textbookFile.kind, "track"),
+        inArray(textbookFile.kind, BOOK_KINDS),
         inArray(
           textbookFile.textbookId,
           db.select({ id: textbook.id }).from(textbook).where(eq(textbook.teacherId, teacherId)),
@@ -247,7 +256,7 @@ export async function retryRender(db: Database, teacherId: string, fileId: strin
     .select({ renderStatus: textbookFile.renderStatus, renderBoot: textbookFile.renderBoot })
     .from(textbookFile)
     .innerJoin(textbook, eq(textbook.id, textbookFile.textbookId))
-    .where(and(eq(textbookFile.id, fileId), eq(textbook.teacherId, teacherId), ne(textbookFile.kind, "track")));
+    .where(and(eq(textbookFile.id, fileId), eq(textbook.teacherId, teacherId), inArray(textbookFile.kind, BOOK_KINDS)));
   if (!row || statusOf(row) !== "failed") return false;
   const blobId = await takeBook(db, teacherId, fileId);
   if (blobId === null) return false;

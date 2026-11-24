@@ -28,6 +28,7 @@ export function checkStructure(found: Found, input: unknown): { ok: true; struct
   const errors: string[] = [];
   const pages = new Map(found.books.filter((b) => b.status === "done").map((b) => [b.kind, b.pageCount]));
   const tracks = new Set(found.tracks.map((t) => t.name));
+  const videos = new Set(found.videos.map((v) => v.name));
   for (const [u, unit] of parsed.data.units.entries()) {
     for (const [l, lesson] of unit.lessons.entries()) {
       const where = `юнит ${u + 1}, урок ${l + 1}`;
@@ -39,6 +40,8 @@ export function checkStructure(found: Found, input: unknown): { ok: true; struct
         else if (range.to > count) errors.push(`${where}: в ${BOOK_LABELS[kind]} ${count} страниц, а урок доходит до ${range.to}`);
       }
       for (const track of lesson.tracks) if (!tracks.has(track)) errors.push(`${where}: трека «${track}» нет в учебнике`);
+      // A video is named as a track is (#329): a typo would drop it from the lesson silently.
+      for (const video of lesson.videos ?? []) if (!videos.has(video)) errors.push(`${where}: видео «${video}» нет в учебнике`);
     }
   }
   if (errors.length > 0) return { ok: false, errors: errors.slice(0, 10) };
@@ -140,7 +143,7 @@ export async function saveTeacherStructure(
   return rows.length > 0 ? "saved" : "conflict";
 }
 
-/** One lesson of a textbook's confirmed structure, with its books' page ranges and its tracks, or null. */
+/** One lesson of a textbook's confirmed structure, with its books' page ranges, its tracks and its videos (#329), or null. */
 export async function findLesson(db: Database, teacherId: string, textbookId: string, lessonId: string) {
   const found = await findTextbook(db, teacherId, textbookId);
   const view = found ? await readStructure(db, teacherId, textbookId) : null;
@@ -149,11 +152,12 @@ export async function findLesson(db: Database, teacherId: string, textbookId: st
     const lesson = unit.lessons.find((l) => l.id === lessonId);
     if (!lesson) continue;
     const tracks = lesson.tracks.flatMap((name) => found.tracks.filter((t) => t.name === name));
+    const videos = (lesson.videos ?? []).flatMap((name) => found.videos.filter((v) => v.name === name));
     const pages = found.books.flatMap((book) => {
       const range = lesson.pages[book.kind as BookKind];
       return range ? [{ fileId: book.id, kind: book.kind, from: range.from, to: range.to }] : [];
     });
-    return { textbookTitle: found.title, unit: unit.title, title: lesson.title, pages, tracks, words: lesson.words };
+    return { textbookTitle: found.title, unit: unit.title, title: lesson.title, pages, tracks, videos, words: lesson.words };
   }
   return null;
 }

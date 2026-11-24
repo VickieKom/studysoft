@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useId, useState } from "react";
 import { LEVELS } from "@/domain/student";
+import { MAX_VIDEO_BYTES } from "@/domain/library";
 import { BOOK_KINDS, BOOK_LABELS, type BookKind, MAX_BOOK_BYTES, MAX_TRACKS_BYTES } from "@/domain/textbook";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
@@ -11,7 +12,7 @@ import { routerClient } from "./router-client";
 class Refused extends Error {}
 
 /** Sends a book or a track to the upload address as it is read from disk (#156) and returns its id. */
-async function upload(file: File, kind: "book" | "track"): Promise<string> {
+async function upload(file: File, kind: "book" | "track" | "video"): Promise<string> {
   const response = await fetch(`/api/files/textbooks?kind=${kind}`, {
     method: "PUT",
     headers: { "Content-Type": file.type || "application/octet-stream" },
@@ -28,8 +29,8 @@ const shortName = (file: File) => file.name.replace(/\.[^.]+$/, "");
 const field = "rounded-control border border-border bg-bg px-3 py-2";
 
 /**
- * «Загрузить учебник» (#156): a title, a level, the books as PDFs and the
- * folder of tracks. The files go first, one by one, then the set; the
+ * «Загрузить учебник» (#156): a title, a level, the books as PDFs, the
+ * folder of tracks and the videos (#329). The files go first, one by one, then the set; the
  * textbook's page then shows the pages as they are rendered.
  */
 export function TextbookUploadForm() {
@@ -39,6 +40,7 @@ export function TextbookUploadForm() {
   const [level, setLevel] = useState<(typeof LEVELS)[number]>("A1");
   const [books, setBooks] = useState<Partial<Record<BookKind, File>>>({});
   const [tracks, setTracks] = useState<File[]>([]);
+  const [videos, setVideos] = useState<File[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +52,8 @@ export function TextbookUploadForm() {
     if (chosen.length === 0) return setError("Добавьте хотя бы одну книгу в PDF");
     if (chosen.some(({ file }) => file.size > MAX_BOOK_BYTES)) return setError("Книга больше 300 МБ");
     if (tracks.reduce((sum, file) => sum + file.size, 0) > MAX_TRACKS_BYTES) return setError("Треки вместе больше 500 МБ");
+    const huge = videos.find((file) => file.size > MAX_VIDEO_BYTES);
+    if (huge) return setError(`${huge.name}: Видео больше 200 МБ`);
     try {
       const uploadedBooks = [];
       for (const { kind, file } of chosen) {
@@ -61,12 +65,18 @@ export function TextbookUploadForm() {
         setProgress(`Загружается трек ${i + 1} из ${tracks.length}`);
         uploadedTracks.push({ name: shortName(file), file: await upload(file, "track") });
       }
+      const uploadedVideos = [];
+      for (const [i, file] of videos.entries()) {
+        setProgress(`Загружается видео ${i + 1} из ${videos.length}`);
+        uploadedVideos.push({ name: shortName(file), file: await upload(file, "video") });
+      }
       setProgress("Сохраняется");
       const { id: textbookId } = await routerClient.teacher.textbooks.create.mutate({
         title: title.trim(),
         level,
         books: uploadedBooks,
         tracks: uploadedTracks,
+        videos: uploadedVideos,
       });
       router.push(`/teacher/library/textbooks/${textbookId}`);
     } catch (caught) {
@@ -118,6 +128,19 @@ export function TextbookUploadForm() {
           onChange={(e) => setTracks([...(e.target.files ?? [])].sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true })))}
         />
         <span className="text-caption text-text-muted">Выделите все файлы в папке с треками. MP3, M4A, WAV или OGG, вместе до 500 МБ</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`${id}-videos`} className="text-small text-text-secondary">
+          Видео
+        </label>
+        <input
+          id={`${id}-videos`}
+          type="file"
+          multiple
+          accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+          onChange={(e) => setVideos([...(e.target.files ?? [])].sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true })))}
+        />
+        <span className="text-caption text-text-muted">Видео к урокам учебника: MP4, WebM или MOV, каждое до 200 МБ. Урок видео отмечается в структуре</span>
       </div>
       {error && (
         <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-small text-danger">

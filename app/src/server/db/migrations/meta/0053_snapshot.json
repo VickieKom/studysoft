@@ -1,5 +1,5 @@
 {
-  "id": "8686021b-3095-4361-aba7-7dc701543a47",
+  "id": "9c3cd13a-d57f-4419-ab4a-92c6acdca736",
   "prevId": "d391d2ea-d9f4-4bb5-ad33-b03fbc33dac0",
   "version": "7",
   "dialect": "postgresql",
@@ -4445,12 +4445,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "feedback_seen_at": {
-          "name": "feedback_seen_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "family_goal": {
           "name": "family_goal",
           "type": "text",
@@ -5027,6 +5021,162 @@
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.textbook_video_access": {
+      "name": "textbook_video_access",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "teacher_id": {
+          "name": "teacher_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "student_id": {
+          "name": "student_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lesson_id": {
+          "name": "lesson_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tasks": {
+          "name": "tasks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "textbook_video_access_lesson_file_key": {
+          "name": "textbook_video_access_lesson_file_key",
+          "columns": [
+            {
+              "expression": "lesson_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "textbook_video_access_student_id_idx": {
+          "name": "textbook_video_access_student_id_idx",
+          "columns": [
+            {
+              "expression": "student_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "textbook_video_access_teacher_id_teacher_id_fk": {
+          "name": "textbook_video_access_teacher_id_teacher_id_fk",
+          "tableFrom": "textbook_video_access",
+          "tableTo": "teacher",
+          "columnsFrom": [
+            "teacher_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "textbook_video_access_file_id_textbook_file_id_fk": {
+          "name": "textbook_video_access_file_id_textbook_file_id_fk",
+          "tableFrom": "textbook_video_access",
+          "tableTo": "textbook_file",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "textbook_video_access_lesson_id_lesson_id_fk": {
+          "name": "textbook_video_access_lesson_id_lesson_id_fk",
+          "tableFrom": "textbook_video_access",
+          "tableTo": "lesson",
+          "columnsFrom": [
+            "lesson_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "textbook_video_access_student_teacher_fk": {
+          "name": "textbook_video_access_student_teacher_fk",
+          "tableFrom": "textbook_video_access",
+          "tableTo": "student",
+          "columnsFrom": [
+            "student_id",
+            "teacher_id"
+          ],
+          "columnsTo": [
+            "id",
+            "teacher_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

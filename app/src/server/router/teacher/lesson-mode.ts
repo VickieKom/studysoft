@@ -35,6 +35,8 @@ const resources = z
       z.object({ id: z.uuid(), title: z.string(), pages: z.partialRecord(z.enum(BOOK_KINDS), range), tracks: z.array(z.string()) }).strict(),
     ),
     tracks: z.array(z.object({ name: z.string(), url: z.string().startsWith("/api/files/textbooks/") }).strict()),
+    // The student's textbook videos (#329), for the labels of their stages.
+    videos: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
     materials: z.array(
       z.discriminatedUnion("kind", [
         z

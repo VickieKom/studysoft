@@ -135,6 +135,20 @@ export default async function TextbookPage({ params }: Props) {
           </ul>
         </section>
       )}
+      {textbook.videos.length > 0 && (
+        <section aria-label="Видео учебника" className="flex flex-col gap-3">
+          <h2 className="text-h3 font-semibold">Видео</h2>
+          <ul aria-label="Видео" className="flex flex-col gap-3">
+            {textbook.videos.map((video) => (
+              <li key={video.id} className="flex flex-col gap-2">
+                <span className="font-semibold">{video.name}</span>
+                {/* biome-ignore lint/a11y/useMediaCaption: a textbook's video comes without captions */}
+                <video controls playsInline preload="metadata" src={`/api/files/textbooks/${video.id}`} className="w-full max-w-xl rounded-card border border-border bg-black" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }

@@ -45,11 +45,47 @@ export function rateMaterialKinds(answers: FunAnswer[]): Rated<RatedMaterialKind
   return byChosen([...chosen].map(([key, n]) => ({ key, chosen: n, of: answers.length })));
 }
 
+/**
+ * For the assistant (#335): the lesson materials' kinds in pairs the child
+ * answered «Оба так себе», with how many such pairs and how many pairs the
+ * kind was in; the most such first. A kind never in such a pair is left out.
+ */
+export function rateMehKinds(answers: FunAnswer[]): { key: RatedMaterialKind; meh: number; of: number }[] {
+  const meh = new Map<RatedMaterialKind, number>();
+  const of = new Map<RatedMaterialKind, number>();
+  for (const { a, b, picked } of answers) {
+    for (const kind of new Set([a, b])) {
+      if (!kind) continue;
+      of.set(kind, (of.get(kind) ?? 0) + 1);
+      if (picked === "neither") meh.set(kind, (meh.get(kind) ?? 0) + 1);
+    }
+  }
+  return [...meh].map(([key, n]) => ({ key, meh: n, of: of.get(key)! })).sort((x, y) => y.meh - x.meh || x.key.localeCompare(y.key));
+}
+
 /** The topics «Про что хочется ещё?» chose, the most chosen first. */
 export function rateTopics(chosen: string[]): { topic: string; chosen: number }[] {
   const counts = new Map<string, number>();
   for (const topic of chosen) counts.set(topic, (counts.get(topic) ?? 0) + 1);
   return [...counts].map(([topic, n]) => ({ topic, chosen: n })).sort((a, b) => b.chosen - a.chosen || a.topic.localeCompare(b.topic));
+}
+
+const WEEK_MS = 7 * 86_400_000;
+
+/**
+ * What «Фидбэк» shows (#333): the week's answers and every answer not seen
+ * yet, however old; the rest go under «Все ответы». `seenAt` is when the
+ * teacher last saw the block, by the newest answer it showed.
+ */
+export function splitFeedback<T extends { answeredAt: string }>(answers: T[], seenAt: string | null, now: number): { shown: T[]; older: T[] } {
+  const seen = seenAt === null ? Number.NEGATIVE_INFINITY : Date.parse(seenAt);
+  const isShown = (a: T) => Date.parse(a.answeredAt) >= now - WEEK_MS || Date.parse(a.answeredAt) > seen;
+  return { shown: answers.filter(isShown), older: answers.filter((a) => !isShown(a)) };
+}
+
+/** The newest of these answers, the time «Фидбэк» is seen up to; null when there is none. */
+export function newestAnswer(answers: { answeredAt: string }[]): string | null {
+  return answers.reduce<string | null>((newest, a) => (newest === null || Date.parse(a.answeredAt) > Date.parse(newest) ? a.answeredAt : newest), null);
 }
 
 /** «Игры — 3 из 3». */

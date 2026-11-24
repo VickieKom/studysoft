@@ -1,15 +1,18 @@
 // «Что заходит» (#333), from the child's answers: the one-tap question after
 // a homework (#331) and the answered surveys about the lessons (#332),
 // gathered into the ratings of `domain/feedback-rating.ts`. «Новый фидбэк» on
-// the teacher's general screen: a student with answers after she last opened
-// their card. The teacher's only — no student or parent procedure reads it.
-import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+// the teacher's general screen: a student with an answer newer than the
+// newest one «Фидбэк» showed her (product owner, 2026-11-24: seen once she
+// scrolls to it; answers before the release count as seen). The teacher's
+// only — no student or parent procedure reads it.
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   type FunAnswer,
   RATED_MATERIAL_KINDS,
   type Rated,
   type RatedMaterialKind,
   rateMaterialKinds,
+  rateMehKinds,
   rateTaskKinds,
   rateTopics,
 } from "../../domain/feedback-rating";
@@ -31,16 +34,28 @@ export type FeedbackRating = {
 
 /** The answers of these students (all of the teacher's when `studentIds` is null), as the ratings count them. */
 async function ratingOf(database: Database, teacherId: string, studentIds: string[] | null): Promise<FeedbackRating> {
+  return (await ratingWithPairs(database, teacherId, studentIds)).rating;
+}
+
+/** The ratings, and the survey's pairs by kind as the child answered them. */
+async function ratingWithPairs(
+  database: Database,
+  teacherId: string,
+  studentIds: string[] | null,
+): Promise<{ rating: FeedbackRating; funAnswers: FunAnswer[] }> {
   const whose = <T extends typeof homeworkFeedback | typeof homeworkSurvey>(table: T) =>
     studentIds ? inArray(table.studentId, studentIds) : undefined;
   const mini = await database
     .select({ answer: homeworkFeedback.answer, document: homework.document })
     .from(homeworkFeedback)
     .innerJoin(homework, eq(homework.id, homeworkFeedback.homeworkId))
+    // A deleted student's answers count no more, here or across students.
+    .innerJoin(student, and(eq(student.id, homeworkFeedback.studentId), isNull(student.deletedAt)))
     .where(and(eq(homeworkFeedback.teacherId, teacherId), whose(homeworkFeedback), isNotNull(homeworkFeedback.answer)));
   const surveys = await database
     .select({ questions: homeworkSurvey.questions, answers: homeworkSurvey.answers })
     .from(homeworkSurvey)
+    .innerJoin(student, and(eq(student.id, homeworkSurvey.studentId), isNull(student.deletedAt)))
     .where(and(eq(homeworkSurvey.teacherId, teacherId), whose(homeworkSurvey), eq(homeworkSurvey.status, "answered")));
 
   const funs: { a: string; b: string; answer: string; titles: [string, string] }[] = [];
@@ -68,13 +83,14 @@ async function ratingOf(database: Database, teacherId: string, studentIds: strin
     b: kindOf.get(f.b) ?? null,
     picked: f.answer === BOTH_FUN ? "both" : f.answer === BOTH_MEH ? "neither" : f.answer === f.titles[0] ? "a" : "b",
   }));
-  return {
+  const rating = {
     tasks: rateTaskKinds(
       mini.map((m) => ({ answer: m.answer as TaskType | typeof ALL_KINDS_ANSWER, kinds: taskKinds(m.document as HomeworkDocument) })),
     ),
     materials: rateMaterialKinds(funAnswers),
     topics: rateTopics(topics),
   };
+  return { rating, funAnswers };
 }
 
 /** «Что заходит» for one student of this teacher. */
@@ -87,20 +103,37 @@ export function ratingAcrossStudents(database: Database, teacherId: string): Pro
   return ratingOf(database, teacherId, null);
 }
 
-/** «Фидбэк» came on the teacher's screen (#333): its answers so far are seen, and the student leaves «Новый фидбэк». */
-export async function seeFeedback(database: Database, teacherId: string, studentId: string): Promise<boolean> {
-  const rows = await database
-    .update(student)
-    .set({ feedbackSeenAt: new Date() })
-    .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt)))
-    .returning({ id: student.id });
-  return rows.length > 0;
+/** When «Фидбэк» of this student was last seen, by the newest answer it showed; null for none, or no such student. */
+export async function feedbackSeenAt(database: Database, teacherId: string, studentId: string): Promise<Date | null> {
+  const [row] = await database
+    .select({ at: student.feedbackSeenAt })
+    .from(student)
+    .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt)));
+  return row?.at ?? null;
 }
 
-/** «Новый фидбэк»: this teacher's students with an answer after «Фидбэк» last came on her screen, by first name. */
+/**
+ * «Фидбэк» came on the teacher's screen (#333) showing answers up to `upTo`,
+ * the newest it showed: those are seen. A conditional write that never moves
+ * the mark back, so a page loaded earlier cannot unsee what a later one
+ * showed, and an answer that came after the page loaded stays new. False when
+ * there is no such student.
+ */
+export async function seeFeedback(database: Database, teacherId: string, studentId: string, upTo: Date): Promise<boolean> {
+  const own = and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt));
+  await database
+    .update(student)
+    .set({ feedbackSeenAt: upTo })
+    .where(and(own, or(isNull(student.feedbackSeenAt), lt(student.feedbackSeenAt, upTo))));
+  const [found] = await database.select({ id: student.id }).from(student).where(own);
+  return found !== undefined;
+}
+
+/** «Новый фидбэк»: this teacher's students with an answer newer than the newest «Фидбэк» showed her, by first name. */
 export async function studentsWithNewFeedback(database: Database, teacherId: string): Promise<{ id: string; firstName: string }[]> {
+  // The page holds an answer's time in milliseconds: compared at that precision, the answer it showed is not newer than itself.
   const after = (at: typeof homeworkFeedback.createdAt | typeof homeworkSurvey.answeredAt) =>
-    or(isNull(student.feedbackSeenAt), gt(at, student.feedbackSeenAt));
+    or(isNull(student.feedbackSeenAt), gt(sql`date_trunc('milliseconds', ${at})`, student.feedbackSeenAt));
   return database
     .select({ id: student.id, firstName: student.firstName })
     .from(student)
@@ -128,11 +161,11 @@ export const CONTEXT_WISHES = 5;
 
 /**
  * The child's feedback for the assistant's student context (#335): «что
- * заходит» as the card rates it, the topics whose latest «Насколько понятно»
+ * заходит» as the card rates it, the kinds in pairs answered «Оба так себе», the topics whose latest «Насколько понятно»
  * is «пока путаюсь», and the latest «А ещё я хочу…» texts.
  */
 export async function feedbackForAssistant(database: Database, teacherId: string, studentId: string) {
-  const rating = await studentRating(database, teacherId, studentId);
+  const { rating, funAnswers } = await ratingWithPairs(database, teacherId, [studentId]);
   const surveys = await database
     .select({ questions: homeworkSurvey.questions, answers: homeworkSurvey.answers })
     .from(homeworkSurvey)
@@ -153,6 +186,8 @@ export async function feedbackForAssistant(database: Database, teacherId: string
   }
   return {
     lessonMaterials: rating.materials.map((r) => ({ kind: r.key, chosen: r.chosen, of: r.of })),
+    // «Оба так себе» names no kind, so the ratings leave it out; the assistant gets it as its own list.
+    lessonMaterialsMeh: rateMehKinds(funAnswers).map((r) => ({ kind: r.key, meh: r.meh, of: r.of })),
     homeworkTasks: rating.tasks.map((r) => ({ kind: r.key, chosen: r.chosen, of: r.of })),
     topics: rating.topics,
     struggling: [...latestClarity].filter(([, answer]) => answer === STRUGGLING).map(([topic]) => topic),

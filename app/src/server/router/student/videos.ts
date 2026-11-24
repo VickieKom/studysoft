@@ -18,7 +18,8 @@ const video = z
   .object({
     id: z.uuid(),
     title: z.string(),
-    fileUrl: z.string().startsWith("/api/files/library/").nullable(),
+    // A library video's own file (#158), or a textbook's (#329).
+    fileUrl: z.string().regex(/^\/api\/files\/(library|textbooks)\//).nullable(),
     link: z.url({ protocol: /^https?$/ }).nullable(),
     // Confirmed tasks to answer under it (#327): its page holds them, so a link with tasks opens there.
     hasTasks: z.boolean(),
@@ -28,7 +29,7 @@ const video = z
 const shown = (v: StudentVideo, hasTasks: boolean) => ({
   id: v.id,
   title: v.title,
-  fileUrl: v.hasFile ? `/api/files/library/${v.id}` : null,
+  fileUrl: v.textbook ? `/api/files/textbooks/${v.id}` : v.hasFile ? `/api/files/library/${v.id}` : null,
   link: v.hasFile ? null : v.link,
   hasTasks,
 });

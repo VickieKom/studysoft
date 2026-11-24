@@ -49,25 +49,10 @@ function FeedbackRatingLists({ rating }: { rating: FeedbackRatingView }) {
 type Entry = { homeworkTitle: string; answer: TaskType | typeof ALL_KINDS_ANSWER; answeredAt: string };
 type Survey = { homeworkTitle: string; answeredAt: string; answers: { question: string; answer: string }[] };
 
-/**
- * «Фидбэк» on the student card (#331): what the child picked as the most
- * interesting kind of task after a homework, with the homework and the
- * date, in the child's words, and the answers of the surveys about the
- * lessons (#332), question by question. The teacher's only.
- */
-export function StudentFeedback({
-  entries,
-  surveys = [],
-  timeZone,
-}: {
-  entries: Entry[];
-  surveys?: Survey[];
-  timeZone: string;
-}) {
+/** The answers as lines: the surveys question by question, then one line each. */
+function Answers({ entries, surveys, label, timeZone }: { entries: Entry[]; surveys: Survey[]; label: string; timeZone: string }) {
   return (
-    <section aria-label="Фидбэк" className="mt-6 flex flex-col gap-2 rounded-card border border-border p-6">
-      <h2 className="text-h3 font-semibold">Фидбэк</h2>
-      {(entries.length > 0 || surveys.length > 0) && <h3 className="mt-2 font-semibold">Ответы за неделю</h3>}
+    <>
       {surveys.map((survey, i) => (
         <div key={`survey-${i}`} className="flex flex-col gap-1 rounded-control bg-surface p-3 text-small">
           <p>
@@ -83,26 +68,65 @@ export function StudentFeedback({
           </dl>
         </div>
       ))}
-      {entries.length === 0 && surveys.length === 0 ? (
-        <p className="text-small text-text-secondary">Ответов пока нет</p>
+      <ul aria-label={label} className="flex flex-col gap-2">
+        {surveys.map((survey, i) => (
+          <li key={`survey-line-${i}`} className="flex flex-wrap gap-x-3 text-small">
+            <span className="font-semibold">{dayMonthIn(new Date(survey.answeredAt), timeZone)}</span>
+            <span>Опрос по урокам · {survey.homeworkTitle}</span>
+          </li>
+        ))}
+        {entries.map((entry, i) => (
+          <li key={i} className="flex flex-wrap gap-x-3 text-small">
+            <span className="font-semibold">{dayMonthIn(new Date(entry.answeredAt), timeZone)}</span>
+            <span>{entry.homeworkTitle}</span>
+            <span>Самое интересное: {entry.answer === ALL_KINDS_ANSWER ? ALL_KINDS_LABEL : CHILD_TASK_KIND_LABELS[entry.answer]}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * «Фидбэк» on the student card (#331): what the child picked as the most
+ * interesting kind of task after a homework, with the homework and the
+ * date, in the child's words, and the answers of the surveys about the
+ * lessons (#332), question by question. The week's answers and those the
+ * teacher has not seen yet, however old (#333); the older ones she has seen
+ * under «Все ответы», folded (product owner, 2026-11-24). The teacher's only.
+ */
+export function StudentFeedback({
+  entries,
+  surveys = [],
+  olderEntries = [],
+  olderSurveys = [],
+  timeZone,
+}: {
+  entries: Entry[];
+  surveys?: Survey[];
+  olderEntries?: Entry[];
+  olderSurveys?: Survey[];
+  timeZone: string;
+}) {
+  const none = entries.length === 0 && surveys.length === 0;
+  return (
+    <section aria-label="Фидбэк" className="mt-6 flex flex-col gap-2 rounded-card border border-border p-6">
+      <h2 className="text-h3 font-semibold">Фидбэк</h2>
+      {none ? (
+        <p className="text-small text-text-secondary">{olderEntries.length + olderSurveys.length > 0 ? "Новых ответов за неделю нет" : "Ответов пока нет"}</p>
       ) : (
-        <ul aria-label="Ответы за неделю" className="flex flex-col gap-2">
-          {surveys.map((survey, i) => (
-            <li key={`survey-line-${i}`} className="flex flex-wrap gap-x-3 text-small">
-              <span className="font-semibold">{dayMonthIn(new Date(survey.answeredAt), timeZone)}</span>
-              <span>Опрос по урокам · {survey.homeworkTitle}</span>
-            </li>
-          ))}
-          {entries.map((entry, i) => (
-            <li key={i} className="flex flex-wrap gap-x-3 text-small">
-              <span className="font-semibold">{dayMonthIn(new Date(entry.answeredAt), timeZone)}</span>
-              <span>{entry.homeworkTitle}</span>
-              <span>
-                Самое интересное: {entry.answer === ALL_KINDS_ANSWER ? ALL_KINDS_LABEL : CHILD_TASK_KIND_LABELS[entry.answer]}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <h3 className="mt-2 font-semibold">Ответы за неделю</h3>
+          <Answers entries={entries} surveys={surveys} label="Ответы за неделю" timeZone={timeZone} />
+        </>
+      )}
+      {olderEntries.length + olderSurveys.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-small font-semibold">Все ответы</summary>
+          <div className="mt-2 flex flex-col gap-2">
+            <Answers entries={olderEntries} surveys={olderSurveys} label="Все ответы" timeZone={timeZone} />
+          </div>
+        </details>
       )}
     </section>
   );

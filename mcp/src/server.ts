@@ -57,7 +57,8 @@ server.registerTool(
       "from homework and games over the last 30 days, to repeat what was hard; and the student's vocabulary, the words " +
       "of the lessons covered with their translations, newest first, and the words the student misses more often than " +
       "not in the word training, to work into homework; and the child's feedback: what works for them by kind of " +
-      "lesson material and of homework task (chosen in so many answers of so many), the topics they want more of, the " +
+      "lesson material and of homework task (chosen in so many answers of so many), the kinds of lesson material in " +
+      "pairs they found «Оба так себе» (in so many pairs of so many), the topics they want more of, the " +
       "topics they find hard («пока путаюсь») and their latest wishes («А ещё я хочу…»). Offer more of the liked kinds " +
       "and topics, less of what was «Оба так себе», and repeat the topics they find hard.",
     inputSchema: studentIdInput,

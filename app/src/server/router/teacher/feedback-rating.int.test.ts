@@ -1,15 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import short from "../../../../../deploy/seed/homework/demo-short.json";
 import { closeDb, db } from "../../db/client";
-import { homeworkFeedback, homeworkSurvey } from "../../db/schema";
+import { eq } from "drizzle-orm";
+import { homeworkFeedback, homeworkSurvey, student } from "../../db/schema";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { appRouter, createServerCaller } from "../index";
 
 // «Что заходит» (#333): the one-tap answers rate the homework's kinds of
 // tasks, the surveys' «Что было веселее?» the lesson materials' kinds, «3 из
 // 3» chosen in three answers of three; «Про что хочется ещё?» lists the
-// topics. «Новый фидбэк» marks a student with answers after «Фидбэк» last came on
-// the teacher's screen; across students the ratings add up. Another teacher, a
+// topics. «Новый фидбэк» marks a student with an answer newer than the
+// newest «Фидбэк» showed the teacher, never moved back, answers before the
+// student was added counting as seen; across students the ratings add up,
+// a deleted student's left out. Another teacher, a
 // student and a parent get none of it. The answers are synthetic.
 
 const [teacherA, teacherB] = seedTeachers as [(typeof seedTeachers)[number], (typeof seedTeachers)[number]];
@@ -25,9 +28,18 @@ async function newStudent(firstName: string) {
 }
 
 /** A one-tap answer after a homework of demo-short.json (single choice and written). */
-async function miniAnswer(studentId: string, answer: string | null) {
+async function miniAnswer(studentId: string, answer: string | null, createdAt?: Date) {
   const { id } = await teacher.teacher.homework.import({ studentId, json: JSON.stringify(short) });
-  await db().insert(homeworkFeedback).values({ teacherId, studentId, homeworkId: id, answer });
+  await db().insert(homeworkFeedback).values({ teacherId, studentId, homeworkId: id, answer, ...(createdAt ? { createdAt } : {}) });
+}
+
+/** The newest answer «Фидбэк» would show now, as the page sends it. */
+async function newestShown(studentId: string) {
+  const times = [
+    ...(await teacher.teacher.students.feedback({ studentId })).map((a) => a.answeredAt),
+    ...(await teacher.teacher.students.surveyFeedback({ studentId })).map((a) => a.answeredAt),
+  ];
+  return times.sort().at(-1)!;
 }
 
 /** An answered survey: three pairs, each game against a video, the picks given; and «Про что хочется ещё?». */
@@ -96,22 +108,56 @@ describe("«Новый фидбэк»", () => {
     expect(await marked()).toBe(false);
     await miniAnswer(studentId, "written");
     expect(await marked()).toBe(true);
-    await teacher.teacher.students.seeFeedback({ studentId });
+    await teacher.teacher.students.seeFeedback({ studentId, upTo: await newestShown(studentId) });
     expect(await marked()).toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 5));
     await survey(studentId, games.map((g) => g.title), null);
     expect(await marked()).toBe(true);
-    // Another teacher neither sees the student nor opens their card.
+    // Another teacher neither sees the student nor marks their feedback seen.
     expect((await other.teacher.home.feedback()).newFeedback.some((s) => s.id === studentId)).toBe(false);
-    await expect(other.teacher.students.seeFeedback({ studentId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(other.teacher.students.seeFeedback({ studentId, upTo: new Date().toISOString() })).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    const across = (await teacher.teacher.home.feedback()).across;
-    expect(across.materials[0]!.key).toBe("game");
-    expect(across.materials[0]!.chosen).toBeGreaterThanOrEqual(6);
+    const across = async () => (await teacher.teacher.home.feedback()).across.materials.find((m) => m.key === "game")?.chosen ?? 0;
+    const before = await across();
+    expect(before).toBeGreaterThanOrEqual(6);
+    // A deleted student's answers leave the rating across students.
+    await db().update(student).set({ deletedAt: new Date() }).where(eq(student.id, studentId));
+    expect(await across()).toBe(before - 3);
+  });
+
+  it("leaves an answer that came after the page loaded new, and never moves the mark back", async () => {
+    const studentId = await newStudent("Позже страницы");
+    const marked = async () => (await teacher.teacher.home.feedback()).newFeedback.some((s) => s.id === studentId);
+    await miniAnswer(studentId, "written");
+    const shown = await newestShown(studentId);
+    // An answer after the page loaded: the page saw up to `shown` only.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await miniAnswer(studentId, "single_choice");
+    await teacher.teacher.students.seeFeedback({ studentId, upTo: shown });
+    expect(await marked()).toBe(true);
+
+    const latest = await newestShown(studentId);
+    await teacher.teacher.students.seeFeedback({ studentId, upTo: latest });
+    expect(await marked()).toBe(false);
+    // An older page seen afterwards does not unsee it.
+    await teacher.teacher.students.seeFeedback({ studentId, upTo: shown });
+    expect((await teacher.teacher.students.feedbackSeen({ studentId })).seenAt).toBe(latest);
+    expect(await marked()).toBe(false);
+    // Nor does a time ahead of now see what has not come yet.
+    await teacher.teacher.students.seeFeedback({ studentId, upTo: new Date(Date.now() + 86_400_000).toISOString() });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await miniAnswer(studentId, "written");
+    expect(await marked()).toBe(true);
+  });
+
+  it("counts answers given before the student was added, as before the release, as seen", async () => {
+    const studentId = await newStudent("До выкатки");
+    await miniAnswer(studentId, "written", new Date(Date.now() - 9 * 86_400_000));
+    expect((await teacher.teacher.home.feedback()).newFeedback.some((s) => s.id === studentId)).toBe(false);
   });
 
   it("is never given to a student or a parent: no procedure of theirs names the feedback", () => {
     const theirs = Object.keys(appRouter._def.procedures).filter((p) => /^(student|parent)\./.test(p));
-    expect(theirs.filter((p) => /rating|seeFeedback|newFeedback|feedbackRating/i.test(p))).toEqual([]);
+    expect(theirs.filter((p) => /rating|feedbackSeen|seeFeedback|newFeedback|feedbackRating/i.test(p))).toEqual([]);
   });
 });
