@@ -10,7 +10,9 @@
 // token, without the teacher's cookies (as in #3). The teacher starts signed
 // in (sessions.setup.ts); her time zone and the student's are Moscow. Two
 // lessons "this week" are added with «+ Урок», each prepared with a game and a
-// video and marked «Проведён». The games are synthetic HTML written here, the
+// video and marked «Проведён»; they are still going on when the file ends,
+// so it sorts after game-words.spec.ts, whose first test needs no lesson going
+// on. The games are synthetic HTML written here, the
 // videos links to a test address; the homework is synthetic
 // (deploy/seed/homework/demo-short.json).
 import { type APIRequestContext, type Browser, expect, type Page, test as base } from "@playwright/test";
