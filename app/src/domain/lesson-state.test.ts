@@ -18,6 +18,7 @@ import {
   toggleShown,
   turnPage,
   visibleTasks,
+  visibleVideoTasks,
 } from "./lesson-state";
 
 const LESSON = "00000000-0000-4000-8000-000000000001";
@@ -199,5 +200,32 @@ describe("a homework stage (#153)", () => {
     const state = initialState({ stages: [{ type: "homework", homeworkId: HOMEWORK, minutes: 10 }] }, lessons, books, now);
     const bad = { ...state, stages: [{ ...state.stages[0], filter: "some" }] };
     expect(lessonStateSchema.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe("a video stage (#328)", () => {
+  const VIDEO = "00000000-0000-4000-8000-000000000005";
+  const task = (index: number, verdict: boolean | null): StageHomeworkTask => ({
+    index,
+    prompt: `Statement ${index + 1}`,
+    passage: null,
+    answer: verdict === null ? null : "True",
+    verdict,
+    key: "False",
+    sentences: null,
+    file: null,
+  });
+  it("is kept from before with «Все задания» and no key shown", () => {
+    const kept = { ...started(), stages: [{ type: "material", materialId: VIDEO, minutes: 5, done: false }], current: 0 };
+    const parsed = lessonStateSchema.parse(kept);
+    expect(parsed.stages[0]).toEqual({ type: "material", materialId: VIDEO, minutes: 5, done: false, filter: "all", shown: [] });
+  });
+  it("shows the wrong answers under «Только ошибки», and a key once toggled", () => {
+    const stage = { type: "material" as const, materialId: VIDEO, minutes: 5, done: false, filter: "wrong" as const, shown: [] };
+    const video = { id: VIDEO, title: "Robot", answered: true, tasks: [task(0, true), task(1, false), task(2, null)] };
+    expect(visibleVideoTasks(stage, video).map((t) => t.index)).toEqual([1]);
+    expect(visibleVideoTasks({ ...stage, filter: "all" }, video).map((t) => t.index)).toEqual([0, 1, 2]);
+    expect(toggleShown(stage, 1).shown).toEqual([1]);
+    expect(toggleShown(toggleShown(stage, 1), 1).shown).toEqual([]);
   });
 });

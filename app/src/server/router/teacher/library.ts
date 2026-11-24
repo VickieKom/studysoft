@@ -43,6 +43,7 @@ import { gameResultSchema } from "../../../domain/game-result-format";
 import { saveLessonGameResult } from "../../library/game-results";
 import { gameOpenedTo, openGameToStudent, studentsInLesson } from "../../library/student-games";
 import { teacherTimeZone } from "../../access/settings";
+import { materialLikes } from "../../library/likes";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -109,6 +110,8 @@ const material = z
     textbookLesson: z.object({ textbookId: z.uuid(), lessonId: z.uuid(), label: z.string() }).strict().nullable(),
     // The students a game is made for (#292), by name.
     students: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
+    // How many of her children liked it in their surveys (#334).
+    likedBy: z.number().int().min(0),
     // A video link's address; null for every other material.
     url: z.string().nullable(),
     /** Saved by the assistant and not yet in the library (#120). */
@@ -116,7 +119,7 @@ const material = z
   })
   .strict();
 
-const output = (books: LinkableTextbook[], marked: Map<string, { id: string; name: string }[]>) => (m: Material) => ({
+const output = (books: LinkableTextbook[], marked: Map<string, { id: string; name: string }[]>, likes: Map<string, number>) => (m: Material) => ({
   id: m.id,
   kind: m.kind,
   title: m.title,
@@ -129,6 +132,7 @@ const output = (books: LinkableTextbook[], marked: Map<string, { id: string; nam
   vocabulary: m.vocabulary,
   textbookLesson: lessonOf(books, m),
   students: marked.get(m.id) ?? [],
+  likedBy: likes.get(m.id) ?? 0,
   url: m.url,
   draft: m.draft,
 });
@@ -166,7 +170,8 @@ export async function checkedStudents(ctx: { db: Database; teacherId: string }, 
 async function outputs(ctx: { db: Database; teacherId: string }, materials: Material[]) {
   const books = await linkableTextbooks(ctx.db, ctx.teacherId);
   const marked = await materialStudents(ctx.db, ctx.teacherId, materials.map((m) => m.id));
-  return materials.map(output(books, marked));
+  const likes = await materialLikes(ctx.db, ctx.teacherId);
+  return materials.map(output(books, marked, likes));
 }
 
 /** A material's link as its page names it, or null. */

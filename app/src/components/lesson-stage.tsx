@@ -18,14 +18,18 @@ import {
   pageIn,
   pageLabel,
   shownPages,
+  type MaterialStage,
   type StageHomework,
+  type StageVideo,
   stageKey,
   visibleTasks,
+  visibleVideoTasks,
 } from "@/domain/lesson-state";
 import type { Board } from "@/domain/board";
 import { LessonBoard } from "./lesson-board";
 import type { LessonResourcesView } from "./lesson-panel";
 import { useGameWords } from "./game-words";
+import { useLessonVideos } from "./lesson-videos";
 import { routerClient } from "./router-client";
 
 /** The stage says it is there this often, and asks for the state when it opens. */
@@ -117,6 +121,9 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
   }
 
   const current = state.stages[state.current];
+  // A video stage reviews its tasks with the student's answers (#328), asked again while it is on.
+  const onVideo = current?.type === "material" && resources.materials.find((m) => m.id === current.materialId)?.kind === "video";
+  const videos = useLessonVideos(lessonId, onVideo);
 
   // «Завершить урок» on the panel (#154): nothing of the lesson stays on the screen.
   if (finished) {
@@ -190,6 +197,7 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
                   />
                 );
               }
+              if (material.kind === "video") return <VideoReview stage={current} title={material.title} video={videos.find((v) => v.id === material.id)} />;
               if (material.kind !== "warmup") return <p className="p-6 text-h2 font-semibold">{material.title}</p>;
               return (
                 <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
@@ -236,6 +244,45 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
 
 const verdictText = (verdict: boolean | null) => (verdict === null ? "Ждёт проверки" : verdict ? "Верно" : "Неверно");
 const verdictClass = (verdict: boolean | null) => (verdict === null ? "text-text-secondary" : verdict ? "text-green-700" : "text-danger");
+
+/**
+ * A video's tasks on the stage (#328): each with the student's answer from
+ * this lesson, right or wrong, as with homework; the right answer only once
+ * the teacher shows it from the panel. Before the child has answered, the
+ * tasks alone. The video does not play here: it stutters over screen sharing.
+ */
+function VideoReview({ stage, title, video }: { stage: MaterialStage; title: string; video: StageVideo | undefined }) {
+  if (!video) return <p className="p-6 text-h2 font-semibold">{title}</p>;
+  const tasks = visibleVideoTasks(stage, video);
+  return (
+    <section aria-label="Видео" className="flex flex-col gap-4 p-2">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-h2 font-semibold">{video.title}</h2>
+        {!video.answered && <p className="text-h3 text-text-secondary">Ученик ещё не ответил</p>}
+      </header>
+      {video.answered && tasks.length === 0 && <p className="text-h3 text-green-700">Ошибок нет</p>}
+      <ol className="flex flex-col gap-3">
+        {tasks.map((task) => (
+          <li
+            key={task.index}
+            className={`flex flex-col gap-2 rounded-card border-2 p-4 text-h3 ${isMistake(task) ? "border-danger bg-danger-bg" : "border-border"}`}
+          >
+            <p className="font-semibold">
+              {task.index + 1}. {task.prompt}
+            </p>
+            {video.answered && (
+              <>
+                <p>{task.answer ?? "Без ответа"}</p>
+                <p className={`font-semibold ${verdictClass(task.verdict)}`}>{verdictText(task.verdict)}</p>
+              </>
+            )}
+            {stage.shown.includes(task.index) && task.key !== null && <p className="text-green-700">Правильный ответ: {task.key}</p>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 /**
  * The homework under review (#153): the score and the child's answers,
