@@ -15,7 +15,7 @@ import { ensureLink, revokeLinks, withStudentLocked } from "../../access/links";
 import { MISTAKE_SOURCES, studentMistakes } from "../../crm/mistakes";
 import { studentFeedback } from "../../homework/feedback";
 import { surveyFeedback } from "../../homework/survey";
-import { seeFeedback, studentRating } from "../../homework/feedback-rating";
+import { feedbackSeenAt, seeFeedback, studentRating } from "../../homework/feedback-rating";
 import { feedbackRatingSchema } from "./feedback-rating-schema";
 import { TASK_TYPES } from "../../../domain/homework-format";
 import { ALL_KINDS_ANSWER } from "../../../domain/homework";
@@ -242,12 +242,28 @@ export const studentsRouter = router({
       return studentRating(ctx.db, ctx.teacherId, input.studentId);
     }),
 
-  /** The card was opened (#333): its feedback is seen, and the student leaves «Новый фидбэк». */
-  seeFeedback: teacherProcedure
+  /** When «Фидбэк» was last seen (#333), by the newest answer it showed: older answers seen go under «Все ответы». */
+  feedbackSeen: teacherProcedure
     .input(z.object({ studentId: z.uuid() }))
+    .output(z.object({ seenAt: z.iso.datetime().nullable() }).strict())
+    .query(async ({ ctx, input }) => {
+      if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      return { seenAt: (await feedbackSeenAt(ctx.db, ctx.teacherId, input.studentId))?.toISOString() ?? null };
+    }),
+
+  /**
+   * «Фидбэк» came on the teacher's screen (#333; product owner, 2026-11-24:
+   * scrolled to, not just the card opened), showing answers up to `upTo`,
+   * the newest it showed: those are seen, and the student leaves «Новый
+   * фидбэк» until a newer one.
+   */
+  seeFeedback: teacherProcedure
+    .input(z.object({ studentId: z.uuid(), upTo: z.iso.datetime() }))
     .output(z.object({ ok: z.literal(true) }).strict())
     .mutation(async ({ ctx, input }) => {
-      if (!(await seeFeedback(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
+      // Not ahead of now: what has not come yet is not seen.
+      const upTo = new Date(Math.min(Date.parse(input.upTo), Date.now()));
+      if (!(await seeFeedback(ctx.db, ctx.teacherId, input.studentId, upTo))) throw notFound();
       return { ok: true as const };
     }),
 

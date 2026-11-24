@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { likedMost, rateMaterialKinds, rateTaskKinds, rateTopics, ratedLine } from "./feedback-rating";
+import { likedMost, newestAnswer, rateMaterialKinds, rateTaskKinds, rateTopics, ratedLine, splitFeedback } from "./feedback-rating";
 
 // «Что заходит» (#333): two ratings and the topics, «3 из 3» chosen in three answers of three.
 
@@ -49,5 +49,24 @@ describe("what the child likes most", () => {
       { topic: "planets", chosen: 2 },
       { topic: "pets", chosen: 1 },
     ]);
+  });
+});
+
+describe("what «Фидбэк» shows", () => {
+  const now = Date.parse("2026-11-24T12:00:00.000Z");
+  const day = (n: number) => ({ answeredAt: new Date(now - n * 86_400_000).toISOString() });
+
+  it("shows the week's answers and the unseen older ones; the seen older ones go under «Все ответы»", () => {
+    const answers = [day(1), day(9), day(20)];
+    // Seen up to 15 days ago: the 9-day answer is new, the 20-day one seen.
+    expect(splitFeedback(answers, day(15).answeredAt, now)).toEqual({ shown: [day(1), day(9)], older: [day(20)] });
+    // Seen up to yesterday: the week shows, the rest is older.
+    expect(splitFeedback(answers, day(1).answeredAt, now)).toEqual({ shown: [day(1)], older: [day(9), day(20)] });
+    expect(splitFeedback(answers, null, now).older).toEqual([]);
+  });
+
+  it("is seen up to the newest answer it shows", () => {
+    expect(newestAnswer([day(9), day(1), day(3)])).toBe(day(1).answeredAt);
+    expect(newestAnswer([])).toBeNull();
   });
 });

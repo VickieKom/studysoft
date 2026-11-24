@@ -1,9 +1,11 @@
 // «Что заходит» (#333), from the child's answers: the one-tap question after
 // a homework (#331) and the answered surveys about the lessons (#332),
 // gathered into the ratings of `domain/feedback-rating.ts`. «Новый фидбэк» on
-// the teacher's general screen: a student with answers after she last opened
-// their card. The teacher's only — no student or parent procedure reads it.
-import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+// the teacher's general screen: a student with an answer newer than the
+// newest one «Фидбэк» showed her (product owner, 2026-11-24: seen once she
+// scrolls to it; answers before the release count as seen). The teacher's
+// only — no student or parent procedure reads it.
+import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   type FunAnswer,
   RATED_MATERIAL_KINDS,
@@ -34,10 +36,13 @@ async function ratingOf(database: Database, teacherId: string, studentIds: strin
     .select({ answer: homeworkFeedback.answer, document: homework.document })
     .from(homeworkFeedback)
     .innerJoin(homework, eq(homework.id, homeworkFeedback.homeworkId))
+    // A deleted student's answers count no more, here or across students.
+    .innerJoin(student, and(eq(student.id, homeworkFeedback.studentId), isNull(student.deletedAt)))
     .where(and(eq(homeworkFeedback.teacherId, teacherId), whose(homeworkFeedback), isNotNull(homeworkFeedback.answer)));
   const surveys = await database
     .select({ questions: homeworkSurvey.questions, answers: homeworkSurvey.answers })
     .from(homeworkSurvey)
+    .innerJoin(student, and(eq(student.id, homeworkSurvey.studentId), isNull(student.deletedAt)))
     .where(and(eq(homeworkSurvey.teacherId, teacherId), whose(homeworkSurvey), eq(homeworkSurvey.status, "answered")));
 
   const funs: { a: string; b: string; answer: string; titles: [string, string] }[] = [];
@@ -84,20 +89,37 @@ export function ratingAcrossStudents(database: Database, teacherId: string): Pro
   return ratingOf(database, teacherId, null);
 }
 
-/** «Фидбэк» came on the teacher's screen (#333): its answers so far are seen, and the student leaves «Новый фидбэк». */
-export async function seeFeedback(database: Database, teacherId: string, studentId: string): Promise<boolean> {
-  const rows = await database
-    .update(student)
-    .set({ feedbackSeenAt: new Date() })
-    .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt)))
-    .returning({ id: student.id });
-  return rows.length > 0;
+/** When «Фидбэк» of this student was last seen, by the newest answer it showed; null for none, or no such student. */
+export async function feedbackSeenAt(database: Database, teacherId: string, studentId: string): Promise<Date | null> {
+  const [row] = await database
+    .select({ at: student.feedbackSeenAt })
+    .from(student)
+    .where(and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt)));
+  return row?.at ?? null;
 }
 
-/** «Новый фидбэк»: this teacher's students with an answer after «Фидбэк» last came on her screen, by first name. */
+/**
+ * «Фидбэк» came on the teacher's screen (#333) showing answers up to `upTo`,
+ * the newest it showed: those are seen. A conditional write that never moves
+ * the mark back, so a page loaded earlier cannot unsee what a later one
+ * showed, and an answer that came after the page loaded stays new. False when
+ * there is no such student.
+ */
+export async function seeFeedback(database: Database, teacherId: string, studentId: string, upTo: Date): Promise<boolean> {
+  const own = and(eq(student.id, studentId), eq(student.teacherId, teacherId), isNull(student.deletedAt));
+  await database
+    .update(student)
+    .set({ feedbackSeenAt: upTo })
+    .where(and(own, or(isNull(student.feedbackSeenAt), lt(student.feedbackSeenAt, upTo))));
+  const [found] = await database.select({ id: student.id }).from(student).where(own);
+  return found !== undefined;
+}
+
+/** «Новый фидбэк»: this teacher's students with an answer newer than the newest «Фидбэк» showed her, by first name. */
 export async function studentsWithNewFeedback(database: Database, teacherId: string): Promise<{ id: string; firstName: string }[]> {
+  // The page holds an answer's time in milliseconds: compared at that precision, the answer it showed is not newer than itself.
   const after = (at: typeof homeworkFeedback.createdAt | typeof homeworkSurvey.answeredAt) =>
-    or(isNull(student.feedbackSeenAt), gt(at, student.feedbackSeenAt));
+    or(isNull(student.feedbackSeenAt), gt(sql`date_trunc('milliseconds', ${at})`, student.feedbackSeenAt));
   return database
     .select({ id: student.id, firstName: student.firstName })
     .from(student)

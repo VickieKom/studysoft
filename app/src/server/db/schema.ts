@@ -107,8 +107,8 @@ export const student = pgTable(
     textbookId: uuid("textbook_id").references((): AnyPgColumn => textbook.id),
     passedLessonId: text("passed_lesson_id"),
     passedLessonSetAt: timestamp("passed_lesson_set_at", { withTimezone: true }),
-    // When «Фидбэк» last came on the teacher's screen (#333): answers after it are «Новый фидбэк» on the general screen.
-    feedbackSeenAt: timestamp("feedback_seen_at", { withTimezone: true }),
+    // The newest answer «Фидбэк» showed the teacher (#333): newer ones are «Новый фидбэк» on the general screen. Now by default: answers before the release, or before the student was added, count as seen.
+    feedbackSeenAt: timestamp("feedback_seen_at", { withTimezone: true }).defaultNow(),
     // The family's goal and a personal measure of the teacher's own (#266): a
     // name and a unit, counted when a lesson is marked. Teacher only, like the
     // profile; the assistant does not see them yet.

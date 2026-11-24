@@ -52,6 +52,24 @@ export function rateTopics(chosen: string[]): { topic: string; chosen: number }[
   return [...counts].map(([topic, n]) => ({ topic, chosen: n })).sort((a, b) => b.chosen - a.chosen || a.topic.localeCompare(b.topic));
 }
 
+const WEEK_MS = 7 * 86_400_000;
+
+/**
+ * What «Фидбэк» shows (#333): the week's answers and every answer not seen
+ * yet, however old; the rest go under «Все ответы». `seenAt` is when the
+ * teacher last saw the block, by the newest answer it showed.
+ */
+export function splitFeedback<T extends { answeredAt: string }>(answers: T[], seenAt: string | null, now: number): { shown: T[]; older: T[] } {
+  const seen = seenAt === null ? Number.NEGATIVE_INFINITY : Date.parse(seenAt);
+  const isShown = (a: T) => Date.parse(a.answeredAt) >= now - WEEK_MS || Date.parse(a.answeredAt) > seen;
+  return { shown: answers.filter(isShown), older: answers.filter((a) => !isShown(a)) };
+}
+
+/** The newest of these answers, the time «Фидбэк» is seen up to; null when there is none. */
+export function newestAnswer(answers: { answeredAt: string }[]): string | null {
+  return answers.reduce<string | null>((newest, a) => (newest === null || Date.parse(a.answeredAt) > Date.parse(newest) ? a.answeredAt : newest), null);
+}
+
 /** «Игры — 3 из 3». */
 export const ratedLine = (label: string, rated: Rated<string>) => `${label} — ${rated.chosen} из ${rated.of}`;
 export const materialLabel = (kind: RatedMaterialKind) => MATERIAL_KIND_PLURALS[kind];
