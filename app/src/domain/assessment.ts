@@ -1,8 +1,9 @@
-// The assessment's files on the card (#252): the recording for «Аудирование»
-// and the picture for «Говорение». Plain data and functions only.
+// The assessment's files (#252, #253): the recording for «Аудирование» and
+// the picture for «Говорение», uploaded on the card, and the speaking
+// recording made on the lesson panel. Plain data and functions only.
 import { MAX_AUDIO_BYTES, MAX_IMAGE_BYTES } from "./homework-format";
 
-export const ASSESSMENT_FILES = ["listening", "picture"] as const;
+export const ASSESSMENT_FILES = ["listening", "picture", "speaking"] as const;
 export type AssessmentFile = (typeof ASSESSMENT_FILES)[number];
 
 /** As a homework task's recording and picture (#127, #33). */

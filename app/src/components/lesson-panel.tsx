@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { LessonAssessment } from "./lesson-assessment";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { lineToWord, printedLines } from "@/domain/board";
 import {
@@ -324,6 +325,8 @@ export function LessonPanel({
       )}
 
       <LessonWords words={state.words} onChange={(words) => change((s) => ({ ...s, words }))} />
+
+      <LessonAssessment lessonId={lessonId} />
 
       <Note lessonId={lessonId} initial={serverNote} />
 

@@ -168,8 +168,8 @@ export async function answerExercise(db: Database, teacherId: string, studentId:
 
 /**
  * Words the student got wrong outside the training: in a submitted homework
- * (#284), in the submission's transaction, or in a game template's result
- * (#285): each counts one mistake towards «часто
+ * (#284), in the submission's transaction, in a game template's result
+ * (#285), or in «Лексика» of a monthly assessment (#253): each counts one mistake towards «часто
  * ошибается», starts again from the first interval and is due tomorrow in
  * the student's time zone — unless it is due by then already, or new.
  * A right answer in homework moves nothing: «закрепилось» comes from the

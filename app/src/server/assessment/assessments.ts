@@ -21,6 +21,11 @@ export type AssessmentRow = {
   speakingPicture: string | null;
   /** The version of the document the teacher's page has seen (#313); see `revision`. */
   revision: string;
+  /** Taken in a lesson (#253). */
+  openUntil: Date | null;
+  speakingRecording: string | null;
+  submittedAt: Date | null;
+  finishedAt: Date | null;
   createdAt: Date;
 };
 
@@ -43,6 +48,10 @@ const columns = {
   listeningRecording: assessment.listeningRecording,
   speakingPicture: assessment.speakingPicture,
   revision,
+  openUntil: assessment.openUntil,
+  speakingRecording: assessment.speakingRecording,
+  submittedAt: assessment.submittedAt,
+  finishedAt: assessment.finishedAt,
   createdAt: assessment.createdAt,
 };
 

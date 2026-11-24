@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LibraryFilters } from "@/components/library-filters";
-import { AGE_GROUP_LABELS, AGE_GROUPS, MATERIAL_KIND_FILTERS, MATERIAL_KINDS } from "@/domain/library";
+import { AGE_GROUP_LABELS, AGE_GROUPS, likedLabel, MATERIAL_KIND_FILTERS, MATERIAL_KINDS } from "@/domain/library";
 import { LEVELS } from "@/domain/student";
 import { teacherCaller } from "../caller";
 
@@ -121,6 +121,7 @@ export default async function LibraryPage({ searchParams }: Props) {
                       <span key={topic}>{topic}</span>
                     ))}
                     <span>{AGE_GROUP_LABELS[m.ageGroup]}</span>
+                    {likedLabel(m.likedBy) && <span className="font-semibold text-green-700">{likedLabel(m.likedBy)}</span>}
                   </span>
                   <Link href={`/teacher/library/${m.id}`} className="self-start text-small text-green-600 hover:text-green-700">
                     Открыть
