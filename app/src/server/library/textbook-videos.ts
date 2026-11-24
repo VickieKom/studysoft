@@ -65,7 +65,7 @@ export async function textbookLessonVideos(
 }
 
 /** The revision of a lesson with no bank row: what `tasksRevision` gives for no tasks. */
-const EMPTY_BANK = "d41d8cd98f00b204e9800998ecf8427e";
+export const EMPTY_BANK = "d41d8cd98f00b204e9800998ecf8427e";
 
 /**
  * Whether a plan's video stage still names what the bank has: the video of

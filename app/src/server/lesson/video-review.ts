@@ -8,6 +8,9 @@ import { answerKey, answerText } from "../../domain/homework";
 import type { Answer, Task } from "../../domain/homework-format";
 import type { StageVideo } from "../../domain/lesson-state";
 import type { Database } from "../db/client";
+import { tasksRevision } from "../library/task-bank";
+import { EMPTY_BANK } from "../library/textbook-videos";
+import { videoTaskError } from "../library/video-tasks";
 import { libraryMaterial, textbookFile, textbookLessonTasks, textbookVideoAccess, videoAnswer, videoTasks } from "../db/schema";
 
 /** The videos with these ids that have confirmed tasks, as their stages show them for this student and lesson. */
@@ -56,14 +59,15 @@ function reviewed(id: string, title: string, confirmed: Task[], answered: Answer
 /**
  * The textbook video stages' tasks (#329), by file: the tasks opened to the
  * student from the preparation, or before that the bank tasks the stage
- * picked, with the student's answers from this lesson.
+ * picked — none once the bank changed since the plan was saved (#381) —
+ * with the student's answers from this lesson.
  */
 export async function textbookStageVideos(
   database: Database,
   teacherId: string,
   studentId: string,
   lessonId: string,
-  stages: { fileId: string; lessonId: string; tasks: number[] }[],
+  stages: { fileId: string; lessonId: string; tasks: number[]; revision: string }[],
 ): Promise<StageVideo[]> {
   if (stages.length === 0) return [];
   const fileIds = [...new Set(stages.map((s) => s.fileId))];
@@ -76,7 +80,7 @@ export async function textbookStageVideos(
     .from(textbookVideoAccess)
     .where(and(eq(textbookVideoAccess.teacherId, teacherId), eq(textbookVideoAccess.lessonId, lessonId), inArray(textbookVideoAccess.fileId, fileIds)));
   const banks = await database
-    .select({ lessonId: textbookLessonTasks.lessonId, tasks: textbookLessonTasks.tasks })
+    .select({ lessonId: textbookLessonTasks.lessonId, tasks: textbookLessonTasks.tasks, revision: tasksRevision })
     .from(textbookLessonTasks)
     .where(and(eq(textbookLessonTasks.teacherId, teacherId), inArray(textbookLessonTasks.lessonId, [...new Set(stages.map((s) => s.lessonId))])));
   const answers = await database
@@ -85,14 +89,16 @@ export async function textbookStageVideos(
     .where(and(eq(videoAnswer.teacherId, teacherId), eq(videoAnswer.studentId, studentId), eq(videoAnswer.lessonId, lessonId), inArray(videoAnswer.materialId, fileIds)));
   const nameOf = new Map(names.map((n) => [n.id, n.name]));
   const openedOf = new Map(opened.map((o) => [o.fileId, o.tasks as Task[]]));
-  const bankOf = new Map(banks.map((b) => [b.lessonId, (b.tasks as Task[] | null) ?? []]));
+  const bankOf = new Map(banks.map((b) => [b.lessonId, { tasks: (b.tasks as Task[] | null) ?? [], revision: b.revision }]));
   const byFile = new Map(answers.map((a) => [a.materialId, a]));
   const seen = new Set<string>();
   return stages.flatMap((stage) => {
     if (seen.has(stage.fileId) || !nameOf.has(stage.fileId)) return [];
     seen.add(stage.fileId);
-    const bank = bankOf.get(stage.lessonId) ?? [];
-    const picked = openedOf.get(stage.fileId) ?? stage.tasks.flatMap((i) => (bank[i] ? [bank[i]] : []));
+    // Not opened yet: the bank's tasks by position, only while the bank is as the plan saw it and only those fit for a video (#381).
+    const bank = bankOf.get(stage.lessonId) ?? { tasks: [], revision: EMPTY_BANK };
+    const fresh = bank.revision === stage.revision;
+    const picked = openedOf.get(stage.fileId) ?? (fresh ? stage.tasks.flatMap((i) => (bank.tasks[i] && videoTaskError(bank.tasks[i]) === null ? [bank.tasks[i]] : [])) : []);
     return reviewed(stage.fileId, nameOf.get(stage.fileId)!, picked, byFile.get(stage.fileId));
   });
 }
