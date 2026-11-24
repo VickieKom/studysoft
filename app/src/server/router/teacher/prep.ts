@@ -71,9 +71,18 @@ export const prepRouter = router({
               .strict(),
           ),
           homeworkDrafts: z.array(z.object({ id: z.uuid(), title: z.string() }).strict()),
-          // The textbook's lesson videos the plan may take (#329), each with its lesson's bank tasks by prompt.
+          // The textbook's lesson videos the plan may take (#329), each with its lesson's bank tasks fit for a video, by position, and the bank's revision.
           textbookVideos: z.array(
-            z.object({ fileId: z.uuid(), name: z.string(), lessonId: z.uuid(), lessonTitle: z.string(), tasks: z.array(z.string()) }).strict(),
+            z
+              .object({
+                fileId: z.uuid(),
+                name: z.string(),
+                lessonId: z.uuid(),
+                lessonTitle: z.string(),
+                tasks: z.array(z.object({ index: z.number().int(), prompt: z.string() }).strict()),
+                revision: z.string(),
+              })
+              .strict(),
           ),
           // The videos opened to the student from this preparation, still open.
           openedVideos: z.array(z.uuid()),
@@ -117,7 +126,9 @@ export const prepRouter = router({
       const book = await studentWithTextbook(ctx.db, ctx.teacherId, found.studentId);
       const textbook = book?.textbookId ? { id: book.textbookId, structure: book.structure } : null;
       const opened = await openTextbookVideo(ctx.db, ctx.teacherId, input.lessonId, input.fileId.toLowerCase(), textbook);
-      if (opened === "not_found") throw new TRPCError({ code: "NOT_FOUND", message: "Сначала сохраните план с этим видео" });
+      if (opened === "not_found") throw new TRPCError({ code: "NOT_FOUND", message: "Сначала сохраните план с этим видео; после урока видео не открыть" });
+      if (opened === "bank_changed")
+        throw new TRPCError({ code: "CONFLICT", message: "Задания урока учебника изменились. Обновите страницу, отметьте задания к видео заново и сохраните план" });
       return { ok: true as const };
     }),
 

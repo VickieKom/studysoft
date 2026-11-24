@@ -872,16 +872,13 @@ export const gameResult = pgTable(
   ],
 );
 
-// The preparation of a lesson (#151, domain/lesson-plan.ts): the approved
-// plan by stages — the lesson is «подготовлен» once it has one — and a draft
-// the assistant saved for the teacher to approve; the homework draft prepared
-// for it, published later by «Завершить урок».
 /**
  * A textbook video opened to a student from a lesson's preparation (#329):
  * at once, until an hour after that lesson's end (product owner,
  * 2026-11-23), with the tasks of the lesson's bank the plan's video stage
- * picked, copied as they were when opened. Opening it again moves `until` and
- * the tasks on. The answers go to `video_answer` as a library video's do,
+ * picked, copied as they were when opened. The end is read from the lesson,
+ * so moving the lesson moves it and cancelling the lesson ends it. Opening it
+ * again copies the tasks anew. The answers go to `video_answer` as a library video's do,
  * under the file's id.
  */
 export const textbookVideoAccess = pgTable(
@@ -900,7 +897,6 @@ export const textbookVideoAccess = pgTable(
       .notNull()
       .references(() => lesson.id, { onDelete: "cascade" }),
     tasks: jsonb("tasks").notNull(),
-    until: timestamp("until", { withTimezone: true }).notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -915,6 +911,10 @@ export const textbookVideoAccess = pgTable(
   ],
 );
 
+// The preparation of a lesson (#151, domain/lesson-plan.ts): the approved
+// plan by stages — the lesson is «подготовлен» once it has one — and a draft
+// the assistant saved for the teacher to approve; the homework draft prepared
+// for it, published later by «Завершить урок».
 export const lessonPlan = pgTable("lesson_plan", {
   lessonId: uuid("lesson_id")
     .primaryKey()

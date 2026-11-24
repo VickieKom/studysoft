@@ -1,5 +1,5 @@
 {
-  "id": "f29afce8-6aa9-4825-88e0-dd9b27944ea3",
+  "id": "9c3cd13a-d57f-4419-ab4a-92c6acdca736",
   "prevId": "d391d2ea-d9f4-4bb5-ad33-b03fbc33dac0",
   "version": "7",
   "dialect": "postgresql",
@@ -5064,12 +5064,6 @@
         "tasks": {
           "name": "tasks",
           "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "until": {
-          "name": "until",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },

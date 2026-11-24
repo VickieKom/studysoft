@@ -37,15 +37,22 @@ export function checkVideoTasks(document: unknown): { ok: true; tasks: Task[] } 
   if (!parsed.ok) return parsed;
   const { tasks } = parsed.homework;
   if (tasks.length > MAX_VIDEO_TASKS) return { ok: false, errors: [`tasks: не больше ${MAX_VIDEO_TASKS} заданий к одному видео`] };
-  const errors = tasks.flatMap((task, index) =>
-    task.image || task.audio || partPictures(task).length > 0
-      ? [`Задание ${index + 1}: в заданиях к видео пока нет картинок и записей — только текст`]
-      : // The child answers under the video in text (#327): no recording or file to upload there.
-        task.type === "voice" || task.type === "file"
-        ? [`Задание ${index + 1}: в заданиях к видео ответ только текстом, без голоса и файла`]
-        : [],
-  );
+  const errors = tasks.flatMap((task, index) => {
+    const error = videoTaskError(task);
+    return error ? [`Задание ${index + 1}: ${error}`] : [];
+  });
   return errors.length > 0 ? { ok: false, errors: errors.slice(0, 10) } : { ok: true, tasks };
+}
+
+/**
+ * Why a task cannot go under a video, or null: text only, answered in text.
+ * The same rule holds for a textbook video's tasks from the lesson's bank (#329).
+ */
+export function videoTaskError(task: Task): string | null {
+  if (task.image || task.audio || partPictures(task).length > 0) return "в заданиях к видео пока нет картинок и записей — только текст";
+  // The child answers under the video in text (#327): no recording or file to upload there.
+  if (task.type === "voice" || task.type === "file") return "в заданиях к видео ответ только текстом, без голоса и файла";
+  return null;
 }
 
 export type SavedTasks = "saved" | "not_found" | "edited" | { errors: string[] };

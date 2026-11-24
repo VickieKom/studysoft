@@ -19,13 +19,14 @@ const stage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("book"), lessonId: z.uuid(), skip: z.string().trim().max(200), minutes }).strict(),
   z.object({ type: z.literal("material"), materialId: z.uuid(), minutes }).strict(),
   z.object({ type: z.literal("homework"), homeworkId: z.uuid(), minutes }).strict(),
-  // A video of the student's textbook (#329), of the book lesson `lessonId`, with tasks of that lesson's bank by position.
+  // A video of the student's textbook (#329), of the book lesson `lessonId`, with tasks of that lesson's bank by position, in the bank as `revision` names it.
   z
     .object({
       type: z.literal("textbook_video"),
       fileId: z.uuid(),
       lessonId: z.uuid(),
       tasks: z.array(z.number().int().min(0).max(49)).max(MAX_STAGE_VIDEO_TASKS),
+      revision: z.string().max(64),
       minutes,
     })
     .strict(),

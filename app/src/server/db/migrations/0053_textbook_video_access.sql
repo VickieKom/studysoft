@@ -9,7 +9,6 @@ CREATE TABLE "textbook_video_access" (
 	"file_id" uuid NOT NULL,
 	"lesson_id" uuid NOT NULL,
 	"tasks" jsonb NOT NULL,
-	"until" timestamp with time zone NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );

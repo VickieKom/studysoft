@@ -28,6 +28,7 @@ export function checkStructure(found: Found, input: unknown): { ok: true; struct
   const errors: string[] = [];
   const pages = new Map(found.books.filter((b) => b.status === "done").map((b) => [b.kind, b.pageCount]));
   const tracks = new Set(found.tracks.map((t) => t.name));
+  const videos = new Set(found.videos.map((v) => v.name));
   for (const [u, unit] of parsed.data.units.entries()) {
     for (const [l, lesson] of unit.lessons.entries()) {
       const where = `юнит ${u + 1}, урок ${l + 1}`;
@@ -39,6 +40,8 @@ export function checkStructure(found: Found, input: unknown): { ok: true; struct
         else if (range.to > count) errors.push(`${where}: в ${BOOK_LABELS[kind]} ${count} страниц, а урок доходит до ${range.to}`);
       }
       for (const track of lesson.tracks) if (!tracks.has(track)) errors.push(`${where}: трека «${track}» нет в учебнике`);
+      // A video is named as a track is (#329): a typo would drop it from the lesson silently.
+      for (const video of lesson.videos ?? []) if (!videos.has(video)) errors.push(`${where}: видео «${video}» нет в учебнике`);
     }
   }
   if (errors.length > 0) return { ok: false, errors: errors.slice(0, 10) };

@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES } from "../../access/links";
 import { closeDb, db } from "../../db/client";
-import { lesson as lessonTable, textbookVideoAccess } from "../../db/schema";
+import { lesson as lessonTable } from "../../db/schema";
+import { openTextbookVideos } from "../../library/textbook-videos";
 import { env } from "../../env";
 import { pdf } from "../../testing/files";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
@@ -12,8 +13,10 @@ import { createServerCaller, handleRouterRequest, handleTextbookFileRequest, han
 // up to 200 MB, marked on a lesson in the structure by name; a lesson's
 // preparation takes one as a stage with tasks of the lesson's bank; opened
 // from the preparation, the student watches it with those tasks copied,
-// until an hour after the lesson's end, and answers them as under a library
-// video (#327); the lesson stage reviews the answers (#328). Nobody else gets
+// until an hour after the lesson's end — moved with the lesson, ended by
+// cancelling it — and answers them as under a library video (#327); the
+// lesson stage reviews the answers (#328). Only tasks fit for a video are
+// offered, and a bank changed after the pick is refused. Nobody else gets
 // its file. The video's bytes, the book and the tasks are synthetic.
 
 const [teacherA] = seedTeachers as [(typeof seedTeachers)[number]];
@@ -36,7 +39,10 @@ const trueFalse = (prompt: string, answer: 0 | 1, exercise: string) => ({
   skill: "listening",
   source: { book: "Workbook", unit: "1", page: "5", exercise },
 });
-const bankTasks = [trueFalse("The fox jumps.", 0, "1"), trueFalse("The fox sleeps.", 1, "2"), trueFalse("The fox sings.", 1, "3")];
+// The voice task cannot go under a video (#327): offered tasks keep their bank positions, 0, 2 and 3.
+const voiceTask = { type: "voice", prompt: "Say what the fox does.", topic: `textbook video ${run}`, skill: "speaking", source: { book: "Workbook", unit: "1", page: "5", exercise: "4" } };
+const bankTasks = [trueFalse("The fox jumps.", 0, "1"), voiceTask, trueFalse("The fox sleeps.", 1, "2"), trueFalse("The fox sings.", 1, "3")];
+const offered = [0, 2, 3];
 
 async function upload(kind: "book" | "video", body: Uint8Array<ArrayBuffer>) {
   const response = await handleTextbookUpload(new Request(`${env().APP_URL}/api/files/textbooks?kind=${kind}`, { method: "PUT", headers: teacherHeaders, body }));
@@ -57,7 +63,21 @@ async function studentWithLesson(firstName: string) {
   return { studentId, lessonId, headers, student: createServerCaller(headers) };
 }
 
-const videoStage = (tasks: number[], fileId = videoFileId, lessonId = lessons[1]!.id) => ({ type: "textbook_video" as const, fileId, lessonId, tasks, minutes: 10 });
+const bankRevision = async (lessonId: string) => (await teacher.teacher.prep.get({ lessonId })).textbookVideos[0]!.revision;
+const videoStage = (tasks: number[], revision: string, fileId = videoFileId, lessonId = lessons[1]!.id) => ({
+  type: "textbook_video" as const,
+  fileId,
+  lessonId,
+  tasks,
+  revision,
+  minutes: 10,
+});
+/** Confirms `tasks` as the bank of lesson 1.2, replacing what it had. */
+async function confirmBank(tasks: unknown[]) {
+  await assistant.agent.saveTextbookLessonTasks({ textbookId, lessonId: lessons[1]!.id, tasks });
+  const bank = (await teacher.teacher.textbooks.taskBank({ id: textbookId })).find((l) => l.lessonId === lessons[1]!.id)!;
+  await teacher.teacher.textbooks.confirmBankLesson({ textbookId, lessonId: lessons[1]!.id, revision: bank.draft!.revision });
+}
 const savePlan = (lessonId: string, stages: unknown[]) => teacher.teacher.prep.save({ lessonId, plan: { stages }, homeworkId: null, revision: "" });
 const fileStatus = async (headers: Headers, id: string) =>
   (await handleTextbookFileRequest(new Request(`${env().APP_URL}/api/files/textbooks/${id}`, { headers }), id, null)).status;
@@ -88,9 +108,7 @@ beforeAll(async () => {
     confirm: true,
   });
   lessons = (await teacher.teacher.textbooks.structure({ id: textbookId })).structure!.units[0]!.lessons.map((l) => ({ id: l.id!, title: l.title }));
-  await assistant.agent.saveTextbookLessonTasks({ textbookId, lessonId: lessons[1]!.id, tasks: bankTasks });
-  const bank = (await teacher.teacher.textbooks.taskBank({ id: textbookId })).find((l) => l.lessonId === lessons[1]!.id)!;
-  await teacher.teacher.textbooks.confirmBankLesson({ textbookId, lessonId: lessons[1]!.id, revision: bank.draft!.revision });
+  await confirmBank(bankTasks);
   videoFileId = (await teacher.teacher.textbooks.get({ id: textbookId })).videos[0]!.id;
 });
 
@@ -119,12 +137,19 @@ describe("a textbook's videos", () => {
     const bystander = await studentWithLesson("Без видео учебника");
     const prep = await teacher.teacher.prep.get({ lessonId });
     expect(prep.textbookVideos).toEqual([
-      { fileId: videoFileId, name: "1-2-clip", lessonId: lessons[1]!.id, lessonTitle: "1.2", tasks: bankTasks.map((t) => t.prompt) },
+      {
+        fileId: videoFileId,
+        name: "1-2-clip",
+        lessonId: lessons[1]!.id,
+        lessonTitle: "1.2",
+        tasks: offered.map((index) => ({ index, prompt: bankTasks[index]!.prompt })),
+        revision: expect.any(String),
+      },
     ]);
 
     // Not opened until the plan has the stage and the teacher opens it.
     await expect(teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await savePlan(lessonId, [videoStage([0, 1])]);
+    await savePlan(lessonId, [videoStage([0, 2], await bankRevision(lessonId))]);
     expect(await student.student.videos.list()).toEqual([]);
     expect(await fileStatus(headers, videoFileId)).toBe(404);
     await teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId });
@@ -138,10 +163,6 @@ describe("a textbook's videos", () => {
     expect(JSON.stringify(shown)).not.toMatch(/"answer"/);
     expect(await fileStatus(headers, videoFileId)).toBe(200);
     expect(await fileStatus(bystander.headers, videoFileId)).toBe(404);
-    // Open until an hour after the lesson's end.
-    const [access] = await db().select({ until: textbookVideoAccess.until }).from(textbookVideoAccess).where(eq(textbookVideoAccess.lessonId, lessonId));
-    const [scheduled] = await db().select({ startsAt: lessonTable.startsAt }).from(lessonTable).where(eq(lessonTable.id, lessonId));
-    expect(access!.until.getTime()).toBe(scheduled!.startsAt.getTime() + (45 + 60) * 60_000);
 
     // Answered as under a library video: right on the jump, wrong on the sleep; the stage reviews them.
     await student.student.videos.submitTasks({
@@ -159,16 +180,63 @@ describe("a textbook's videos", () => {
       ["The fox sleeps.", "True", false],
     ]);
 
-    // Once the access ends, it is gone for the student and their file is not served.
-    await db().update(textbookVideoAccess).set({ until: new Date(Date.now() - 60_000) }).where(eq(textbookVideoAccess.lessonId, lessonId));
+    // Once an hour after the lesson's end has passed, it is gone for the student, their file is not served, and it is not opened again.
+    await db().update(lessonTable).set({ startsAt: new Date(Date.now() - (45 + 61) * 60_000) }).where(eq(lessonTable.id, lessonId));
+    expect(await student.student.videos.list()).toEqual([]);
+    expect(await fileStatus(headers, videoFileId)).toBe(404);
+    await expect(teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("follows its lesson: moved later, the access ends an hour after the new end; cancelled, it ends at once", async () => {
+    const { studentId, lessonId, headers, student } = await studentWithLesson("Перенос видео учебника");
+    await savePlan(lessonId, [videoStage([0], await bankRevision(lessonId))]);
+    await teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId });
+    const [row] = await db().select({ startsAt: lessonTable.startsAt, teacherId: lessonTable.teacherId }).from(lessonTable).where(eq(lessonTable.id, lessonId));
+    const afterFirstEnd = new Date(row!.startsAt.getTime() + (45 + 61) * 60_000);
+    expect(await openTextbookVideos(db(), row!.teacherId, studentId, afterFirstEnd)).toEqual([]);
+
+    await teacher.teacher.schedule.move({ lessonId, date: isoIn(9), time: "10:00" });
+    expect((await openTextbookVideos(db(), row!.teacherId, studentId, afterFirstEnd)).map((v) => v.id)).toEqual([videoFileId]);
+
+    await teacher.teacher.schedule.cancel({ lessonId, charged: false });
     expect(await student.student.videos.list()).toEqual([]);
     expect(await fileStatus(headers, videoFileId)).toBe(404);
   });
 
-  it("refuses a stage with a video or a task the lesson does not have", async () => {
+  it("is not opened, nor its plan saved, with tasks picked from a bank that changed since; picked anew, it is", async () => {
+    const { lessonId, student } = await studentWithLesson("Новый банк видео");
+    const before = await bankRevision(lessonId);
+    await savePlan(lessonId, [videoStage([2], before)]);
+    // The bank is replaced: position 2 is another task now.
+    await confirmBank([trueFalse("The fox runs.", 0, "5"), trueFalse("The fox hides.", 0, "6"), trueFalse("The fox eats.", 0, "7")]);
+    await expect(teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await student.student.videos.list()).toEqual([]);
+    await expect(savePlan(lessonId, [videoStage([2], before)])).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/изменились/) });
+
+    const after = await bankRevision(lessonId);
+    expect(after).not.toBe(before);
+    await savePlan(lessonId, [videoStage([2], after)]);
+    await teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId });
+    expect((await student.student.videos.tasks({ id: videoFileId }))!.tasks.map((t) => t.prompt)).toEqual(["The fox eats."]);
+    await confirmBank(bankTasks);
+  });
+
+  it("refuses a stage with a video or a task the lesson does not have, or a task that cannot go under a video", async () => {
     const { lessonId } = await studentWithLesson("Чужое видео учебника");
-    await expect(savePlan(lessonId, [videoStage([7])])).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(savePlan(lessonId, [videoStage([0], crypto.randomUUID())])).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(savePlan(lessonId, [videoStage([0], videoFileId, lessons[2]!.id)])).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const revision = await bankRevision(lessonId);
+    await expect(savePlan(lessonId, [videoStage([7], revision)])).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // The voice task, at position 1.
+    await expect(savePlan(lessonId, [videoStage([1], revision)])).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(savePlan(lessonId, [videoStage([0], revision, crypto.randomUUID())])).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(savePlan(lessonId, [videoStage([0], revision, videoFileId, lessons[2]!.id)])).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("are refused in the structure by a name the set has no video for, as a track is", async () => {
+    const { structure, revision } = await teacher.teacher.textbooks.structure({ id: textbookId });
+    const typo = { units: structure!.units.map((u) => ({ ...u, lessons: u.lessons.map((l, i) => (i === 1 ? { ...l, videos: ["1-2-clp"] } : l)) })) };
+    await expect(teacher.teacher.textbooks.saveStructure({ id: textbookId, structure: typo, revision, confirm: true })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("видео «1-2-clp» нет в учебнике"),
+    });
   });
 });
