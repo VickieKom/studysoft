@@ -42,7 +42,7 @@ export default async function StudentCardPage({ params }: Props) {
   const rating = await caller.teacher.students.feedbackRating({ studentId: student.id });
   // «Фидбэк» lists the week's answers and those not seen yet (#333), the rest under «Все ответы»; the ratings count them all.
   const { seenAt } = await caller.teacher.students.feedbackSeen({ studentId: student.id });
-  const now = Date.now();
+  const now = new Date().getTime();
   const answers = splitFeedback(feedback, seenAt, now);
   const surveyAnswers = splitFeedback(surveys, seenAt, now);
   const vocabulary = await caller.teacher.students.vocabulary({ studentId: student.id });
