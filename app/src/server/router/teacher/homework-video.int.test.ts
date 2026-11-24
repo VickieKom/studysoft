@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LINK_SESSION_COOKIES } from "../../access/links";
-import { closeDb } from "../../db/client";
+import { eq, sql } from "drizzle-orm";
+import { closeDb, db } from "../../db/client";
+import { homework as homeworkTable } from "../../db/schema";
 import { env } from "../../env";
 import { seedTeachers, signedInHeaders } from "../../testing/requests";
 import { createServerCaller, handleLibraryFileRequest, handleLibraryVideoUpload, handleRouterRequest } from "../index";
@@ -10,7 +12,8 @@ import { createServerCaller, handleLibraryFileRequest, handleLibraryVideoUpload,
 // published homework gets the video, never the keys, and its file; nobody
 // else does; a later change of the video's tasks leaves the homework as it
 // was; a library id the teacher has no video for is refused wherever a
-// homework is saved; a YouTube link is embedded, another link opened. The
+// homework is saved; a YouTube link is embedded, another link opened; a
+// video a homework uses is not deleted (product owner, 2026-11-24). The
 // video's bytes and the tasks are synthetic.
 
 const [teacherA, teacherB] = seedTeachers as [(typeof seedTeachers)[number], (typeof seedTeachers)[number]];
@@ -135,6 +138,53 @@ describe("a video in homework", () => {
     });
     await expect(teacher.teacher.homework.videoTasks({ id, materialId: theirs })).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(assistant.agent.saveHomeworkDraft({ studentId, homework: JSON.parse(homework([foreign])) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("is not deleted while a homework uses it, a draft or a published one, and the refusal names the homework; once no homework uses it, it is", async () => {
+    const videoId = await videoWithTasks(teacher, teacherHeaders, `Kept clip ${run}`);
+    await confirm(videoId, VIDEO_TASKS);
+    const { studentId } = await student("Держит видео");
+    const withVideo = async () => {
+      const { id } = await teacher.teacher.homework.import({ studentId, json: homework([]) });
+      const draft = await teacher.teacher.homework.get({ id });
+      const { revision } = await teacher.teacher.homework.updateTasks({
+        id,
+        revision: draft.revision,
+        tasks: [...draft.tasks, ...(await teacher.teacher.homework.videoTasks({ id, materialId: videoId }))],
+      });
+      return { id, revision };
+    };
+    const refused = { code: "CONFLICT", message: expect.stringContaining(`«Video homework ${run}» (Держит видео)`) };
+
+    const draft = await withVideo();
+    await expect(teacher.teacher.library.remove({ id: videoId })).rejects.toMatchObject(refused);
+    // Another teacher cannot learn that the video exists.
+    await expect(other.teacher.library.remove({ id: videoId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // The draft without the video's tasks no longer keeps it; a published homework does.
+    const tasks = (await teacher.teacher.homework.get({ id: draft.id })).tasks.filter((task) => !task.video);
+    await teacher.teacher.homework.updateTasks({ id: draft.id, revision: draft.revision, tasks });
+    const published = await withVideo();
+    await teacher.teacher.homework.publish({ id: published.id, revision: published.revision, dueDate: inDays(3) });
+    await expect(teacher.teacher.library.remove({ id: videoId })).rejects.toMatchObject(refused);
+    expect((await teacher.teacher.homework.taskVideos({ id: published.id }))[1]).toEqual({ title: `Kept clip ${run}`, file: `/api/files/library/${videoId}` });
+
+    // A video no homework uses is deleted.
+    const unused = await videoWithTasks(teacher, teacherHeaders, `Unused clip ${run}`);
+    await expect(teacher.teacher.library.remove({ id: unused })).resolves.toEqual({ id: unused });
+  });
+
+  it("serves a homework's library id to the student only when it is a video and not a draft", async () => {
+    const watcher = await student("Не видео");
+    const { id: game } = await teacher.teacher.library.addGame({ title: `Not a clip ${run}`, level: "A2", topic: `homework video ${run}`, ageGroup: "younger", html: "<!doctype html><html><body>game</body></html>" });
+    const { id } = await teacher.teacher.homework.import({ studentId: watcher.studentId, json: homework([]) });
+    await teacher.teacher.homework.publish({ id, revision: (await teacher.teacher.homework.get({ id })).revision, dueDate: inDays(3) });
+    // No save path takes such a task; written straight to the document, it still opens nothing.
+    await db()
+      .update(homeworkTable)
+      .set({ document: sql`jsonb_set(${homeworkTable.document}, '{tasks,0,video}', ${JSON.stringify({ library: game })}::jsonb)` })
+      .where(eq(homeworkTable.id, id));
+    expect(await fileStatus(watcher.headers, game)).toBe(404);
   });
 
   it("embeds a YouTube link and leaves any other link to open in a new tab", async () => {

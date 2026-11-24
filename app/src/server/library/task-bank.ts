@@ -41,6 +41,8 @@ function checkLessonTasks(tasks: unknown, skipped: unknown): { ok: true; tasks: 
   }
   for (const [index, task] of checked.entries()) {
     if (typeof task.source !== "object") errors.push(`Задание ${index + 1}, поле source: укажите книгу, страницу и упражнение`);
+    // A video goes into homework from the library (#330), not through the bank.
+    if (task.video) errors.push(`Задание ${index + 1}, поле video: в заданиях учебника видео не указывается`);
   }
   const skips = skippedSchema.safeParse(skipped);
   if (!skips.success) errors.push(...skips.error.issues.slice(0, 5).map((issue) => `skipped.${issue.path.join(".")}: ${issue.message}`));

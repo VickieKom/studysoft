@@ -104,11 +104,16 @@ export async function videoTasksForHomework(database: Database, teacherId: strin
   return tasks.map((task) => ({ ...task, video: { library: materialId } }));
 }
 
-/** Whether a published homework of this student is about the library video `id`: its file is then theirs to watch. */
+/** Whether a published homework of this student is about the library video `id` (a video, not a draft): its file is then theirs to watch. */
 export async function isInStudentHomework(database: Pick<Database, "select">, teacherId: string, studentId: string, id: string): Promise<boolean> {
   const [row] = await database
     .select({ id: homework.id })
     .from(homework)
+    // Only a library video, not a draft, whatever id a task carries.
+    .innerJoin(
+      libraryMaterial,
+      and(eq(libraryMaterial.id, id), eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.kind, "video"), eq(libraryMaterial.draft, false)),
+    )
     .where(
       and(
         eq(homework.teacherId, teacherId),

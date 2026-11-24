@@ -431,7 +431,12 @@ export const libraryRouter = router({
     .input(z.object({ id: z.uuid() }))
     .output(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      if (!(await deleteMaterial(ctx.db, ctx.teacherId, input.id))) throw notFound();
+      const removed = await deleteMaterial(ctx.db, ctx.teacherId, input.id);
+      if (removed === "not_found") throw notFound();
+      if (removed !== "deleted") {
+        const used = removed.usedBy.map((h) => `«${h.title}» (${h.student})`).join(", ");
+        throw new TRPCError({ code: "CONFLICT", message: `Видео есть в домашке: ${used}. Уберите его из домашки, потом удаляйте` });
+      }
       return { id: input.id };
     }),
 });

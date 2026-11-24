@@ -153,6 +153,8 @@ describe("the task bank", () => {
       [[{ ...gap, prompt: "" }], /Задание 1/],
       [[{ ...gap, source: undefined }], /Задание 1, поле source/],
       [[{ ...gap, source: "own" }], /Задание 1, поле source/],
+      // A video goes into homework from the library (#330), not through the bank.
+      [[{ ...gap, video: { library: crypto.randomUUID() } }], /Задание 1, поле video/],
       ["not a list", /tasks/],
     ];
     for (const [tasks, message] of cases) {
