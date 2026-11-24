@@ -8,6 +8,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm"
 import { type LessonPlan, lessonPlanSchema, STAGE_MATERIAL_KINDS, withWaitingHomework } from "../../domain/lesson-plan";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
+import { openedFromLesson, stageFits, textbookLessonVideos } from "../library/textbook-videos";
 import { homework, lesson, lessonPlan, libraryMaterial, student, textbook } from "../db/schema";
 import { studentHomeworkIds, waitingHomework } from "./homework";
 
@@ -189,8 +190,13 @@ async function checkPlan(
     studentId,
     parsed.data.stages.flatMap((s) => (s.type === "homework" ? [s.homeworkId] : [])),
   );
+  const videos = found?.textbookId ? await textbookLessonVideos(db, found.textbookId, found.structure) : [];
   const errors = parsed.data.stages.flatMap((s, i) =>
-    s.type === "book" && !lessons.has(s.lessonId)
+    s.type === "textbook_video" && stageFits(videos.find((v) => v.fileId === s.fileId && v.lessonId === s.lessonId), s) !== "fits"
+      ? stageFits(videos.find((v) => v.fileId === s.fileId && v.lessonId === s.lessonId), s) === "no_video"
+        ? [`этап ${i + 1}: такого видео нет в уроке учебника ученика`]
+        : [`этап ${i + 1}: задания урока учебника изменились — отметьте задания к видео заново`]
+      : s.type === "book" && !lessons.has(s.lessonId)
       ? [`этап ${i + 1}: такого урока нет в учебнике ученика`]
       : s.type === "material" && !materials.has(s.materialId)
         ? [`этап ${i + 1}: такого материала нет в библиотеке`]
@@ -278,6 +284,16 @@ export async function findPreparation(db: Database, teacherId: string, lessonId:
     ),
     homeworkId: row?.homeworkId ?? null,
     lessons: orderedLessons(withBook.structure),
+    // The textbook's lesson videos the plan may take (#329), each with its lesson's bank tasks fit for a video by position and prompt, and those already opened.
+    textbookVideos: (withBook.textbookId ? await textbookLessonVideos(db, withBook.textbookId, withBook.structure) : []).map((v) => ({
+      fileId: v.fileId,
+      name: v.name,
+      lessonId: v.lessonId,
+      lessonTitle: v.lessonTitle,
+      tasks: v.tasks.map((t) => ({ index: t.index, prompt: t.task.prompt })),
+      revision: v.revision,
+    })),
+    openedVideos: [...(await openedFromLesson(db, teacherId, lessonId))],
     materials: await prepMaterials(db, teacherId, found.studentId),
     homeworkDrafts: drafts,
   };

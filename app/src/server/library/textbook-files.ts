@@ -1,13 +1,18 @@
 // Uploading a textbook's files and serving them (#156). A book (PDF) or a
 // track is uploaded with PUT before its set is saved, written to the store as
-// it arrives and stopped at its limit. A book, a track and a rendered page are
-// served to their teacher only, in byte ranges; anyone else — a student, a
-// parent, another teacher, no session — gets the same 404 as for a missing one.
+// it arrives and stopped at its limit, and so is a video (#329). A book, a
+// track and a rendered page are served to their teacher only, in byte ranges;
+// a video also to a student it is open to; anyone else — a student, a parent,
+// another teacher, no session — gets the same 404 as for a missing one.
+import { MAX_VIDEO_BYTES } from "../../domain/library";
 import { MAX_BOOK_BYTES, MAX_TRACKS_BYTES } from "../../domain/textbook";
 import { teacherIdFromHeaders } from "../access/auth";
+import { linkSessionFromHeaders } from "../access/links";
 import { byteRange } from "../blob/range";
 import { openBlob, saveBlobStream } from "../blob/store";
 import { db } from "../db/client";
+import { sniffVideo } from "./library";
+import { isTextbookVideoOpen } from "./textbook-videos";
 import { sniffPdf, sniffTrack, textbookBlob } from "./textbooks";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,6 +33,7 @@ export async function handleTextbookUpload(request: Request): Promise<Response> 
   const teacherId = await teacherIdFromHeaders(request.headers);
   if (!teacherId) return notFound();
   const kind = new URL(request.url).searchParams.get("kind");
+  if (kind === "video") return uploadVideo(request, teacherId);
   if (kind !== "book" && kind !== "track") return notFound();
   const book = kind === "book";
   const limit = book ? MAX_BOOK_BYTES : MAX_TRACKS_BYTES;
@@ -43,12 +49,34 @@ export async function handleTextbookUpload(request: Request): Promise<Response> 
   return Response.json({ file: saved }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
 
-/** A book or a track (`page` null), or a rendered page of a book, for its teacher. */
+/** A set's video (#329): MP4, WebM or MOV by its first bytes, at most 200 MB, as a library video is (#117). */
+async function uploadVideo(request: Request, teacherId: string): Promise<Response> {
+  const tooBig = () => refused(413, "Видео больше 200 МБ");
+  if (Number(request.headers.get("Content-Length") ?? "0") > MAX_VIDEO_BYTES) return tooBig();
+  const unsupported = () => refused(415, "Видео — MP4, WebM или MOV. Файл другого формата переведите в MP4");
+  if (!request.body) return unsupported();
+  const saved = await saveBlobStream(db(), teacherId, request.body, { limit: MAX_VIDEO_BYTES, sniff: sniffVideo });
+  if (saved === "too_big") return tooBig();
+  if (saved === "unsupported") return unsupported();
+  return Response.json({ file: saved }, { status: 201, headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * A book, a track or a video (`page` null), or a rendered page of a book, for
+ * its teacher; a video also for a student it is open to from a lesson's
+ * preparation (#329).
+ */
 export async function handleTextbookFileRequest(request: Request, fileId: string, page: string | null): Promise<Response> {
   if (!UUID.test(fileId) || (page !== null && !PAGE.test(page))) return notFound();
-  const teacherId = await teacherIdFromHeaders(request.headers);
-  if (!teacherId) return notFound();
   const database = db();
+  let teacherId = await teacherIdFromHeaders(request.headers);
+  if (!teacherId && page === null) {
+    const session = await linkSessionFromHeaders(database, request.headers, "student");
+    if (session?.role === "student" && (await isTextbookVideoOpen(database, session.teacherId, session.studentId, fileId.toLowerCase()))) {
+      teacherId = session.teacherId;
+    }
+  }
+  if (!teacherId) return notFound();
   const blobId = await textbookBlob(database, teacherId, fileId.toLowerCase(), page === null ? null : Number(page));
   const file = blobId ? await openBlob(database, teacherId, blobId) : null;
   if (!file || !blobId) return notFound();

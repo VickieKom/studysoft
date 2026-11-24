@@ -214,7 +214,8 @@ export async function confirmLessonTasks(
 }
 
 /** The confirmed tasks as the teacher's editor saw them: an edit is refused once they changed. */
-const tasksRevision = sql<string>`md5(coalesce(${textbookLessonTasks.tasks}::text, ''))`;
+/** The confirmed tasks as a page or a plan saw them (#225, #329). */
+export const tasksRevision = sql<string>`md5(coalesce(${textbookLessonTasks.tasks}::text, ''))`;
 
 /** A confirmed lesson's tasks whole, keys included, for the teacher's editor (#225); null when the lesson has none confirmed. */
 export async function readConfirmedTasks(
