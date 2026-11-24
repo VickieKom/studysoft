@@ -5,7 +5,7 @@
 // 2026-11-23). The answers are checked on the server; the wrong ones join
 // «Ошибки по темам» as «Видео: <title>». Keys never go out: the tasks leave
 // as studentView(), the verdicts stay here (AGENTS.md, rule 4).
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { and, eq, gt, gte, sql } from "drizzle-orm";
 import { answerText } from "../../domain/homework";
 import { type Answer, type StudentTask, studentView, type Task } from "../../domain/homework-format";
@@ -13,6 +13,7 @@ import type { Database } from "../db/client";
 import { gameAccess, libraryMaterial, videoAnswer, videoTasks } from "../db/schema";
 import { env } from "../env";
 import { checkAnswer, fitsTask } from "../homework/check";
+import { openTextbookVideoFor } from "./textbook-videos";
 
 /** Tasks the platform checks itself; a written answer waits for the teacher, as in homework. */
 const verdictOf = (task: Task, answer: Answer | null): boolean | null =>
@@ -43,7 +44,12 @@ async function openVideo(database: Database, teacherId: string, studentId: strin
     .innerJoin(libraryMaterial, and(eq(libraryMaterial.id, gameAccess.materialId), eq(libraryMaterial.teacherId, teacherId), eq(libraryMaterial.kind, "video")))
     .leftJoin(videoTasks, and(eq(videoTasks.materialId, libraryMaterial.id), eq(videoTasks.teacherId, teacherId)))
     .where(and(eq(gameAccess.teacherId, teacherId), eq(gameAccess.studentId, studentId), eq(gameAccess.materialId, materialId), gt(gameAccess.until, now)));
-  return row ? { title: row.title, lessonId: row.lessonId, tasks: (row.tasks as Task[] | null) ?? null, revision: videoTasksRevision(materialId, row.hash) } : null;
+  if (row) return { title: row.title, lessonId: row.lessonId, tasks: (row.tasks as Task[] | null) ?? null, revision: videoTasksRevision(materialId, row.hash) };
+  // A textbook video opened from a lesson's preparation (#329), with the tasks copied when it was opened.
+  const textbook = await openTextbookVideoFor(database, teacherId, studentId, materialId, now);
+  if (!textbook) return null;
+  const hash = createHash("md5").update(JSON.stringify(textbook.tasks)).digest("hex");
+  return { title: textbook.title, lessonId: textbook.lessonId, tasks: textbook.tasks, revision: videoTasksRevision(materialId, hash) };
 }
 
 export type StudentVideoTasks = { tasks: StudentTask[]; revision: string; done: boolean };

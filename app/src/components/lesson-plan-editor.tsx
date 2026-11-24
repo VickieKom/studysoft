@@ -3,7 +3,7 @@
 import { PREP_GROUP_LABELS, prepMaterialGroups } from "@/domain/prep-materials";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { HOMEWORK_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
+import { HOMEWORK_STAGE_MINUTES, MAX_STAGE_VIDEO_TASKS, VIDEO_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
 import type { MaterialKind } from "@/domain/library";
 import { Button } from "./button";
 import { type PrepBankLesson, PrepBankTasks } from "./prep-bank-tasks";
@@ -14,6 +14,18 @@ type Material = { id: string; kind: MaterialKind; title: string; forStudent: boo
 
 const field = "rounded-control border border-border bg-bg px-3 py-2";
 const KIND_ONE: Record<MaterialKind, string> = { warmup: "Разминка", game: "Игра", video: "Видео" };
+
+/** A textbook lesson's video the plan may take (#329), with its lesson's bank tasks by prompt. */
+export type TextbookVideoChoice = {
+  fileId: string;
+  name: string;
+  lessonId: string;
+  lessonTitle: string;
+  /** The lesson's bank tasks fit for a video, by their position in the bank. */
+  tasks: { index: number; prompt: string }[];
+  /** The bank's revision the positions belong to. */
+  revision: string;
+};
 
 /**
  * A lesson's plan by stages (#151): in order, with minutes; the book lesson
@@ -36,6 +48,8 @@ export function LessonPlanEditor({
   waitingHomework,
   stageHomework,
   bank,
+  textbookVideos,
+  openedVideos,
 }: {
   lessonId: string;
   start: LessonPlan;
@@ -48,13 +62,45 @@ export function LessonPlanEditor({
   waitingHomework: { id: string; title: string } | null;
   stageHomework: { id: string; title: string }[];
   bank: PrepBankLesson[];
+  /** The textbook's lesson videos (#329), each with its lesson's bank tasks fit for a video. */
+  textbookVideos: TextbookVideoChoice[];
+  /** The videos opened to the student from this preparation, still open. */
+  openedVideos: string[];
 }) {
   const router = useRouter();
-  const [stages, setStages] = useState<PlanStage[]>(start.stages);
+  // A video stage whose lesson's bank changed since it was saved (#329): its positions name other tasks now, so its ticks are cleared to pick anew.
+  const choiceOf = (fileId: string, lessonId: string) => textbookVideos.find((v) => v.fileId === fileId && v.lessonId === lessonId);
+  const [stages, setStages] = useState<PlanStage[]>(() =>
+    start.stages.map((s) => {
+      const video = s.type === "textbook_video" ? choiceOf(s.fileId, s.lessonId) : undefined;
+      return s.type === "textbook_video" && video && video.revision !== s.revision ? { ...s, tasks: [], revision: video.revision } : s;
+    }),
+  );
+  const changedBanks = start.stages.some((s) => {
+    const video = s.type === "textbook_video" ? choiceOf(s.fileId, s.lessonId) : undefined;
+    return s.type === "textbook_video" && video !== undefined && video.revision !== s.revision;
+  });
+  // «Открыть ученику» opens the saved plan: not while the screen shows changes it does not have.
+  const [unsaved, setUnsaved] = useState(changedBanks);
   const [adding, setAdding] = useState<string>(materials[0]?.id ?? "");
   const [homework, setHomework] = useState<string>(homeworkId ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
+  const videoKey = (v: { fileId: string; lessonId: string }) => `${v.lessonId}:${v.fileId}`;
+  const [addingVideo, setAddingVideo] = useState<string>(textbookVideos[0] ? videoKey(textbookVideos[0]) : "");
+  const [opened, setOpened] = useState<Set<string>>(new Set(openedVideos));
+
+  async function openVideo(fileId: string) {
+    setError(null);
+    try {
+      await routerClient.teacher.prep.openTextbookVideo.mutate({ lessonId, fileId });
+      setOpened((before) => new Set([...before, fileId]));
+    } catch (caught) {
+      const message = (caught as { message?: string })?.message;
+      const code = (caught as { data?: { code?: string } })?.data?.code;
+      setError((code === "NOT_FOUND" || code === "CONFLICT") && message ? message : "Не получилось открыть видео. Попробуйте ещё раз");
+    }
+  }
 
   // The student's games first, then the plan's book lessons', then the rest (#293).
   const groups = prepMaterialGroups(
@@ -71,6 +117,7 @@ export function LessonPlanEditor({
   const change = (next: PlanStage[]) => {
     setStages(next);
     setState("idle");
+    setUnsaved(true);
   };
   const update = (i: number, patch: Partial<PlanStage>) => change(stages.map((s, j) => (j === i ? ({ ...s, ...patch } as PlanStage) : s)));
   const move = (i: number, by: -1 | 1) => {
@@ -85,6 +132,7 @@ export function LessonPlanEditor({
     try {
       await routerClient.teacher.prep.save.mutate({ lessonId, plan: { stages }, homeworkId: homework || null, revision });
       setState("saved");
+      setUnsaved(false);
       router.refresh();
     } catch (caught) {
       const code = (caught as { data?: { code?: string } })?.data?.code;
@@ -100,6 +148,7 @@ export function LessonPlanEditor({
       const title = stageHomework.find((h) => h.id === stage.homeworkId)?.title ?? waitingHomework?.title;
       return title ? `Домашка: ${title}` : "Домашка";
     }
+    if (stage.type === "textbook_video") return `Видео: ${choiceOf(stage.fileId, stage.lessonId)?.name ?? "не найдено"}`;
     const material = materials.find((m) => m.id === stage.materialId);
     return material ? `${KIND_ONE[material.kind]}: ${material.title}` : "Материал не найден";
   };
@@ -148,6 +197,43 @@ export function LessonPlanEditor({
                     </label>
                   </>
                 )}
+                {stage.type === "textbook_video" && (
+                  <div className="flex basis-full flex-col gap-2">
+                    {changedBanks && stage.tasks.length === 0 && (
+                      <p className="text-small text-danger">Задания урока учебника изменились — отметьте задания к видео заново</p>
+                    )}
+                    {(choiceOf(stage.fileId, stage.lessonId)?.tasks.length ?? 0) === 0 ? (
+                      <p className="text-small text-text-secondary">В банке урока нет подтверждённых заданий, подходящих к видео</p>
+                    ) : (
+                      <ul aria-label="Задания к видео" className="flex flex-col gap-1">
+                        {choiceOf(stage.fileId, stage.lessonId)!.tasks.map(({ index: t, prompt }) => (
+                          <li key={t} className="flex items-start gap-2 text-small">
+                            <label className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                aria-label="К видео"
+                                checked={stage.tasks.includes(t)}
+                                disabled={!stage.tasks.includes(t) && stage.tasks.length >= MAX_STAGE_VIDEO_TASKS}
+                                onChange={(e) =>
+                                  update(i, { tasks: e.target.checked ? [...stage.tasks, t].sort((a, b) => a - b) : stage.tasks.filter((x) => x !== t) })
+                                }
+                              />
+                              <span>{prompt}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="secondary" disabled={unsaved} onClick={() => void openVideo(stage.fileId)}>
+                        Открыть ученику
+                      </Button>
+                      {unsaved && <span className="text-small text-text-secondary">Сохраните план, чтобы открыть видео</span>}
+                      {!unsaved && opened.has(stage.fileId) && <span className="text-small text-accent-900">Открыто ученику</span>}
+                      <span className="text-caption text-text-muted">Ученик увидит видео сразу и до часа после конца урока</span>
+                    </div>
+                  </div>
+                )}
                 <label className="flex flex-col gap-1">
                   <span className="text-small text-text-secondary">Минуты</span>
                   <input
@@ -181,6 +267,33 @@ export function LessonPlanEditor({
           >
             Добавить урок учебника
           </Button>
+        )}
+        {textbookVideos.length > 0 && (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-small text-text-secondary">Видео урока</span>
+              <select value={addingVideo} onChange={(e) => setAddingVideo(e.target.value)} className={`${field} h-10`}>
+                {textbookVideos.map((v) => (
+                  <option key={videoKey(v)} value={videoKey(v)}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const video = textbookVideos.find((v) => videoKey(v) === addingVideo);
+                if (video)
+                  change([
+                    ...stages,
+                    { type: "textbook_video", fileId: video.fileId, lessonId: video.lessonId, tasks: [], revision: video.revision, minutes: VIDEO_STAGE_MINUTES },
+                  ]);
+              }}
+            >
+              Добавить видео
+            </Button>
+          </>
         )}
         {materials.length > 0 && (
           <>
