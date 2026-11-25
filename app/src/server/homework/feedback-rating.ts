@@ -5,7 +5,7 @@
 // newest one «Фидбэк» showed her (product owner, 2026-11-24: seen once she
 // scrolls to it; answers before the release count as seen). The teacher's
 // only — no student or parent procedure reads it.
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   type FunAnswer,
   RATED_MATERIAL_KINDS,
@@ -42,6 +42,8 @@ async function ratingWithPairs(
   database: Database,
   teacherId: string,
   studentIds: string[] | null,
+  // Only the answers given from this moment (#377: «За месяц»); null for all time.
+  since: Date | null = null,
 ): Promise<{ rating: FeedbackRating; funAnswers: FunAnswer[] }> {
   const whose = <T extends typeof homeworkFeedback | typeof homeworkSurvey>(table: T) =>
     studentIds ? inArray(table.studentId, studentIds) : undefined;
@@ -51,12 +53,16 @@ async function ratingWithPairs(
     .innerJoin(homework, eq(homework.id, homeworkFeedback.homeworkId))
     // A deleted student's answers count no more, here or across students.
     .innerJoin(student, and(eq(student.id, homeworkFeedback.studentId), isNull(student.deletedAt)))
-    .where(and(eq(homeworkFeedback.teacherId, teacherId), whose(homeworkFeedback), isNotNull(homeworkFeedback.answer)));
+    .where(
+      and(eq(homeworkFeedback.teacherId, teacherId), whose(homeworkFeedback), isNotNull(homeworkFeedback.answer), since ? gte(homeworkFeedback.createdAt, since) : undefined),
+    );
   const surveys = await database
     .select({ questions: homeworkSurvey.questions, answers: homeworkSurvey.answers })
     .from(homeworkSurvey)
     .innerJoin(student, and(eq(student.id, homeworkSurvey.studentId), isNull(student.deletedAt)))
-    .where(and(eq(homeworkSurvey.teacherId, teacherId), whose(homeworkSurvey), eq(homeworkSurvey.status, "answered")));
+    .where(
+      and(eq(homeworkSurvey.teacherId, teacherId), whose(homeworkSurvey), eq(homeworkSurvey.status, "answered"), since ? gte(homeworkSurvey.answeredAt, since) : undefined),
+    );
 
   const funs: { a: string; b: string; answer: string; titles: [string, string] }[] = [];
   const topics: string[] = [];
@@ -93,9 +99,9 @@ async function ratingWithPairs(
   return { rating, funAnswers };
 }
 
-/** «Что заходит» for one student of this teacher. */
-export function studentRating(database: Database, teacherId: string, studentId: string): Promise<FeedbackRating> {
-  return ratingOf(database, teacherId, [studentId]);
+/** «Что заходит» for one student of this teacher: all time, or the answers given from `since` (#377). */
+export async function studentRating(database: Database, teacherId: string, studentId: string, since: Date | null = null): Promise<FeedbackRating> {
+  return (await ratingWithPairs(database, teacherId, [studentId], since)).rating;
 }
 
 /** What the teacher's children like across students, for the general screen. */

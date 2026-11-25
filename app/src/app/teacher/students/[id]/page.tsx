@@ -6,7 +6,8 @@ import { ReissueLinkButton } from "@/components/reissue-link-button";
 import { PastSubmissions } from "@/components/past-submissions";
 import { StudentHomework } from "@/components/student-homework";
 import { FeedbackSeen } from "@/components/feedback-seen";
-import { FeedbackRating, StudentFeedback } from "@/components/student-feedback";
+import { FeedbackRating } from "@/components/feedback-rating";
+import { StudentFeedback } from "@/components/student-feedback";
 import { likedMost, newestAnswer, splitFeedback } from "@/domain/feedback-rating";
 import { StudentMistakes } from "@/components/student-mistakes";
 import { StudentAssessments } from "@/components/student-assessments";
@@ -40,6 +41,7 @@ export default async function StudentCardPage({ params }: Props) {
   const feedback = await caller.teacher.students.feedback({ studentId: student.id });
   const surveys = await caller.teacher.students.surveyFeedback({ studentId: student.id });
   const rating = await caller.teacher.students.feedbackRating({ studentId: student.id });
+  const monthRating = await caller.teacher.students.feedbackRating({ studentId: student.id, period: "month" });
   // «Фидбэк» lists the week's answers and those not seen yet (#333), the rest under «Все ответы»; the ratings count them all.
   const { seenAt } = await caller.teacher.students.feedbackSeen({ studentId: student.id });
   const now = new Date().getTime();
@@ -164,7 +166,7 @@ export default async function StudentCardPage({ params }: Props) {
           timeZone={timeZone}
         />
       </FeedbackSeen>
-      <FeedbackRating rating={rating} />
+      <FeedbackRating ratings={{ all: rating, month: monthRating }} />
       <StudentVocabulary studentId={student.id} words={vocabulary} timeZone={timeZone} />
       <PastSubmissions submissions={past} />
       <StudentNotes studentId={student.id} notes={notes} />

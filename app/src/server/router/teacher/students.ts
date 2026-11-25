@@ -17,6 +17,7 @@ import { studentFeedback } from "../../homework/feedback";
 import { surveyFeedback } from "../../homework/survey";
 import { feedbackSeenAt, seeFeedback, studentRating } from "../../homework/feedback-rating";
 import { feedbackRatingSchema } from "./feedback-rating-schema";
+import { RATING_PERIODS, ratingSince } from "../../../domain/feedback-rating";
 import { TASK_TYPES } from "../../../domain/homework-format";
 import { ALL_KINDS_ANSWER } from "../../../domain/homework";
 import { createStudent, findContacts, findStudent, listStudents, saveContacts, updateStudent } from "../../crm/students";
@@ -235,11 +236,12 @@ export const studentsRouter = router({
    * in three answers of three, and the topics chosen.
    */
   feedbackRating: teacherProcedure
-    .input(z.object({ studentId: z.uuid() }))
+    // «За месяц» (#377): only the answers of the last 30 days; all time by default.
+    .input(z.object({ studentId: z.uuid(), period: z.enum(RATING_PERIODS).default("all") }))
     .output(feedbackRatingSchema)
     .query(async ({ ctx, input }) => {
       if (!(await findStudent(ctx.db, ctx.teacherId, input.studentId))) throw notFound();
-      return studentRating(ctx.db, ctx.teacherId, input.studentId);
+      return studentRating(ctx.db, ctx.teacherId, input.studentId, ratingSince(input.period, new Date()));
     }),
 
   /** When «Фидбэк» was last seen (#333), by the newest answer it showed: older answers seen go under «Все ответы». */

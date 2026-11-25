@@ -43,17 +43,16 @@ async function newestShown(studentId: string) {
 }
 
 /** An answered survey: three pairs, each game against a video, the picks given; and «Про что хочется ещё?». */
-async function survey(studentId: string, picks: string[], more: string | null) {
+async function survey(studentId: string, picks: string[], more: string | null, at = new Date()) {
   const { id } = await teacher.teacher.homework.import({ studentId, json: JSON.stringify(short) });
   const questions = [
     ...games.map((g, i) => ({ kind: "fun", a: g, b: videos[i]! })),
     { kind: "more", topics: ["planets", "pets"] },
     { kind: "wish" },
   ];
-  const now = new Date();
   await db()
     .insert(homeworkSurvey)
-    .values({ teacherId, studentId, homeworkId: id, periodFrom: now, periodTo: now, questions, answers: [...picks, more, null], status: "answered", answeredAt: now });
+    .values({ teacherId, studentId, homeworkId: id, periodFrom: at, periodTo: at, questions, answers: [...picks, more, null], status: "answered", answeredAt: at });
 }
 
 beforeAll(async () => {
@@ -83,6 +82,30 @@ describe("«Что заходит»", () => {
       topics: [{ topic: "planets", chosen: 1 }],
     });
     await expect(other.teacher.students.feedbackRating({ studentId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("«За месяц» counts the answers of the last 30 days only; all time is the default (#377)", async () => {
+    const studentId = await newStudent("Помесячный");
+    const longAgo = new Date(Date.now() - 40 * 86_400_000);
+    // More than a month ago: games picked, «planets», the written task.
+    await survey(studentId, games.map((g) => g.title), "planets", longAgo);
+    await miniAnswer(studentId, "written", longAgo);
+    // This week: videos picked, «pets», the choice.
+    const recent = async (id: string) => {
+      await survey(id, videos.map((v) => v.title), "pets", new Date(Date.now() - 2 * 86_400_000));
+      await miniAnswer(id, "single_choice", new Date(Date.now() - 2 * 86_400_000));
+    };
+    await recent(studentId);
+    const onlyRecent = await newStudent("Только недавний");
+    await recent(onlyRecent);
+
+    const month = await teacher.teacher.students.feedbackRating({ studentId, period: "month" });
+    expect(month).toEqual(await teacher.teacher.students.feedbackRating({ studentId: onlyRecent }));
+    expect(month.topics).toEqual([{ topic: "pets", chosen: 1 }]);
+    const all = await teacher.teacher.students.feedbackRating({ studentId });
+    expect(all).toEqual(await teacher.teacher.students.feedbackRating({ studentId, period: "all" }));
+    expect(all.topics.map((t) => t.topic).sort()).toEqual(["pets", "planets"]);
+    await expect(other.teacher.students.feedbackRating({ studentId, period: "month" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("counts «Оба классные» for both kinds, «Оба так себе» for none, «Все классные» for every kind of its homework", async () => {

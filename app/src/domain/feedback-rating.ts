@@ -103,3 +103,13 @@ export function likedMost(materials: Rated<RatedMaterialKind>[], tasks: Rated<Ta
   if (tasks[0]) return taskKindLabel(tasks[0].key).toLowerCase();
   return null;
 }
+
+/** The periods of «Что заходит» on the card (#377): all the answers, or those of the last `RATING_MONTH_DAYS` days. */
+export const RATING_PERIODS = ["all", "month"] as const;
+export type RatingPeriod = (typeof RATING_PERIODS)[number];
+export const RATING_MONTH_DAYS = 30;
+
+/** The moment a period's answers start from; null for all time. */
+export function ratingSince(period: RatingPeriod, now: Date): Date | null {
+  return period === "month" ? new Date(now.getTime() - RATING_MONTH_DAYS * 86_400_000) : null;
+}
