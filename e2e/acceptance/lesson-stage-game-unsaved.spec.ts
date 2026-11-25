@@ -85,15 +85,20 @@ test("closing the stage window while a game result is being saved asks first; sa
   const frame = stage.frameLocator(`iframe[title="${GAME}"]`);
   await expect(frame.getByText(`${GAME} is ready`)).toBeVisible();
 
-  // The save is held on its way.
+  // The save is held on its way. The game's message reaches the stage a moment after its own text
+  // changes, so the scenario waits for the save to set out, not for the game's text.
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
+  let setOut!: () => void;
+  const onItsWay = new Promise<void>((resolve) => (setOut = resolve));
   await stage.route((url) => url.pathname.includes("saveGameResult"), async (route: Route) => {
+    setOut();
     await held;
     await route.continue();
   });
   await frame.getByRole("button", { name: "Finish" }).click();
   await expect(frame.getByText(`${GAME} is finished`)).toBeVisible();
+  await onItsWay;
 
   // Closing now asks; the teacher stays.
   const asked = stage.waitForEvent("dialog");
@@ -103,10 +108,9 @@ test("closing the stage window while a game result is being saved asks first; sa
   await dialog.dismiss();
   expect(stage.isClosed()).toBe(false);
 
-  // Saved, it closes without asking.
-  const saved = stage.waitForResponse((response) => response.url().includes("saveGameResult"));
+  // Saved — the panel says so — it closes without asking.
   release();
-  await saved;
+  await expect(page.getByText("Итог игры сохранён")).toBeVisible();
   stage.on("dialog", () => {
     throw new Error("asked after the result was saved");
   });
