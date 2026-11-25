@@ -21,6 +21,7 @@ import {
   type WeekLesson,
   weekLessons,
 } from "../../schedule/schedule";
+import { followIntroLesson } from "../../crm/requests";
 import { router, teacherProcedure } from "../core/trpc";
 
 // The schedule (#80). Teacher procedures only; times go out as moments (ISO)
@@ -152,7 +153,13 @@ export const scheduleRouter = router({
     .output(z.object({ ok: z.literal(true) }))
     .mutation(async ({ ctx, input }) => {
       const { lessonId, ...mark } = input;
-      if (!(await markLesson(ctx.db, ctx.teacherId, lessonId, mark))) throw notFound();
+      // An intro lesson moves its request in the same transaction (#338).
+      const marked = await ctx.db.transaction(async (tx) => {
+        if (!(await markLesson(tx, ctx.teacherId, lessonId, mark))) return false;
+        await followIntroLesson(tx, ctx.teacherId, lessonId);
+        return true;
+      });
+      if (!marked) throw notFound();
       return { ok: true as const };
     }),
 
@@ -171,7 +178,13 @@ export const scheduleRouter = router({
     .input(z.object({ lessonId: z.uuid(), charged: z.boolean() }))
     .output(ok)
     .mutation(async ({ ctx, input }) => {
-      if (!(await cancelLesson(ctx.db, ctx.teacherId, input.lessonId, input.charged))) throw notFound();
+      // An intro lesson moves its request in the same transaction (#338).
+      const cancelled = await ctx.db.transaction(async (tx) => {
+        if (!(await cancelLesson(tx, ctx.teacherId, input.lessonId, input.charged))) return false;
+        await followIntroLesson(tx, ctx.teacherId, input.lessonId);
+        return true;
+      });
+      if (!cancelled) throw notFound();
       return { ok: true as const };
     }),
 
@@ -180,7 +193,13 @@ export const scheduleRouter = router({
     .input(z.object({ lessonId: z.uuid() }))
     .output(ok)
     .mutation(async ({ ctx, input }) => {
-      if (!(await restoreLesson(ctx.db, ctx.teacherId, input.lessonId))) throw notFound();
+      // An intro lesson moves its request in the same transaction (#338).
+      const restored = await ctx.db.transaction(async (tx) => {
+        if (!(await restoreLesson(tx, ctx.teacherId, input.lessonId))) return false;
+        await followIntroLesson(tx, ctx.teacherId, input.lessonId);
+        return true;
+      });
+      if (!restored) throw notFound();
       return { ok: true as const };
     }),
 

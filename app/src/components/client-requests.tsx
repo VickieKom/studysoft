@@ -18,6 +18,7 @@ import {
   type RequestSource,
   type RequestStage,
 } from "@/domain/requests";
+import type { Level } from "@/domain/student";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
@@ -32,6 +33,8 @@ export type ClientRequestView = {
   stage: RequestStage;
   declineReason: DeclineReason | null;
   declineComment: string | null;
+  introLevel: Level | null;
+  introNotes: string | null;
 };
 
 const field = "h-10 rounded-control border border-border bg-bg px-3";
@@ -119,6 +122,7 @@ export function ClientRequests({ requests, today }: { requests: ClientRequestVie
                         {request.schoolYear && <span>{request.schoolYear} класс</span>}
                         <span className="text-text-secondary">{REQUEST_SOURCE_LABELS[request.source]}</span>
                         <span className="text-text-secondary">{dayMonth(request.requestedOn)}</span>
+                        {request.introLevel && <span>Уровень {request.introLevel}</span>}
                       </div>
                       {request.contact && <span>{request.contact}</span>}
                       {request.declineReason && (

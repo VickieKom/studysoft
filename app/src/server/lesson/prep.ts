@@ -4,7 +4,8 @@
 // teacher has saved or approved its plan. The assistant only drafts
 // (AGENTS.md, rule 5); approving is the teacher's.
 import { gamesForStudent } from "../library/material-students";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
+import { CANDIDATE_STATUS } from "../../domain/student";
 import { type LessonPlan, lessonPlanSchema, STAGE_MATERIAL_KINDS, withWaitingHomework } from "../../domain/lesson-plan";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
@@ -124,7 +125,14 @@ export async function nextBookLesson(db: Database, teacherId: string, studentId:
 }
 
 /** This teacher's lessons from an hour ago to two weeks ahead, still to hold, each «подготовлен» or not; optionally one student's. */
-export async function upcomingLessons(db: Database, teacherId: string, studentId?: string, now: Date = new Date()) {
+export async function upcomingLessons(
+  db: Database,
+  teacherId: string,
+  studentId?: string,
+  now: Date = new Date(),
+  // The assistant does not see a request's hidden card (#338): it has no context for it.
+  { introCards = true }: { introCards?: boolean } = {},
+) {
   const rows = await db
     .select({
       id: lesson.id,
@@ -145,10 +153,21 @@ export async function upcomingLessons(db: Database, teacherId: string, studentId
         gte(lesson.startsAt, new Date(now.getTime() - 3_600_000)),
         lte(lesson.startsAt, new Date(now.getTime() + UPCOMING_DAYS * 86_400_000)),
         studentId ? eq(lesson.studentId, studentId) : undefined,
+        introCards ? undefined : ne(student.status, CANDIDATE_STATUS),
       ),
     )
     .orderBy(asc(lesson.startsAt));
   return rows;
+}
+
+/** Whether a lesson of this teacher is on a request's hidden card (#338), which the assistant does not see. */
+export async function onIntroCard(db: Database, teacherId: string, lessonId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: lesson.id })
+    .from(lesson)
+    .innerJoin(student, eq(student.id, lesson.studentId))
+    .where(and(eq(lesson.id, lessonId), eq(lesson.teacherId, teacherId), eq(student.status, CANDIDATE_STATUS)));
+  return row !== undefined;
 }
 
 /** A lesson of this teacher still to hold, with its student. */

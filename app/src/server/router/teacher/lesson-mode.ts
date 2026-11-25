@@ -8,6 +8,7 @@ import { finishForm, finishLesson } from "../../lesson/finish";
 import { saveStageGameResult } from "../../library/game-results";
 import { BOOK_KINDS } from "../../../domain/textbook";
 import { lessonVideos, lessonStage, MAX_NOTE_LENGTH, openLesson, saveLessonNote, saveLessonState } from "../../lesson/mode";
+import { requestOfLesson } from "../../crm/requests";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -171,7 +172,8 @@ export const lessonModeRouter = router({
         words: z.array(lessonWordSchema).max(MAX_LESSON_WORDS),
       }),
     )
-    .output(z.object({ studentId: z.uuid() }).strict())
+    // An intro lesson's request (#338), to go back to instead of a card the child does not have.
+    .output(z.object({ studentId: z.uuid(), requestId: z.uuid().nullable() }).strict())
     .mutation(async ({ ctx, input }) => {
       const { lessonId, ...form } = input;
       const result = await finishLesson(ctx.db, ctx.teacherId, lessonId, form);
@@ -179,7 +181,7 @@ export const lessonModeRouter = router({
       if (result === "homework_changed") throw new TRPCError({ code: "CONFLICT", message: "Домашку к уроку изменили, пока форма была открыта. Откройте форму снова" });
       if (result === "past") throw new TRPCError({ code: "BAD_REQUEST", message: "Срок домашки уже прошёл" });
       if ("error" in result) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
-      return result.finished;
+      return { ...result.finished, requestId: await requestOfLesson(ctx.db, ctx.teacherId, lessonId) };
     }),
 
   /** A result the game on the stage posted (#199): kept for the lesson's student, as a game played with the teacher. */

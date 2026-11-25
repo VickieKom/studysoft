@@ -1,5 +1,5 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { CONTACT_KEYS, type Contacts, type Level, type Profile, type Status, type TimeZoneId } from "../../domain/student";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { CANDIDATE_STATUS, CONTACT_KEYS, type Contacts, type Level, type Profile, type Status, type TimeZoneId } from "../../domain/student";
 import type { Database } from "../db/client";
 import { contact, student } from "../db/schema";
 
@@ -45,12 +45,16 @@ export async function listStudents(db: Database, teacherId: string, statuses: re
   return rows.map(toCard);
 }
 
-/** One student of this teacher, or null — another teacher's student is the same as a missing one. */
+/**
+ * One student of this teacher, or null — another teacher's student is the
+ * same as a missing one, and so is a request's hidden card (#338): it has no
+ * card, only its intro lesson.
+ */
 export async function findStudent(db: Database, teacherId: string, id: string): Promise<StudentCard | null> {
   const [row] = await db
     .select(cardColumns)
     .from(student)
-    .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt)));
+    .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt), ne(student.status, CANDIDATE_STATUS)));
   return row ? toCard(row) : null;
 }
 
@@ -77,7 +81,7 @@ export async function createStudent(db: Database, teacherId: string, fields: Stu
   return row.id;
 }
 
-/** Updates a student of this teacher; false when there is no such student. */
+/** Updates a student of this teacher; false when there is no such student, a request's hidden card (#338) included. */
 export async function updateStudent(
   db: Pick<Database, "update">,
   teacherId: string,
@@ -87,7 +91,7 @@ export async function updateStudent(
   const rows = await db
     .update(student)
     .set(fields)
-    .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt)))
+    .where(and(eq(student.id, id), eq(student.teacherId, teacherId), isNull(student.deletedAt), ne(student.status, CANDIDATE_STATUS)))
     .returning({ id: student.id });
   return rows.length > 0;
 }

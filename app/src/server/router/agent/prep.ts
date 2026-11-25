@@ -2,12 +2,14 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { MATERIAL_KINDS } from "../../../domain/library";
 import { lessonPlanSchema } from "../../../domain/lesson-plan";
-import { findPreparation, saveAssistantPlan, stageMaterials, upcomingLessons } from "../../lesson/prep";
+import { findPreparation, onIntroCard, saveAssistantPlan, stageMaterials, upcomingLessons } from "../../lesson/prep";
 import { agentProcedure, router } from "../core/trpc";
 
 // The assistant's lesson preparation (#151): it reads the upcoming lessons
 // and saves a plan as a draft. There is no agent procedure that approves a
-// plan (AGENTS.md, rule 5): approving is the teacher's.
+// plan (AGENTS.md, rule 5): approving is the teacher's. A request's hidden
+// card (#338) has no context for the assistant, so its intro lessons are not
+// among them (product owner, 2026-11-24).
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
 
@@ -23,7 +25,7 @@ export const agentPrepRouter = router({
       ),
     )
     .query(async ({ ctx, input }) =>
-      (await upcomingLessons(ctx.db, ctx.teacherId, input.studentId)).map(({ draft: _, ...l }) => ({ ...l, startsAt: l.startsAt.toISOString() })),
+      (await upcomingLessons(ctx.db, ctx.teacherId, input.studentId, new Date(), { introCards: false })).map(({ draft: _, ...l }) => ({ ...l, startsAt: l.startsAt.toISOString() })),
     ),
 
   /** A lesson's plan as it stands, the plan proposed (the student's next book lesson), and the lessons of their textbook. */
@@ -41,6 +43,7 @@ export const agentPrepRouter = router({
         .strict(),
     )
     .query(async ({ ctx, input }) => {
+      if (await onIntroCard(ctx.db, ctx.teacherId, input.lessonId)) throw notFound();
       const found = await findPreparation(ctx.db, ctx.teacherId, input.lessonId);
       if (!found) throw notFound();
       return { plan: found.plan, draft: found.draft, proposed: found.proposed, textbookTitle: found.textbookTitle, lessons: found.lessons };
@@ -51,7 +54,7 @@ export const agentPrepRouter = router({
     .input(z.object({ lessonId: z.uuid() }))
     .output(z.array(z.object({ id: z.uuid(), kind: z.enum(MATERIAL_KINDS), title: z.string(), level: z.string(), topics: z.array(z.string()) }).strict()))
     .query(async ({ ctx, input }) => {
-      if (!(await findPreparation(ctx.db, ctx.teacherId, input.lessonId))) throw notFound();
+      if ((await onIntroCard(ctx.db, ctx.teacherId, input.lessonId)) || !(await findPreparation(ctx.db, ctx.teacherId, input.lessonId))) throw notFound();
       return (await stageMaterials(ctx.db, ctx.teacherId)).map((m) => ({ ...m, kind: m.kind as (typeof MATERIAL_KINDS)[number] }));
     }),
 
@@ -60,6 +63,7 @@ export const agentPrepRouter = router({
     .input(z.object({ lessonId: z.uuid(), plan: z.unknown() }))
     .output(z.object({ status: z.literal("draft") }).strict())
     .mutation(async ({ ctx, input }) => {
+      if (await onIntroCard(ctx.db, ctx.teacherId, input.lessonId)) throw notFound();
       const saved = await saveAssistantPlan(ctx.db, ctx.teacherId, input.lessonId, input.plan);
       if (saved === "not_found") throw notFound();
       if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });

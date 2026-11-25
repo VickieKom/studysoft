@@ -13,7 +13,10 @@ import {
 } from "../../../domain/requests";
 import { teacherTimeZone } from "../../access/settings";
 import { briefTemplate, requestBrief, saveBriefTemplate, saveRequestBrief } from "../../crm/brief";
-import { createRequest, deleteRequest, findRequest, listRequests, moveRequest } from "../../crm/requests";
+import { bookIntro, createRequest, deleteRequest, findRequest, introGames, listRequests, moveRequest, saveIntroOutcome } from "../../crm/requests";
+import { dateIn, DURATIONS, timeIn } from "../../../domain/schedule";
+import { formatPastDate } from "../../../domain/homework";
+import { LEVELS } from "../../../domain/student";
 import { briefAnswersSchema, briefTemplateSchema, convenientTimeSchema } from "../../../domain/brief";
 import { router, teacherProcedure } from "../core/trpc";
 
@@ -40,8 +43,14 @@ const request = z
     stage: z.enum(REQUEST_STAGES),
     declineReason: z.enum(DECLINE_REASONS).nullable(),
     declineComment: z.string().nullable(),
+    introLevel: z.enum(LEVELS).nullable(),
+    introNotes: z.string().nullable(),
   })
   .strict();
+
+/** «Итог вводного»: the notes, at most this long. */
+const MAX_INTRO_NOTES_LENGTH = 5_000;
+const ok = z.object({ ok: z.literal(true) }).strict();
 
 export const requestsRouter = router({
   /** The requests that are not deleted, and today in the teacher's time zone for «Новая заявка». */
@@ -125,6 +134,63 @@ export const requestsRouter = router({
       if (result === "not_found") throw notFound();
       if (result === "invalid") throw new TRPCError({ code: "BAD_REQUEST", message: "Бриф не совпадает с вопросами. Обновите страницу" });
       return { ok: true as const };
+    }),
+
+  /** «Записать на вводный» (#338): a free intro lesson at the teacher's date and time; the request is «Вводный записан». */
+  bookIntro: teacherProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        date: z.iso.date(),
+        time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+        durationMinutes: z.number().int().refine((m) => (DURATIONS as readonly number[]).includes(m)),
+      }),
+    )
+    .output(ok)
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...intro } = input;
+      const booked = await bookIntro(ctx.db, ctx.teacherId, id.toLowerCase(), intro);
+      if (!booked) throw notFound();
+      if (booked !== "booked") {
+        if (booked.refused === "stage") throw new TRPCError({ code: "CONFLICT", message: "Записать на вводный можно только заявку на стадии «Заявка»" });
+        const zone = await teacherTimeZone(ctx.db, ctx.teacherId);
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Вводный уже записан на ${formatPastDate(dateIn(booked.startsAt, zone))}, ${timeIn(booked.startsAt, zone)}. Чтобы перенести, отмените его в расписании и запишите снова`,
+        });
+      }
+      return { ok: true as const };
+    }),
+
+  /** «Итог вводного» (#338): the CEFR level and the notes; empty notes for none. */
+  saveIntroOutcome: teacherProcedure
+    .input(z.object({ id: z.uuid(), level: z.enum(LEVELS).nullable(), notes: optionalText(MAX_INTRO_NOTES_LENGTH) }))
+    .output(ok)
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...outcome } = input;
+      if (!(await saveIntroOutcome(ctx.db, ctx.teacherId, id.toLowerCase(), outcome))) throw notFound();
+      return { ok: true as const };
+    }),
+
+  /** «Игры на вводном» (#338): the results of the games played on the intro's stage. */
+  introGames: teacherProcedure
+    .input(z.object({ id: z.uuid() }))
+    .output(
+      z.array(
+        z
+          .object({
+            id: z.uuid(),
+            title: z.string(),
+            playedAt: z.date(),
+            answers: z.array(z.object({ task: z.string(), answer: z.string(), correct: z.boolean() }).strict()),
+          })
+          .strict(),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      const games = await introGames(ctx.db, ctx.teacherId, input.id.toLowerCase());
+      if (!games) throw notFound();
+      return games;
     }),
 
   /** «Удалить заявку»: everything personal is erased; an anonymous count stays for the metrics. */

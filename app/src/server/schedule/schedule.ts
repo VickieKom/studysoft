@@ -260,7 +260,7 @@ export type LessonMark = { status: "held" | "missed"; charged: boolean; unit: st
  * such lesson yet.
  */
 export async function markLesson(
-  db: Database,
+  db: Db,
   teacherId: string,
   lessonId: string,
   mark: LessonMark,
@@ -416,7 +416,7 @@ export async function moveLesson(
  * False when there is no such lesson or it is marked already.
  */
 export async function cancelLesson(
-  db: Database,
+  db: Db,
   teacherId: string,
   lessonId: string,
   charged: boolean,
@@ -434,7 +434,7 @@ export async function cancelLesson(
 }
 
 /** «Вернуть в расписание»: a cancelled lesson is scheduled again and not charged. */
-export async function restoreLesson(db: Database, teacherId: string, lessonId: string, now: Date = new Date()) {
+export async function restoreLesson(db: Db, teacherId: string, lessonId: string, now: Date = new Date()) {
   const rows = await db
     .update(lesson)
     .set({ status: "scheduled", charged: null, updatedAt: now })

@@ -14,6 +14,14 @@ export const STATUS_LABELS: Record<Status, string> = {
   finished: "Завершили",
 };
 
+/**
+ * The hidden card of a child booked for an intro lesson (#338): not one of
+ * the statuses, so it is in no list of students and has no card page; the
+ * intro lesson, its prep and its stage work through it. Seen only from the
+ * request; «Стал учеником» (#340) gives it an ordinary status.
+ */
+export const CANDIDATE_STATUS = "candidate";
+
 /** "Завершили" is the archive: hidden from the default list. */
 export const ACTIVE_STATUSES: readonly Status[] = ["discussion", "active", "paused"];
 

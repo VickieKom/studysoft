@@ -52,7 +52,15 @@ export default async function LessonPrepPage({ params }: Props) {
         <p className="text-small">
           {prep.plan ? <span className="text-green-700">подготовлен</span> : <span className="text-text-secondary">не подготовлен</span>}
         </p>
-        {!prep.textbookTitle && (
+        {prep.requestId ? (
+          // An intro lesson (#338): the child's hidden card has no page, the request has.
+          <p className="text-small text-text-secondary">
+            Вводный урок:{" "}
+            <Link href={`/teacher/requests/${prep.requestId}`} className="text-green-600 hover:text-green-700">
+              заявка
+            </Link>
+          </p>
+        ) : !prep.textbookTitle && (
           <p className="text-small text-text-secondary">
             Учебник ученика не выбран: выберите его на{" "}
             <Link href={`/teacher/students/${prep.studentId}`} className="text-green-600 hover:text-green-700">
