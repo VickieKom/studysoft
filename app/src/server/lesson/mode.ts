@@ -153,7 +153,11 @@ export async function lessonVideos(db: Database, teacherId: string, lessonId: st
   const keptStages = lessonStateSchema.safeParse(keptRow?.state);
   const stages = [...prep.launch.stages, ...(keptStages.success ? keptStages.data.stages : [])];
   const ids = [...new Set(stages.flatMap((s) => (s.type === "material" ? [s.materialId] : [])))];
-  const textbookStages = stages.flatMap((s) => (s.type === "textbook_video" ? [s] : []));
+  // A state kept before #381 has no bank revision: the saved plan's is taken; none known, no bank tasks are shown.
+  const planRevision = new Map((prep.plan?.stages ?? []).flatMap((s) => (s.type === "textbook_video" ? [[s.fileId, s.revision] as const] : [])));
+  const textbookStages = stages.flatMap((s) =>
+    s.type === "textbook_video" ? [{ ...s, revision: s.revision ?? planRevision.get(s.fileId) ?? "" }] : [],
+  );
   return [
     ...(await stageVideos(db, teacherId, prep.studentId, lessonId, ids)),
     ...(await textbookStageVideos(db, teacherId, prep.studentId, lessonId, textbookStages)),

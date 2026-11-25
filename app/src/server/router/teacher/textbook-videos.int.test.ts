@@ -207,10 +207,14 @@ describe("a textbook's videos", () => {
     const { lessonId, student } = await studentWithLesson("Новый банк видео");
     const before = await bankRevision(lessonId);
     await savePlan(lessonId, [videoStage([2], before)]);
+    // The lesson mode keeps the plan's stages from its opening (#381).
+    await teacher.teacher.lessonMode.open({ lessonId });
     // The bank is replaced: position 2 is another task now.
     await confirmBank([trueFalse("The fox runs.", 0, "5"), trueFalse("The fox hides.", 0, "6"), trueFalse("The fox eats.", 0, "7")]);
     await expect(teacher.teacher.prep.openTextbookVideo({ lessonId, fileId: videoFileId })).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await student.student.videos.list()).toEqual([]);
+    // Nor does the lesson stage, opened before, show the bank's new tasks at those positions (#381).
+    expect(await teacher.teacher.lessonMode.videos({ lessonId })).toEqual([]);
     await expect(savePlan(lessonId, [videoStage([2], before)])).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/изменились/) });
 
     const after = await bankRevision(lessonId);

@@ -2,7 +2,7 @@
 
 import { PREP_GROUP_LABELS, prepMaterialGroups } from "@/domain/prep-materials";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { HOMEWORK_STAGE_MINUTES, MAX_STAGE_VIDEO_TASKS, VIDEO_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
 import type { MaterialKind } from "@/domain/library";
 import { Button } from "./button";
@@ -114,7 +114,10 @@ export function LessonPlanEditor({
       </option>
     ));
 
+  // Counts the edits, so a save marks the plan saved only when nothing changed while it was in flight (#381).
+  const edits = useRef(0);
   const change = (next: PlanStage[]) => {
+    edits.current += 1;
     setStages(next);
     setState("idle");
     setUnsaved(true);
@@ -127,12 +130,14 @@ export function LessonPlanEditor({
   };
 
   async function save() {
+    const editsSaved = edits.current;
     setState("saving");
     setError(null);
     try {
       await routerClient.teacher.prep.save.mutate({ lessonId, plan: { stages }, homeworkId: homework || null, revision });
-      setState("saved");
-      setUnsaved(false);
+      const unchanged = edits.current === editsSaved;
+      setState(unchanged ? "saved" : "idle");
+      setUnsaved(!unchanged);
       router.refresh();
     } catch (caught) {
       const code = (caught as { data?: { code?: string } })?.data?.code;

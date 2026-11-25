@@ -62,6 +62,8 @@ const stage = z.discriminatedUnion("type", [
       fileId: z.uuid(),
       lessonId: z.uuid(),
       tasks: z.array(z.number().int().min(0).max(MAX_TASK_INDEX)).max(MAX_TASK_INDEX + 1),
+      // The bank as the plan saw it (#381): the stage shows the bank's tasks by position only while the bank is the same.
+      revision: z.string().max(64).optional(),
       minutes,
       done: z.boolean(),
       filter: z.enum(HOMEWORK_FILTERS).default("all"),
