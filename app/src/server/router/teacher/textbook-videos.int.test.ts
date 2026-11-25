@@ -203,6 +203,43 @@ describe("a textbook's videos", () => {
     expect(await fileStatus(headers, videoFileId)).toBe(404);
   });
 
+  it("open from the lesson going on and from a later one, takes the answers to the lesson going on (#382)", async () => {
+    const { studentId, lessonId: now, student } = await studentWithLesson("Видео двух уроков");
+    const { id: later } = await teacher.teacher.schedule.addLesson({ studentId, date: isoIn(4), time: "10:00", durationMinutes: 45, intro: false });
+    for (const id of [now, later]) {
+      await savePlan(id, [videoStage(id === now ? [0] : [2], await bankRevision(id))]);
+    }
+    await teacher.teacher.prep.openTextbookVideo({ lessonId: now, fileId: videoFileId });
+    // The first lesson is going on: started ten minutes ago.
+    await db().update(lessonTable).set({ startsAt: new Date(Date.now() - 10 * 60_000) }).where(eq(lessonTable.id, now));
+    // The later lesson's preparation opens the same video.
+    await teacher.teacher.prep.openTextbookVideo({ lessonId: later, fileId: videoFileId });
+
+    const shown = (await student.student.videos.tasks({ id: videoFileId }))!;
+    expect(shown.tasks.map((t) => t.prompt)).toEqual(["The fox jumps."]);
+    await student.student.videos.submitTasks({ id: videoFileId, revision: shown.revision, answers: [{ type: "single_choice", choice: 0 }] });
+    const [reviewed] = await teacher.teacher.lessonMode.videos({ lessonId: now });
+    expect(reviewed).toMatchObject({ id: videoFileId, answered: true });
+    expect(reviewed!.tasks.map((t) => [t.prompt, t.verdict])).toEqual([["The fox jumps.", true]]);
+  });
+
+  it("refuses a set with two videos of one name, as «clip.mp4» and «clip.mov» are (#382)", async () => {
+    const book = (await upload("book", new Uint8Array(pdf(1)))).body.file!;
+    const clip = async () => (await upload("video", new Uint8Array(Buffer.concat([MP4_HEAD, Buffer.alloc(2000)])))).body.file!;
+    await expect(
+      teacher.teacher.textbooks.create({
+        title: `Two clips ${run}`,
+        level: "A2",
+        books: [{ kind: "students_book", name: "b.pdf", file: book }],
+        tracks: [],
+        videos: [
+          { name: "clip", file: await clip() },
+          { name: "clip", file: await clip() },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("«clip»") });
+  });
+
   it("is not opened, nor its plan saved, with tasks picked from a bank that changed since; picked anew, it is", async () => {
     const { lessonId, student } = await studentWithLesson("Новый банк видео");
     const before = await bankRevision(lessonId);
