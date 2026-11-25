@@ -49,6 +49,8 @@ export function AssessmentReview({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sections whose picked scores are not saved: «Записать в прогресс» would write the saved ones, so it waits.
+  const [unsaved, setUnsaved] = useState<CriteriaSection[]>([]);
 
   async function write() {
     setBusy(true);
@@ -74,6 +76,7 @@ export function AssessmentReview({
           saved={review.criteria[section] ?? null}
           frozen={review.written}
           onSaved={() => router.refresh()}
+          onUnsaved={(changed) => setUnsaved((list) => (changed ? [...list.filter((s) => s !== section), section] : list.filter((s) => s !== section)))}
         >
           {section === "writing" &&
             (review.writing ? <p className="whitespace-pre-line rounded-control bg-surface p-3 text-small">{review.writing}</p> : <p className="text-small text-text-secondary">Ребёнок ничего не написал</p>)}
@@ -106,10 +109,14 @@ export function AssessmentReview({
         <p className="text-small text-accent-900">Записано в прогресс</p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={busy || !review.complete} onClick={() => void write()}>
+          <Button disabled={busy || !review.complete || unsaved.length > 0} onClick={() => void write()}>
             Записать в прогресс
           </Button>
-          {!review.complete && <span className="text-small text-text-secondary">Сначала оцените письмо и говорение</span>}
+          {!review.complete ? (
+            <span className="text-small text-text-secondary">Сначала оцените письмо и говорение</span>
+          ) : (
+            unsaved.length > 0 && <span className="text-small text-text-secondary">Сначала сохраните оценку</span>
+          )}
         </div>
       )}
     </section>
@@ -122,6 +129,7 @@ function SectionScore({
   saved,
   frozen,
   onSaved,
+  onUnsaved,
   children,
 }: {
   assessmentId: string;
@@ -129,9 +137,12 @@ function SectionScore({
   saved: number[] | null;
   frozen: boolean;
   onSaved: () => void;
+  onUnsaved: (changed: boolean) => void;
   children: React.ReactNode;
 }) {
   const [picked, setPicked] = useState<(number | null)[]>(saved ?? CRITERIA.map(() => null));
+  // The scores the server has, as this page last saved or was given them: what «Записать в прогресс» would write.
+  const [stored, setStored] = useState<number[] | null>(saved);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<"idle" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +155,8 @@ function SectionScore({
     try {
       await routerClient.teacher.assessments.score.mutate({ assessmentId, section, scores: picked as number[] });
       setState("saved");
+      setStored(picked as number[]);
+      onUnsaved(false);
       onSaved();
     } catch (cause) {
       setError(message(cause));
@@ -167,8 +180,11 @@ function SectionScore({
                 checked={picked[i] === score}
                 disabled={frozen || busy}
                 onChange={() => {
-                  setPicked(picked.map((p, j) => (j === i ? score : p)));
+                  const next = picked.map((p, j) => (j === i ? score : p));
+                  setPicked(next);
                   setState("idle");
+                  // Picked back to what is saved is not a change.
+                  onUnsaved(next.some((p, j) => p !== (stored?.[j] ?? null)));
                 }}
               />
               {CRITERION_SCORE_LABELS[score]}
