@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState, useSyncExternalStore } from "react";
+import { useId, useState } from "react";
+import { speak, useCanSpeak } from "./speech";
 
 type Word = { id: string; word: string; translation: string | null; example: string | null };
 
@@ -13,12 +14,7 @@ type Word = { id: string; word: string; translation: string | null; example: str
 export function StudentWords({ words }: { words: Word[] }) {
   const search = useId();
   const [query, setQuery] = useState("");
-  // Known in the browser only: the server renders without «Послушать».
-  const canSpeak = useSyncExternalStore(
-    noChange,
-    () => "speechSynthesis" in window,
-    () => false,
-  );
+  const canSpeak = useCanSpeak();
 
   if (words.length === 0) {
     return (
@@ -76,21 +72,4 @@ export function StudentWords({ words }: { words: Word[] }) {
       )}
     </div>
   );
-}
-
-const noChange = () => () => undefined;
-
-/** The best English voice the device has: a Google or natural one first, then any English one; else the browser's default for English. */
-function speak(text: string) {
-  const synth = window.speechSynthesis;
-  const english = synth.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith("en"));
-  const rank = (voice: SpeechSynthesisVoice) =>
-    (/google|natural|premium|enhanced/i.test(voice.name) ? 0 : 2) + (voice.lang.toLowerCase() === "en-us" || voice.lang.toLowerCase() === "en-gb" ? 0 : 1);
-  const voice = [...english].sort((a, b) => rank(a) - rank(b))[0];
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = voice?.lang ?? "en-US";
-  if (voice) utterance.voice = voice;
-  utterance.rate = 0.9;
-  synth.cancel();
-  synth.speak(utterance);
 }

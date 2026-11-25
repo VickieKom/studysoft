@@ -28,6 +28,8 @@ Every word:
 
 Only words with a confirmed translation are sent. A game that starts listening late can ask for the words again with `window.parent.postMessage({ type: "studysoft.words-request" }, "*")`.
 
+A game may play a word aloud with the browser's speech synthesis (`speechSynthesis.speak(new SpeechSynthesisUtterance(word))`), as «Послушать» does in «Тренировка слов» (#323): it works in the game's frame, but only from a click or a tap in the game — the browser plays no sound before one — and nothing is sent anywhere. Where the browser has no `speechSynthesis`, the game shows no such button.
+
 ## Example
 
 ```js

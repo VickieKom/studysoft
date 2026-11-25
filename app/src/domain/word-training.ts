@@ -101,3 +101,14 @@ export function wordMark(word: { step: number; rightCount: number; wrongCount: n
   if (word.wrongCount > word.rightCount) return "often_wrong";
   return "learning";
 }
+
+/**
+ * The English word «Послушать» plays in an exercise (#323), where it does not
+ * give the answer away: the prompt of «Как переводится …?» at once; on the
+ * others the word, once answered (`correct` is the right answer then). Null
+ * while it would give the answer away.
+ */
+export function spokenWord(type: ExerciseType, prompt: string, correct: string | null): string | null {
+  if (type === "choose_translation") return prompt;
+  return correct;
+}
