@@ -15,7 +15,7 @@ import {
   type StageHomework,
   type StageVideo,
 } from "../../domain/lesson-state";
-import { isStageBook } from "../../domain/textbook";
+import { type BookKind, isStageBook, STAGE_BOOK_KINDS, type StageBookKind } from "../../domain/textbook";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
 import { lessonState, libraryMaterial } from "../db/schema";
@@ -43,6 +43,13 @@ export type LessonResources = {
   videos: { id: string; title: string }[];
 };
 
+type Range = { from: number; to: number };
+
+/** A lesson's ranges in the books a stage can show. */
+function stagePages(pages: Partial<Record<BookKind, Range>>): Partial<Record<StageBookKind, Range>> {
+  return Object.fromEntries(STAGE_BOOK_KINDS.flatMap((k) => (pages[k] ? [[k, pages[k]]] : [])));
+}
+
 /** The student's textbook as the lesson shows it: the rendered books, the confirmed lessons and the tracks. */
 async function textbookResources(db: Database, teacherId: string, studentId: string) {
   const found = await studentWithTextbook(db, teacherId, studentId);
@@ -52,7 +59,10 @@ async function textbookResources(db: Database, teacherId: string, studentId: str
     textbookTitle: found?.textbookTitle ?? null,
     // The stage never shows the teacher's book (#414).
     books: (book?.books ?? []).flatMap((b) => (isStageBook(b.kind) ? [{ kind: b.kind, fileId: b.id, pageCount: b.pageCount }] : [])),
-    lessons: (structure?.units ?? []).flatMap((u) => u.lessons.map((l) => ({ id: l.id!, title: l.title, pages: l.pages, tracks: l.tracks }))),
+    // A lesson's teacher's book range (#415) stays off the stage, as the book does.
+    lessons: (structure?.units ?? []).flatMap((u) =>
+      u.lessons.map((l) => ({ id: l.id!, title: l.title, pages: stagePages(l.pages), tracks: l.tracks })),
+    ),
     tracks: (book?.tracks ?? []).map((t) => ({ name: t.name, url: `/api/files/textbooks/${t.id}` })),
     videos: (book?.videos ?? []).map((v) => ({ id: v.id, title: v.name })),
   };

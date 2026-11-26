@@ -286,6 +286,8 @@ export async function findPreparation(db: Database, teacherId: string, lessonId:
     startsAt: found.startsAt,
     durationMinutes: found.durationMinutes,
     textbookTitle: withBook.textbookTitle,
+    // For the book stage's link to the lesson's page (#415).
+    textbookId: withBook.textbookTitle ? withBook.textbookId : null,
     plan,
     draft,
     revision: row?.revision ?? "",

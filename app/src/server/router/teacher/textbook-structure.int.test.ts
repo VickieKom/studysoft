@@ -136,7 +136,7 @@ describe("a textbook's structure", () => {
     expect(await teacher.teacher.textbooks.structure({ id })).toMatchObject({ draftBy: "assistant", structure: null });
   });
 
-  it("lists the teacher's book to the assistant and lets it read its pages; a lesson has no teacher's book range yet (#414)", async () => {
+  it("lists the teacher's book to the assistant, lets it read its pages and save a lesson's range in it (#414, #415)", async () => {
     const { id } = await newTextbook("Teacher's book read set");
     await teacher.teacher.textbooks.addTeachersBook({ textbookId: id, name: "teachers-book.pdf", file: await upload("book", pdf(3)) });
     let listed;
@@ -149,9 +149,16 @@ describe("a textbook's structure", () => {
     expect(teachersBook).toMatchObject({ status: "done", pageCount: 3 });
     expect((await assistant.agent.textbookText({ bookId: teachersBook.id, from: 2, to: 2 }))[0]!.text).toContain("Page 2");
     expect((await assistant.agent.textbookPage({ bookId: teachersBook.id, page: 2 })).contentType).toBe("image/jpeg");
-    // shortcut: the teacher's book range of a lesson comes with #415
-    const withRange = { units: [{ title: "U", lessons: [{ ...lesson("1", 1, 1, "1-01"), pages: { students_book: { from: 1, to: 1 }, teachers_book: { from: 1, to: 1 } } }] }] };
-    await expect(assistant.agent.saveTextbookStructure({ textbookId: id, structure: withRange })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // A lesson's teacher's book range (#415) is checked against its pages like any book's.
+    const withRange = (to: number) => ({
+      units: [{ title: "U", lessons: [{ ...lesson("1", 1, 1, "1-01"), pages: { students_book: { from: 1, to: 1 }, teachers_book: { from: 2, to } } }] }],
+    });
+    await expect(assistant.agent.saveTextbookStructure({ textbookId: id, structure: withRange(9) })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("юнит 1, урок 1: в Teacher's Book 3 страниц, а урок доходит до 9"),
+    });
+    expect(await assistant.agent.saveTextbookStructure({ textbookId: id, structure: withRange(3) })).toEqual({ status: "draft" });
+    expect((await teacher.teacher.textbooks.structure({ id })).draft!.units[0]!.lessons[0]!.pages.teachers_book).toEqual({ from: 2, to: 3 });
   });
 
   it("lets the assistant read the pages' text and images, never confirm, and never reach another teacher's textbook", async () => {

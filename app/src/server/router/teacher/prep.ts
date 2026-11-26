@@ -47,6 +47,7 @@ export const prepRouter = router({
           startsAt: z.iso.datetime(),
           durationMinutes: z.number().int(),
           textbookTitle: z.string().nullable(),
+          textbookId: z.uuid().nullable(),
           plan: lessonPlanSchema.nullable(),
           draft: lessonPlanSchema.nullable(),
           revision: z.string(),
