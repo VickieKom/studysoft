@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { criteriaComplete, criteriaPercent, skillPercents } from "./assessment-review";
+import { criteriaComplete, criteriaPercent, criteriaUnsaved, skillPercents } from "./assessment-review";
 
 describe("the assessment's percents (#254)", () => {
   it("scores a section by the criteria as the sum of six", () => {
@@ -33,5 +33,34 @@ describe("the assessment's percents (#254)", () => {
     expect(criteriaComplete(["reading", "writing", "speaking"], { writing: [1, 1, 1], speaking: [0, 0, 0] })).toBe(true);
     expect(criteriaComplete(["reading", "speaking"], { speaking: [0, 1, 2] })).toBe(true);
     expect(criteriaComplete(["reading"], {})).toBe(true);
+  });
+});
+
+describe("a section's unsaved scores (#400)", () => {
+  it("has none while the picks are what the server has, or nothing is picked and nothing stored", () => {
+    expect(criteriaUnsaved([2, 1, 1], [2, 1, 1])).toBe(false);
+    expect(criteriaUnsaved([null, null, null], null)).toBe(false);
+  });
+
+  it("has some once a pick differs from what was loaded, or is made with nothing stored", () => {
+    expect(criteriaUnsaved([2, 1, 0], [2, 1, 1])).toBe(true);
+    expect(criteriaUnsaved([2, null, null], null)).toBe(true);
+  });
+
+  it("compares with the last save, not the load: saved then changed again is unsaved", () => {
+    const loaded = [1, 1, 1];
+    const saved = [2, 1, 1];
+    expect(criteriaUnsaved([2, 1, 1], loaded)).toBe(true);
+    expect(criteriaUnsaved([2, 1, 1], saved)).toBe(false);
+    expect(criteriaUnsaved([2, 2, 1], saved)).toBe(true);
+  });
+
+  it("has none once the picks are put back to what is saved", () => {
+    expect(criteriaUnsaved([1, 1, 1], [1, 1, 1])).toBe(false);
+  });
+
+  it("stays unsaved after a failed save, which leaves the stored scores as they were", () => {
+    const stored = [1, 1, 1];
+    expect(criteriaUnsaved([0, 1, 1], stored)).toBe(true);
   });
 });

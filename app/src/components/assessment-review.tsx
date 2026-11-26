@@ -11,6 +11,7 @@ import {
   CRITERION_SCORES,
   type CriteriaScores,
   type CriteriaSection,
+  criteriaUnsaved,
 } from "@/domain/assessment-review";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
@@ -183,8 +184,7 @@ function SectionScore({
                   const next = picked.map((p, j) => (j === i ? score : p));
                   setPicked(next);
                   setState("idle");
-                  // Picked back to what is saved is not a change.
-                  onUnsaved(next.some((p, j) => p !== (stored?.[j] ?? null)));
+                  onUnsaved(criteriaUnsaved(next, stored));
                 }}
               />
               {CRITERION_SCORE_LABELS[score]}
