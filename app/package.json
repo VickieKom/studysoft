@@ -26,7 +26,7 @@
     "@fontsource/pangolin": "5.3.0",
     "@trpc/client": "11.29.7",
     "@trpc/server": "11.29.7",
-    "better-auth": "1.7.14",
+    "better-auth": "1.7.27",
     "drizzle-orm": "0.45.4",
     "next": "16.4.6",
     "postgres": "3.4.9",
