@@ -40,6 +40,17 @@ export function criteriaPercent(scores: SectionCriteria): number {
   return Math.round((scores.reduce((sum, s) => sum + s, 0) / MAX_CRITERIA) * 100);
 }
 
+/**
+ * Whether a section's picks differ from the scores the server has for it:
+ * then «Записать в прогресс» would write something other than what the page
+ * shows, so it waits (#400). `stored` is what the page was given or last
+ * saved; picks put back to it are no change, and a failed save leaves it as
+ * it was.
+ */
+export function criteriaUnsaved(picked: readonly (number | null)[], stored: readonly number[] | null): boolean {
+  return picked.some((p, i) => p !== (stored?.[i] ?? null));
+}
+
 /** Whether the teacher scored every section of `skills` that she scores. */
 export function criteriaComplete(skills: readonly AssessmentSkill[], criteria: CriteriaScores): boolean {
   return CRITERIA_SECTIONS.every((section) => !skills.includes(section) || criteria[section] !== undefined);
