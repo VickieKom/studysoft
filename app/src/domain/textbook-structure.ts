@@ -43,6 +43,16 @@ export type StructureLesson = z.infer<typeof lesson>;
 /** One lesson of a structure, for outputs that add to it (#291). */
 export const structureLessonSchema = lesson;
 
+/** The structure without its ranges in one book (#417): the book was taken off the set; the rest is unchanged. */
+export function withoutBook(structure: TextbookStructure, kind: (typeof BOOK_KINDS)[number]): TextbookStructure {
+  return {
+    units: structure.units.map((u) => ({
+      ...u,
+      lessons: u.lessons.map((l) => ({ ...l, pages: Object.fromEntries(Object.entries(l.pages).filter(([k]) => k !== kind)) })),
+    })),
+  };
+}
+
 /** Who wrote a draft: the assistant, or the teacher saving her own edits. */
 export const DRAFT_AUTHORS = ["assistant", "teacher"] as const;
 export type DraftAuthor = (typeof DRAFT_AUTHORS)[number];

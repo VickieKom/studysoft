@@ -223,6 +223,93 @@ describe("textbook sets", () => {
     await expect(teacher.teacher.textbooks.addTeachersBook({ textbookId: other, name: "tb.pdf", file })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
+  it("replace the teacher's book: the old one is served to nobody, the structure kept, what no longer fits shown as problems (#417)", async () => {
+    const files = [(await upload(teacherHeaders, "book", pdf(3))).body!.file!, (await upload(teacherHeaders, "book", pdf(3))).body!.file!];
+    const { id } = await teacher.teacher.textbooks.create({
+      title: "Replaced teacher's book",
+      level: "A2",
+      books: [
+        { kind: "students_book", name: "book.pdf", file: files[0]! },
+        { kind: "teachers_book", name: "teachers-book.pdf", file: files[1]! },
+      ],
+      tracks: [],
+    });
+    const before = await rendered(id);
+    const oldBook = before.books.find((b) => b.kind === "teachers_book")!.id;
+    const { revision } = await teacher.teacher.textbooks.structure({ id });
+    const structure = {
+      units: [
+        {
+          title: "Unit 1",
+          lessons: [
+            { title: "1.1", pages: { students_book: { from: 1, to: 1 }, teachers_book: { from: 2, to: 3 } }, tracks: [], words: [] },
+            { title: "1.2", pages: { students_book: { from: 2, to: 2 }, teachers_book: { from: 1, to: 1 } }, tracks: [], words: [] },
+          ],
+        },
+      ],
+    };
+    await teacher.teacher.textbooks.saveStructure({ id, structure, revision, confirm: true });
+    expect((await teacher.teacher.textbooks.structure({ id })).problems).toEqual([]);
+
+    const shorter = (await upload(teacherHeaders, "book", pdf(2))).body!.file!;
+    await expect(createServerCaller(otherHeaders).teacher.textbooks.replaceTeachersBook({ textbookId: id, name: "x.pdf", file: shorter })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await teacher.teacher.textbooks.replaceTeachersBook({ textbookId: id, name: "teachers-book-2.pdf", file: shorter });
+    const after = await rendered(id);
+    expect(after.books.map((b) => [b.kind, b.pageCount])).toEqual([
+      ["students_book", 3],
+      ["teachers_book", 2],
+    ]);
+    expect((await fetchFile(teacherHeaders, oldBook, "1")).status).toBe(404);
+    expect((await fetchFile(teacherHeaders, oldBook, null)).status).toBe(404);
+    const view = await teacher.teacher.textbooks.structure({ id });
+    expect(view.structure!.units[0]!.lessons[0]!.pages.teachers_book).toEqual({ from: 2, to: 3 });
+    expect(view.problems).toEqual(["юнит 1, урок 1: в Teacher's Book 2 страниц, а урок доходит до 3"]);
+
+    // A set without a teacher's book has none to replace.
+    const plain = await newTextbook("Nothing to replace");
+    const another = (await upload(teacherHeaders, "book", pdf(2))).body!.file!;
+    await expect(teacher.teacher.textbooks.replaceTeachersBook({ textbookId: plain, name: "x.pdf", file: another })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("remove the teacher's book with its ranges from the confirmed structure and the draft, the rest unchanged (#417)", async () => {
+    const files = [(await upload(teacherHeaders, "book", pdf(3))).body!.file!, (await upload(teacherHeaders, "book", pdf(3))).body!.file!];
+    const { id } = await teacher.teacher.textbooks.create({
+      title: "Removed teacher's book",
+      level: "A2",
+      books: [
+        { kind: "students_book", name: "book.pdf", file: files[0]! },
+        { kind: "teachers_book", name: "teachers-book.pdf", file: files[1]! },
+      ],
+      tracks: [],
+    });
+    const found = await rendered(id);
+    const teachersBook = found.books.find((b) => b.kind === "teachers_book")!.id;
+    const lesson = (title: string) => ({ title, pages: { students_book: { from: 1, to: 2 }, teachers_book: { from: 1, to: 1 } }, tracks: [], words: ["kite"] });
+    const { revision } = await teacher.teacher.textbooks.structure({ id });
+    await teacher.teacher.textbooks.saveStructure({ id, structure: { units: [{ title: "Unit 1", lessons: [lesson("1.1")] }] }, revision, confirm: true });
+    const confirmed = await teacher.teacher.textbooks.structure({ id });
+    await teacher.teacher.textbooks.saveStructure({
+      id,
+      structure: { units: [{ title: "Unit 1", lessons: [{ ...lesson("1.1"), id: confirmed.structure!.units[0]!.lessons[0]!.id }, lesson("1.2")] }] },
+      revision: confirmed.revision,
+      confirm: false,
+    });
+
+    await expect(createServerCaller(otherHeaders).teacher.textbooks.removeTeachersBook({ textbookId: id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await teacher.teacher.textbooks.removeTeachersBook({ textbookId: id });
+    expect((await teacher.teacher.textbooks.get({ id })).books.map((b) => b.kind)).toEqual(["students_book"]);
+    expect((await fetchFile(teacherHeaders, teachersBook, "1")).status).toBe(404);
+    const view = await teacher.teacher.textbooks.structure({ id });
+    const kept = view.structure!.units[0]!.lessons[0]!;
+    expect(kept).toEqual({ ...lesson("1.1"), id: confirmed.structure!.units[0]!.lessons[0]!.id, pages: { students_book: { from: 1, to: 2 } } });
+    expect(view.draft!.units[0]!.lessons.map((l) => l.pages)).toEqual([{ students_book: { from: 1, to: 2 } }, { students_book: { from: 1, to: 2 } }]);
+    expect(view.problems).toEqual([]);
+    // Nothing to remove the second time.
+    await expect(teacher.teacher.textbooks.removeTeachersBook({ textbookId: id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
   it("keep their files through the cleanup, however old", async () => {
     const id = await newTextbook("Kept set");
     await rendered(id);

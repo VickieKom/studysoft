@@ -208,6 +208,73 @@ export function TextbookAddTeachersBook({ textbookId }: { textbookId: string }) 
   );
 }
 
+/**
+ * «Заменить» and «Убрать» of the teacher's book (#417): a new PDF in its
+ * place, the structure kept; or the book off the set with its ranges, once
+ * the teacher confirms.
+ */
+export function TextbookTeachersBookActions({ textbookId }: { textbookId: string }) {
+  const router = useRouter();
+  const id = useId();
+  const [file, setFile] = useState<File | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(run: () => Promise<unknown>) {
+    setError(null);
+    setPending(true);
+    try {
+      await run();
+      router.refresh();
+    } catch (caught) {
+      const message = (caught as { message?: string })?.message;
+      const isOwn = caught instanceof Refused || (caught as { data?: { code?: string } })?.data?.code === "BAD_REQUEST";
+      setError(isOwn && message ? message : "Не получилось. Попробуйте ещё раз");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function replace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!file) return setError("Выберите PDF Teacher's Book");
+    if (file.size > MAX_BOOK_BYTES) return setError("Книга больше 300 МБ");
+    void act(async () => {
+      const uploaded = await upload(file, "book");
+      await routerClient.teacher.textbooks.replaceTeachersBook.mutate({ textbookId, name: file.name, file: uploaded });
+    });
+  }
+
+  function remove() {
+    if (!window.confirm("Убрать Teacher's Book? Её страницы в уроках разметки тоже уберутся")) return;
+    void act(() => routerClient.teacher.textbooks.removeTeachersBook.mutate({ textbookId }));
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <form onSubmit={replace} className="flex flex-wrap items-end gap-3">
+        <span className="flex flex-col gap-1">
+          <label htmlFor={`${id}-replace`} className="text-small text-text-secondary">
+            Новый {BOOK_LABELS.teachers_book} (PDF)
+          </label>
+          <input id={`${id}-replace`} type="file" accept="application/pdf,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </span>
+        <Button type="submit" variant="secondary" disabled={pending}>
+          Заменить
+        </Button>
+        <Button variant="secondary" disabled={pending} onClick={remove}>
+          Убрать
+        </Button>
+      </form>
+      {error && (
+        <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** «Повторить»: renders a book whose rendering failed again (#156). */
 export function TextbookRetry({ fileId }: { fileId: string }) {
   const router = useRouter();
