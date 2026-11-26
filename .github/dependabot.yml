@@ -10,3 +10,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # The client requires the server of its exact version: bumped apart, the router types break.
+      trpc:
+        patterns: ["@trpc/*"]
