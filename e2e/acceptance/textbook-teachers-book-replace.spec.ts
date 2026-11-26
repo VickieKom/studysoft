@@ -126,11 +126,12 @@ test("«Заменить» puts a new teacher's book in place; a range past its 
 
   await teachers.getByLabel("Новый Teacher's Book (PDF)").setInputFiles({ name: "teachers-book-2.pdf", mimeType: "application/pdf", buffer: pdf(2) });
   await teachers.getByRole("button", { name: "Заменить", exact: true }).click();
+  // The old book is gone once the replacement is saved; only then is the new one's rendering worth waiting for.
+  await expect.poll(async () => (await page.request.get(oldPage)).status(), { timeout: 30_000 }).toBe(404);
   await rendered(page, ["Teacher's Book"]);
   await expect(page.getByRole("region", { name: "Teacher's Book", exact: true }).getByRole("img", { name: /^Страница \d+$/ })).toHaveCount(2);
   await expect(outline).toContainText("юнит 1, урок 1: в Teacher's Book 2 страниц, а урок доходит до 3");
   await expect(outline).not.toContainText("урок 2:");
-  expect((await page.request.get(oldPage)).status()).toBe(404);
 });
 
 test("«Убрать», once confirmed, takes the teacher's book off with its ranges; the rest of the structure stays", async ({ page }) => {
