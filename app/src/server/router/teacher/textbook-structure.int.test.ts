@@ -136,6 +136,24 @@ describe("a textbook's structure", () => {
     expect(await teacher.teacher.textbooks.structure({ id })).toMatchObject({ draftBy: "assistant", structure: null });
   });
 
+  it("lists the teacher's book to the assistant and lets it read its pages; a lesson has no teacher's book range yet (#414)", async () => {
+    const { id } = await newTextbook("Teacher's book read set");
+    await teacher.teacher.textbooks.addTeachersBook({ textbookId: id, name: "teachers-book.pdf", file: await upload("book", pdf(3)) });
+    let listed;
+    for (let i = 0; i < 100; i++) {
+      listed = (await assistant.agent.listTextbooks()).find((t) => t.id === id)!;
+      if (listed.books.every((b) => b.status === "done")) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const teachersBook = listed!.books.find((b) => b.kind === "teachers_book")!;
+    expect(teachersBook).toMatchObject({ status: "done", pageCount: 3 });
+    expect((await assistant.agent.textbookText({ bookId: teachersBook.id, from: 2, to: 2 }))[0]!.text).toContain("Page 2");
+    expect((await assistant.agent.textbookPage({ bookId: teachersBook.id, page: 2 })).contentType).toBe("image/jpeg");
+    // shortcut: the teacher's book range of a lesson comes with #415
+    const withRange = { units: [{ title: "U", lessons: [{ ...lesson("1", 1, 1, "1-01"), pages: { students_book: { from: 1, to: 1 }, teachers_book: { from: 1, to: 1 } } }] }] };
+    await expect(assistant.agent.saveTextbookStructure({ textbookId: id, structure: withRange })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("lets the assistant read the pages' text and images, never confirm, and never reach another teacher's textbook", async () => {
     const { id, bookId } = await newTextbook("Read set");
     const text = await assistant.agent.textbookText({ bookId, from: 2, to: 3 });

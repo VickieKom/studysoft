@@ -163,6 +163,66 @@ describe("textbook sets", () => {
     expect((await rendered(id)).books[0]).toMatchObject({ status: "done", pageCount: 3 });
   });
 
+  it("take a teacher's book when created, after the other books, and serve it to their teacher only (#414)", async () => {
+    const files = [(await upload(teacherHeaders, "book", pdf(3))).body!.file!, (await upload(teacherHeaders, "book", pdf(2))).body!.file!];
+    const { id } = await teacher.teacher.textbooks.create({
+      title: "Set with a teacher's book",
+      level: "A2",
+      books: [
+        { kind: "teachers_book", name: "teachers-book.pdf", file: files[1]! },
+        { kind: "students_book", name: "book.pdf", file: files[0]! },
+      ],
+      tracks: [],
+    });
+    const found = await rendered(id);
+    expect(found.books.map((b) => [b.kind, b.status, b.pageCount])).toEqual([
+      ["students_book", "done", 3],
+      ["teachers_book", "done", 2],
+    ]);
+    const teachersBook = found.books[1]!.id;
+    expect((await fetchFile(teacherHeaders, teachersBook, "2")).status).toBe(200);
+    const student = await studentHeaders();
+    for (const headers of [student, otherHeaders]) {
+      for (const page of ["1", null]) expect(await fetchFile(headers, teachersBook, page)).toEqual(await fetchFile(headers, MISSING, page));
+    }
+  });
+
+  it("add a teacher's book to a set without one, keep its structure, and refuse a second one or another teacher's set (#414)", async () => {
+    const id = await newTextbook("Teacher's book later");
+    await rendered(id);
+    const { revision } = await teacher.teacher.textbooks.structure({ id });
+    const structure = { units: [{ title: "Unit 1", lessons: [{ title: "1.1", pages: { students_book: { from: 2, to: 3 } }, tracks: ["1-01"], words: [] }] }] };
+    await teacher.teacher.textbooks.saveStructure({ id, structure, revision, confirm: true });
+    const before = await teacher.teacher.textbooks.structure({ id });
+
+    const file = (await upload(teacherHeaders, "book", pdf(2))).body!.file!;
+    // Another teacher's call is answered as for a missing set, and adds nothing.
+    await expect(createServerCaller(otherHeaders).teacher.textbooks.addTeachersBook({ textbookId: id, name: "tb.pdf", file })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    const track = (await upload(teacherHeaders, "track", mp3())).body!.file!;
+    await expect(teacher.teacher.textbooks.addTeachersBook({ textbookId: id, name: "tb.mp3", file: track })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    await teacher.teacher.textbooks.addTeachersBook({ textbookId: id, name: "tb.pdf", file });
+    const found = await rendered(id);
+    expect(found.books.map((b) => [b.kind, b.status, b.pageCount])).toEqual([
+      ["students_book", "done", 3],
+      ["teachers_book", "done", 2],
+    ]);
+    const after = await teacher.teacher.textbooks.structure({ id });
+    expect(after.structure).toEqual(before.structure);
+    expect(after.structureRevision).toBe(before.structureRevision);
+
+    const second = (await upload(teacherHeaders, "book", pdf(2))).body!.file!;
+    await expect(teacher.teacher.textbooks.addTeachersBook({ textbookId: id, name: "tb2.pdf", file: second })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Teacher's Book в учебнике уже есть",
+    });
+    // The file already in the set cannot be added again either.
+    const other = await newTextbook("Another set");
+    await expect(teacher.teacher.textbooks.addTeachersBook({ textbookId: other, name: "tb.pdf", file })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("keep their files through the cleanup, however old", async () => {
     const id = await newTextbook("Kept set");
     await rendered(id);

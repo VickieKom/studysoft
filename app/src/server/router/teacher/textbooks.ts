@@ -8,7 +8,7 @@ import { studentTaskSchema } from "../../../domain/student-task-schema";
 import { bookSourceSchema, MAX_LESSON_TASKS, skippedSchema } from "../../../domain/task-bank";
 import { confirmLessonTasks, readConfirmedTasks, readTaskBank, removeDraftTask, updateConfirmedTask } from "../../library/task-bank";
 import { findLesson, readStructure, saveTeacherStructure } from "../../library/textbook-structure";
-import { createTextbook, findTextbook, listTextbooks, retryRender } from "../../library/textbooks";
+import { addTeachersBook, createTextbook, findTextbook, listTextbooks, retryRender } from "../../library/textbooks";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -214,6 +214,17 @@ export const textbooksRouter = router({
       if (saved === "conflict") throw new TRPCError({ code: "CONFLICT", message: "Задания урока изменились, пока редактор был открыт. Обновите страницу" });
       if (typeof saved === "object") throw new TRPCError({ code: "BAD_REQUEST", message: saved.errors.join("\n") });
       return { ok: true as const };
+    }),
+
+  /** «Добавить Teacher's Book» (#414): adds the uploaded teacher's book to a set that has none; its pages are rendered after it. */
+  addTeachersBook: teacherProcedure
+    .input(z.object({ textbookId: z.uuid(), name: fileName, file: z.uuid() }))
+    .output(z.object({ id: z.uuid() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const added = await addTeachersBook(ctx.db, ctx.teacherId, input.textbookId, { name: input.name, file: input.file });
+      if (!added) throw notFound();
+      if ("error" in added) throw new TRPCError({ code: "BAD_REQUEST", message: added.error });
+      return added;
     }),
 
   /** «Повторить»: renders a failed book again. */

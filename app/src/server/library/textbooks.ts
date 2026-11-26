@@ -131,6 +131,56 @@ export async function createTextbook(db: Database, teacherId: string, input: New
   return { id: created.id };
 }
 
+/**
+ * «Добавить Teacher's Book» (#414): adds the teacher's book, uploaded first
+ * (`/api/files/textbooks`), to a set of this teacher that has none, and
+ * starts its rendering. The set's structure is not touched. Null when it is
+ * not this teacher's set; otherwise its file, or a message the teacher reads.
+ */
+export async function addTeachersBook(
+  db: Database,
+  teacherId: string,
+  textbookId: string,
+  input: { name: string; file: string },
+): Promise<{ id: string } | { error: string } | null> {
+  const added = await db.transaction(async (tx): Promise<{ id: string } | { error: string } | null> => {
+    // The set's row is locked first, so two additions at once cannot both find no teacher's book.
+    const [own] = await tx
+      .select({ id: textbook.id })
+      .from(textbook)
+      .where(and(eq(textbook.id, textbookId), eq(textbook.teacherId, teacherId)))
+      .for("update");
+    if (!own) return null;
+    const [present] = await tx
+      .select({ id: textbookFile.id })
+      .from(textbookFile)
+      .where(and(eq(textbookFile.textbookId, textbookId), eq(textbookFile.kind, "teachers_book")));
+    if (present) return { error: "Teacher's Book в учебнике уже есть" };
+    const [file] = await tx
+      .select({ contentType: blob.contentType, used: textbookFile.id })
+      .from(blob)
+      .leftJoin(textbookFile, eq(textbookFile.blobId, blob.id))
+      .where(and(eq(blob.id, input.file), eq(blob.teacherId, teacherId)))
+      .for("update", { of: blob });
+    if (!file || file.used || file.contentType !== "application/pdf") return { error: "Файл не найден: загрузите его ещё раз" };
+    const [row] = await tx
+      .insert(textbookFile)
+      .values({
+        textbookId,
+        kind: "teachers_book",
+        name: input.name,
+        blobId: input.file,
+        position: 0,
+        renderStatus: "queued",
+        renderBoot: BOOT_ID,
+      })
+      .returning({ id: textbookFile.id });
+    return { id: row!.id };
+  });
+  if (added && "id" in added) void renderBook(db, teacherId, added.id);
+  return added;
+}
+
 /** This teacher's sets, newest first. */
 export async function listTextbooks(db: Database, teacherId: string) {
   return db
@@ -163,6 +213,8 @@ export async function findTextbook(db: Database, teacherId: string, id: string) 
     ...row,
     books: files
       .filter((f) => (BOOK_KINDS as readonly string[]).includes(f.kind))
+      // In the order of BOOK_KINDS: the teacher's book (#414) last, whenever it was added.
+      .sort((a, b) => BOOK_KINDS.indexOf(a.kind as BookKind) - BOOK_KINDS.indexOf(b.kind as BookKind))
       .map((f) => {
         const status = statusOf(f);
         return { id: f.id, kind: f.kind as BookKind, name: f.name, status, pageCount: status === "done" ? (f.pageCount ?? 0) : 0 };

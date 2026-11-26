@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TextbookStructureEditor } from "@/components/textbook-structure-editor";
 import { TextbookTaskBank } from "@/components/textbook-task-bank";
-import { TextbookRetry } from "@/components/textbook-upload-form";
-import { BOOK_LABELS, RENDER_LABELS } from "@/domain/textbook";
+import { TextbookAddTeachersBook, TextbookRetry } from "@/components/textbook-upload-form";
+import { BOOK_LABELS, isStageBook, RENDER_LABELS } from "@/domain/textbook";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../../caller";
 
@@ -89,7 +89,8 @@ export default async function TextbookPage({ params }: Props) {
           start={structure.draft ?? structure.structure}
           open={structure.draft !== null}
           revision={structure.revision}
-          books={textbook.books.filter((b) => b.status === "done").map((b) => b.kind)}
+          // shortcut: lessons get pages in the stage's books only, until the teacher's book range is added (#415)
+          books={textbook.books.filter((b) => b.status === "done" && isStageBook(b.kind)).map((b) => b.kind)}
         />
       </section>
 
@@ -121,6 +122,13 @@ export default async function TextbookPage({ params }: Props) {
           )}
         </section>
       ))}
+
+      {!textbook.books.some((b) => b.kind === "teachers_book") && (
+        <section aria-label="Добавить Teacher's Book" className="flex flex-col gap-3 rounded-card border border-border p-4">
+          <h2 className="text-h3 font-semibold">{BOOK_LABELS.teachers_book}</h2>
+          <TextbookAddTeachersBook textbookId={textbook.id} />
+        </section>
+      )}
 
       {textbook.tracks.length > 0 && (
         <section aria-label="Треки по порядку" className="flex flex-col gap-3">
