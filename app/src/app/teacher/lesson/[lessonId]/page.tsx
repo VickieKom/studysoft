@@ -28,6 +28,7 @@ export default async function LessonPanelPage({ params }: Props) {
       durationMinutes={lesson.durationMinutes}
       textbookTitle={lesson.textbookTitle}
       resources={lesson.resources}
+      teachersBook={lesson.teachersBook}
       serverKept={lesson.kept}
       serverNote={lesson.note}
     />

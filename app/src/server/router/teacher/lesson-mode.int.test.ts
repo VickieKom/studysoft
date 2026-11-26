@@ -200,6 +200,13 @@ describe("lesson mode", () => {
     await teacher.teacher.textbooks.saveStructure({ id: textbookId, structure: withRange, revision: view.revision, confirm: true });
     const reopened = await teacher.teacher.lessonMode.open({ lessonId });
     expect(reopened.resources.lessons.find((l) => l.title === "1.2")!.pages).toEqual({ students_book: { from: 4, to: 5 } });
+
+    // The panel gets the teacher's book with the lesson's range (#416); the stage gets nothing of it.
+    const teachersBookId = (await teacher.teacher.textbooks.get({ id: textbookId })).books.find((b) => b.kind === "teachers_book")!.id;
+    expect(reopened.teachersBook).toEqual({ fileId: teachersBookId, pageCount: 3, ranges: [{ lessonId: lessonIds["1.2"], from: 2, to: 3 }] });
+    const stage = await teacher.teacher.lessonMode.stage({ lessonId });
+    expect(JSON.stringify(stage)).not.toContain(teachersBookId);
+    expect(JSON.stringify(stage)).not.toContain("teachers_book");
   });
 
   it("answers another teacher's lesson as a missing one, and leaves it alone", async () => {
