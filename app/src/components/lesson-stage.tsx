@@ -72,6 +72,17 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
   const [drawn, setDrawn] = useState<Board | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
+  // Game results posted on the stage and not saved yet: closing the window asks first, so a result is not lost unsaid (#369).
+  // Kept here rather than in the game, so a stage changed while a save is on its way still asks.
+  const savingResults = useRef(0);
+
+  useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (savingResults.current > 0) event.preventDefault();
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
 
   useEffect(() => {
     const ch = new BroadcastChannel(lessonChannel(lessonId));
@@ -204,7 +215,14 @@ export function LessonStage({ lessonId, resources, serverKept }: { lessonId: str
                     lessonId={lessonId}
                     materialId={material.id}
                     title={material.title}
-                    onResult={(kept) => channel.current?.postMessage({ type: "game-result", kept } satisfies LessonMessage)}
+                    onPosted={() => {
+                      savingResults.current += 1;
+                    }}
+                    onResult={(kept) => {
+                      // Saved or refused, nothing is on its way any more by the time the panel hears of it.
+                      savingResults.current -= 1;
+                      channel.current?.postMessage({ type: "game-result", kept } satisfies LessonMessage);
+                    }}
                   />
                 );
               }
@@ -370,11 +388,13 @@ function StageGame({
   lessonId,
   materialId,
   title,
+  onPosted,
   onResult,
 }: {
   lessonId: string;
   materialId: string;
   title: string;
+  onPosted: () => void;
   onResult: (kept: boolean) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
@@ -385,6 +405,7 @@ function StageGame({
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow || !looksLikeGameResult(event.data)) return;
       const result: unknown = event.data;
+      onPosted();
       queue.current = queue.current.then(() =>
         routerClient.teacher.lessonMode.saveGameResult.mutate({ lessonId, materialId, result }).then(
           () => onResult(true),
@@ -394,7 +415,7 @@ function StageGame({
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [lessonId, materialId, onResult]);
+  }, [lessonId, materialId, onPosted, onResult]);
 
   return (
     <iframe
