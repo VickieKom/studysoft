@@ -5,6 +5,7 @@ import type { AssessmentAnswers } from "@/domain/assessment-answers";
 import { type AssessmentSectionView, type AssessmentSkill, GAP, sectionLabel, TRUE_FALSE, TRUE_FALSE_LABELS } from "@/domain/assessment-format";
 import { Button } from "./button";
 import { answerQueue } from "./answer-queue";
+import { type KeptAnswers, keptOnOpen } from "./kept-answers";
 import { routerClient } from "./router-client";
 
 type ChildAssessment = {
@@ -21,14 +22,14 @@ const field = "rounded-control border border-border bg-bg px-3 py-2 text-answer"
 /** A typed answer is saved this long after the last keystroke, and at once on «Дальше», «Назад» and «Сдать». */
 const TYPING_DELAY_MS = 500;
 
-/** `saved`: the server confirmed it, but a page rendered a moment before may not have it yet (#399). */
-type Pending = Record<string, { skill: AssessmentSkill; index: number; value: string | null; saved?: true }>;
+type Pending = KeptAnswers;
 
 /**
  * Answers given in this browser and kept until the page opens again: a reload
  * or a lost connection right after an answer sends it again when the page
- * opens. A confirmed one is kept too, marked saved, because a reload may have
- * been rendered from the database just before it was saved there (#399).
+ * opens. A confirmed one is kept too, with the time of its save, because a
+ * reload may have been rendered from the database just before it was saved
+ * there (#399, #412).
  * Storage may be unavailable; then nothing is kept.
  */
 const pendingKey = (id: string) => `studysoft:assessment:${id}`;
@@ -88,7 +89,7 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
         setError(null);
         // Kept on the server: marked so, unless a newer answer to the same question is on its way.
         writePending(assessment.id, (pending) => {
-          if (pending[key]?.value === answer.value) pending[key].saved = true;
+          if (pending[key]?.value === answer.value) pending[key].savedAt = Date.now();
         });
       },
       failed: () => setError("Не получилось сохранить ответ. Проверьте интернет"),
@@ -104,17 +105,17 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     if (kept > 0 && kept < assessment.sections.length) void Promise.resolve().then(() => setCurrent(kept));
   }, [assessment.id, assessment.sections.length]);
 
-  // Answers kept from before a reload or a lost connection. A saved one the page already shows is done with;
-  // any other is shown and sent again, a saved one too: then this page was rendered before it was saved.
+  // Answers kept from before a reload or a lost connection, shown and sent again as `keptOnOpen` decides.
+  // Once, when the page opens: a later render must not send them again.
+  const opened = useRef(false);
   useEffect(() => {
-    if (assessment.submitted) return;
-    const loaded = assessment.answers;
+    if (assessment.submitted || opened.current) return;
+    opened.current = true;
     let pending: Pending[string][] = [];
     writePending(assessment.id, (kept) => {
-      for (const [key, entry] of Object.entries(kept)) {
-        if (entry.saved && (loaded[entry.skill]?.[entry.index] ?? null) === entry.value) delete kept[key];
-      }
-      pending = Object.values(kept);
+      const again = keptOnOpen(kept, assessment.answers, Date.now());
+      for (const key of Object.keys(kept)) if (!(key in again)) delete kept[key];
+      pending = Object.values(again);
     });
     if (pending.length === 0) return;
     void Promise.resolve().then(() => {
@@ -169,7 +170,7 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     try {
       await flush();
       // What failed, or was left from before a reload, is sent again; nothing is submitted unsaved.
-      if (!(await saver.saveAll(Object.values(readPending(assessment.id)).filter((entry) => !entry.saved)))) {
+      if (!(await saver.saveAll(Object.values(readPending(assessment.id)).filter((entry) => entry.savedAt === undefined)))) {
         setError("Не все ответы сохранились. Проверьте интернет и нажмите «Сдать» ещё раз");
         return;
       }
