@@ -45,6 +45,9 @@ export type LessonResources = {
 
 type Range = { from: number; to: number };
 
+/** The teacher's book on the panel (#416): its pages and each lesson's range in it. The panel's only: the stage never gets it. */
+export type PanelTeachersBook = { fileId: string; pageCount: number; ranges: ({ lessonId: string } & Range)[] };
+
 /** A lesson's ranges in the books a stage can show. */
 function stagePages(pages: Partial<Record<BookKind, Range>>): Partial<Record<StageBookKind, Range>> {
   return Object.fromEntries(STAGE_BOOK_KINDS.flatMap((k) => (pages[k] ? [[k, pages[k]]] : [])));
@@ -65,7 +68,18 @@ async function textbookResources(db: Database, teacherId: string, studentId: str
     ),
     tracks: (book?.tracks ?? []).map((t) => ({ name: t.name, url: `/api/files/textbooks/${t.id}` })),
     videos: (book?.videos ?? []).map((v) => ({ id: v.id, title: v.name })),
+    teachersBook: panelTeachersBook(book?.books ?? [], structure),
   };
+}
+
+/** The rendered teacher's book with the confirmed lessons' ranges in it, or null when there is none to show. */
+function panelTeachersBook(books: { id: string; kind: BookKind; pageCount: number }[], structure: TextbookStructure | null): PanelTeachersBook | null {
+  const book = books.find((b) => b.kind === "teachers_book" && b.pageCount > 0);
+  if (!book) return null;
+  const ranges = (structure?.units ?? []).flatMap((u) =>
+    u.lessons.flatMap((l) => (l.pages.teachers_book ? [{ lessonId: l.id!, ...l.pages.teachers_book }] : [])),
+  );
+  return { fileId: book.id, pageCount: book.pageCount, ranges };
 }
 
 /** This teacher's warm-ups, games and videos, with what a warm-up shows. */
@@ -115,6 +129,7 @@ export async function lessonResources(db: Database, teacherId: string, lessonId:
     textbookTitle: book.textbookTitle,
     plan,
     resources,
+    teachersBook: book.teachersBook,
   };
 }
 

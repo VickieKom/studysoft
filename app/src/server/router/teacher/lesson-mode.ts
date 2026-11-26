@@ -82,6 +82,15 @@ export const lessonModeRouter = router({
           durationMinutes: z.number().int(),
           textbookTitle: z.string().nullable(),
           resources,
+          // The teacher's book for the panel (#416); the stage procedure never returns it.
+          teachersBook: z
+            .object({
+              fileId: z.uuid(),
+              pageCount: z.number().int(),
+              ranges: z.array(z.object({ lessonId: z.uuid(), from: z.number().int(), to: z.number().int() }).strict()),
+            })
+            .strict()
+            .nullable(),
           kept: keptStateSchema,
           note: z.string(),
         })
@@ -97,6 +106,7 @@ export const lessonModeRouter = router({
         durationMinutes: found.durationMinutes,
         textbookTitle: found.textbookTitle,
         resources: found.resources,
+        teachersBook: found.teachersBook,
         kept: found.kept,
         note: found.note,
       };

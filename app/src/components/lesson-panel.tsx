@@ -97,6 +97,7 @@ export function LessonPanel({
   durationMinutes,
   textbookTitle,
   resources,
+  teachersBook,
   serverKept,
   serverNote,
 }: {
@@ -105,6 +106,8 @@ export function LessonPanel({
   durationMinutes: number;
   textbookTitle: string | null;
   resources: LessonResourcesView;
+  /** The teacher's book for this panel only (#416), with each lesson's range in it. */
+  teachersBook: PanelTeachersBookView | null;
   serverKept: KeptState;
   serverNote: string;
 }) {
@@ -306,6 +309,15 @@ export function LessonPanel({
           onLayout={(layout) => change((s) => ({ ...s, layout }))}
         />
       )}
+      {current?.type === "book" && teachersBook && teachersBook.ranges.some((r) => r.lessonId === current.lessonId) && (
+        <TeachersBook
+          // A new book stage opens the block at its own lesson's first page.
+          key={`${state.current}:${current.lessonId}`}
+          fileId={teachersBook.fileId}
+          pageCount={teachersBook.pageCount}
+          range={teachersBook.ranges.find((r) => r.lessonId === current.lessonId)!}
+        />
+      )}
       {current?.type === "book" && (
         <Tracks
           names={lessonOf(current.lessonId)?.tracks ?? []}
@@ -364,6 +376,59 @@ export function LessonPanel({
     </main>
   );
 }
+
+export type PanelTeachersBookView = { fileId: string; pageCount: number; ranges: { lessonId: string; from: number; to: number }[] };
+
+/**
+ * «Teacher's Book» on the panel (#416): the lesson's pages in the teacher's
+ * book, for her eyes only. It turns its own pages through the whole book and
+ * never changes the stage: nothing of it goes into the lesson's state.
+ */
+function TeachersBook({ fileId, pageCount, range }: { fileId: string; pageCount: number; range: { from: number; to: number } }) {
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState(Math.min(range.from, pageCount));
+  const go = (page: number) => setAt(Math.max(1, Math.min(pageCount, page)));
+  const button = "rounded-control border border-border px-3 py-1.5 text-small";
+  return (
+    <section aria-label="Teacher's Book" className="flex flex-col gap-3 rounded-card border border-border p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-h3 font-semibold">{BOOK_LABELS.teachers_book}</h2>
+        <span className="text-small text-text-secondary">
+          Урок: стр. {range.from}
+          {range.to !== range.from && `–${range.to}`}
+        </span>
+        <button type="button" onClick={() => setOpen(!open)} className="text-small text-green-600 hover:text-green-700">
+          {open ? "Скрыть Teacher's Book" : "Показать Teacher's Book"}
+        </button>
+      </div>
+      {open && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" aria-label="Предыдущая страница" onClick={() => go(at - 1)} className={button}>
+              ‹
+            </button>
+            <span className="font-semibold">стр. {at}</span>
+            <button type="button" aria-label="Следующая страница" onClick={() => go(at + 1)} className={button}>
+              ›
+            </button>
+            <button type="button" onClick={() => go(range.from)} className="text-small text-green-600 hover:text-green-700">
+              К страницам урока
+            </button>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- served with a permission check, not by the image optimizer */}
+          <img
+            src={`/api/files/textbooks/${fileId}/pages/${at}`}
+            alt={pageLabelOf("teachers_book", at)}
+            className="w-full max-w-xl rounded-control border border-border"
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+/** «Teacher's Book, стр. 2»: as a page is named on the panel. */
+const pageLabelOf = (kind: "teachers_book", at: number) => `${BOOK_LABELS[kind]}, стр. ${at}`;
 
 function BookControls({
   stage,
