@@ -21,12 +21,15 @@ const field = "rounded-control border border-border bg-bg px-3 py-2 text-answer"
 /** A typed answer is saved this long after the last keystroke, and at once on «Дальше», «Назад» and «Сдать». */
 const TYPING_DELAY_MS = 500;
 
-type Pending = Record<string, { skill: AssessmentSkill; index: number; value: string | null }>;
+/** `saved`: the server confirmed it, but a page rendered a moment before may not have it yet (#399). */
+type Pending = Record<string, { skill: AssessmentSkill; index: number; value: string | null; saved?: true }>;
 
 /**
- * Answers given but not yet confirmed by the server, kept in this browser:
- * a reload or a lost connection right after an answer sends it again when
- * the page opens. Storage may be unavailable; then nothing is kept.
+ * Answers given in this browser and kept until the page opens again: a reload
+ * or a lost connection right after an answer sends it again when the page
+ * opens. A confirmed one is kept too, marked saved, because a reload may have
+ * been rendered from the database just before it was saved there (#399).
+ * Storage may be unavailable; then nothing is kept.
  */
 const pendingKey = (id: string) => `studysoft:assessment:${id}`;
 function readPending(id: string): Pending {
@@ -83,9 +86,9 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     answerQueue<AssessmentSkill>((answer) => routerClient.student.assessments.answer.mutate({ id: assessment.id, section: answer.skill, index: answer.index, value: answer.value }), {
       saved: (key, answer) => {
         setError(null);
-        // Kept on the server: no longer pending, unless a newer answer to the same question is.
+        // Kept on the server: marked so, unless a newer answer to the same question is on its way.
         writePending(assessment.id, (pending) => {
-          if (pending[key]?.value === answer.value) delete pending[key];
+          if (pending[key]?.value === answer.value) pending[key].saved = true;
         });
       },
       failed: () => setError("Не получилось сохранить ответ. Проверьте интернет"),
@@ -101,16 +104,24 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     if (kept > 0 && kept < assessment.sections.length) void Promise.resolve().then(() => setCurrent(kept));
   }, [assessment.id, assessment.sections.length]);
 
-  // Answers left pending by a reload or a lost connection: shown and sent again.
+  // Answers kept from before a reload or a lost connection. A saved one the page already shows is done with;
+  // any other is shown and sent again, a saved one too: then this page was rendered before it was saved.
   useEffect(() => {
     if (assessment.submitted) return;
-    const pending = Object.values(readPending(assessment.id));
+    const loaded = assessment.answers;
+    let pending: Pending[string][] = [];
+    writePending(assessment.id, (kept) => {
+      for (const [key, entry] of Object.entries(kept)) {
+        if (entry.saved && (loaded[entry.skill]?.[entry.index] ?? null) === entry.value) delete kept[key];
+      }
+      pending = Object.values(kept);
+    });
     if (pending.length === 0) return;
     void Promise.resolve().then(() => {
       setAnswers((before) => pending.reduce((next, { skill, index, value }) => withValue(next, skill, index, value), before));
       for (const { skill, index, value } of pending) send(skill, index, value);
     });
-  }, [assessment.id, assessment.submitted, send]);
+  }, [assessment.id, assessment.submitted, assessment.answers, send]);
 
   /** Sends the typed answers still waiting, then waits for every save. */
   const flush = useCallback(async () => {
@@ -158,7 +169,7 @@ export function AssessmentRunner({ assessment }: { assessment: ChildAssessment }
     try {
       await flush();
       // What failed, or was left from before a reload, is sent again; nothing is submitted unsaved.
-      if (!(await saver.saveAll(Object.values(readPending(assessment.id))))) {
+      if (!(await saver.saveAll(Object.values(readPending(assessment.id)).filter((entry) => !entry.saved)))) {
         setError("Не все ответы сохранились. Проверьте интернет и нажмите «Сдать» ещё раз");
         return;
       }
