@@ -42,7 +42,7 @@
     "drizzle-kit": "0.31.11",
     "eslint": "10.15.0",
     "eslint-config-next": "16.4.6",
-    "squawk-cli": "2.70.0",
+    "squawk-cli": "2.74.0",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
