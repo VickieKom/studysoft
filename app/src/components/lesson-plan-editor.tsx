@@ -1,6 +1,7 @@
 "use client";
 
 import { PREP_GROUP_LABELS, prepMaterialGroups } from "@/domain/prep-materials";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { HOMEWORK_STAGE_MINUTES, MAX_STAGE_VIDEO_TASKS, VIDEO_STAGE_MINUTES, type LessonPlan, type PlanStage } from "@/domain/lesson-plan";
@@ -38,6 +39,7 @@ export type TextbookVideoChoice = {
  */
 export function LessonPlanEditor({
   lessonId,
+  textbookId,
   start,
   fromAssistant,
   revision,
@@ -52,6 +54,8 @@ export function LessonPlanEditor({
   openedVideos,
 }: {
   lessonId: string;
+  /** The student's textbook, for the book stage's link to the lesson's pages in every book (#415). */
+  textbookId: string | null;
   start: LessonPlan;
   fromAssistant: boolean;
   revision: string;
@@ -200,6 +204,14 @@ export function LessonPlanEditor({
                       <span className="text-small text-text-secondary">Пропустить упражнения</span>
                       <input value={stage.skip} onChange={(e) => update(i, { skip: e.target.value })} placeholder="3, 5" className={field} />
                     </label>
+                    {textbookId && lessons.some((l) => l.id === stage.lessonId) && (
+                      <Link
+                        href={`/teacher/library/textbooks/${textbookId}/lessons/${stage.lessonId}`}
+                        className="self-center text-small text-green-600 hover:text-green-700"
+                      >
+                        Страницы урока
+                      </Link>
+                    )}
                   </>
                 )}
                 {stage.type === "textbook_video" && (

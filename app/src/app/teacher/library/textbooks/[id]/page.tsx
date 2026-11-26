@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { TextbookStructureEditor } from "@/components/textbook-structure-editor";
 import { TextbookTaskBank } from "@/components/textbook-task-bank";
 import { TextbookAddTeachersBook, TextbookRetry } from "@/components/textbook-upload-form";
-import { BOOK_LABELS, isStageBook, RENDER_LABELS } from "@/domain/textbook";
+import { BOOK_LABELS, RENDER_LABELS } from "@/domain/textbook";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../../caller";
 
@@ -89,8 +89,7 @@ export default async function TextbookPage({ params }: Props) {
           start={structure.draft ?? structure.structure}
           open={structure.draft !== null}
           revision={structure.revision}
-          // shortcut: lessons get pages in the stage's books only, until the teacher's book range is added (#415)
-          books={textbook.books.filter((b) => b.status === "done" && isStageBook(b.kind)).map((b) => b.kind)}
+          books={textbook.books.filter((b) => b.status === "done").map((b) => b.kind)}
         />
       </section>
 

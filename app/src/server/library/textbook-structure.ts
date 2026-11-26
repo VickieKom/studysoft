@@ -10,7 +10,7 @@ import {
   structureSchema,
   type TextbookStructure,
 } from "../../domain/textbook-structure";
-import { BOOK_LABELS, type BookKind, STAGE_BOOK_KINDS } from "../../domain/textbook";
+import { BOOK_KINDS, BOOK_LABELS, type BookKind } from "../../domain/textbook";
 import type { Database } from "../db/client";
 import { textbook } from "../db/schema";
 import { findTextbook } from "./textbooks";
@@ -32,7 +32,7 @@ export function checkStructure(found: Found, input: unknown): { ok: true; struct
   for (const [u, unit] of parsed.data.units.entries()) {
     for (const [l, lesson] of unit.lessons.entries()) {
       const where = `юнит ${u + 1}, урок ${l + 1}`;
-      for (const kind of STAGE_BOOK_KINDS) {
+      for (const kind of BOOK_KINDS) {
         const range = lesson.pages[kind];
         if (!range) continue;
         const count = pages.get(kind);
@@ -154,7 +154,7 @@ export async function findLesson(db: Database, teacherId: string, textbookId: st
     const tracks = lesson.tracks.flatMap((name) => found.tracks.filter((t) => t.name === name));
     const videos = (lesson.videos ?? []).flatMap((name) => found.videos.filter((v) => v.name === name));
     const pages = found.books.flatMap((book) => {
-      const range = (lesson.pages as Partial<Record<BookKind, { from: number; to: number }>>)[book.kind];
+      const range = lesson.pages[book.kind as BookKind];
       return range ? [{ fileId: book.id, kind: book.kind, from: range.from, to: range.to }] : [];
     });
     return { textbookTitle: found.title, unit: unit.title, title: lesson.title, pages, tracks, videos, words: lesson.words };

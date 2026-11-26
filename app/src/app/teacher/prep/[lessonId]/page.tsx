@@ -74,6 +74,7 @@ export default async function LessonPrepPage({ params }: Props) {
         // Kept across the refresh after saving, so «План сохранён» stays; a full reload starts it again from the server.
         key={prep.lessonId}
         lessonId={prep.lessonId}
+        textbookId={prep.textbookId}
         start={prep.start}
         fromAssistant={prep.draft !== null}
         revision={prep.revision}

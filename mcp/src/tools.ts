@@ -124,7 +124,7 @@ export const structureInput = {
   structure: z
     .record(z.string(), z.unknown())
     .describe(
-      "{ units: [{ title, lessons: [{ title, pages: { students_book?: { from, to }, workbook?: { from, to } }, tracks: [track names], words: [words] }] }] }",
+      "{ units: [{ title, lessons: [{ title, pages: { students_book?: { from, to }, workbook?: { from, to }, teachers_book?: { from, to } }, tracks: [track names], words: [words] }] }] }",
     ),
 };
 

@@ -185,6 +185,21 @@ describe("lesson mode", () => {
       "BAD_REQUEST",
     );
     expect((await teacher.teacher.lessonMode.open({ lessonId })).kept.revision).toBe(0);
+
+    // A lesson's teacher's book range (#415) never reaches the lesson mode either.
+    const view = await teacher.teacher.textbooks.structure({ id: textbookId });
+    for (let i = 0; i < 100 && (await teacher.teacher.textbooks.get({ id: textbookId })).books.some((b) => b.status !== "done"); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const withRange = {
+      units: view.structure!.units.map((u) => ({
+        ...u,
+        lessons: u.lessons.map((l) => (l.title === "1.2" ? { ...l, pages: { ...l.pages, teachers_book: { from: 2, to: 3 } } } : l)),
+      })),
+    };
+    await teacher.teacher.textbooks.saveStructure({ id: textbookId, structure: withRange, revision: view.revision, confirm: true });
+    const reopened = await teacher.teacher.lessonMode.open({ lessonId });
+    expect(reopened.resources.lessons.find((l) => l.title === "1.2")!.pages).toEqual({ students_book: { from: 4, to: 5 } });
   });
 
   it("answers another teacher's lesson as a missing one, and leaves it alone", async () => {

@@ -3,7 +3,7 @@
 // one as a draft; the teacher corrects and confirms it, or enters it by hand.
 // Only a confirmed structure is used by lessons. Plain data and zod only.
 import { z } from "zod";
-import { STAGE_BOOK_KINDS } from "./textbook";
+import { BOOK_KINDS } from "./textbook";
 
 export const MAX_UNITS = 60;
 export const MAX_LESSONS_PER_UNIT = 30;
@@ -24,8 +24,8 @@ const lesson = z
     // Kept across edits, so a lesson planned for a student stays the same lesson; given by the platform when missing.
     id: z.uuid().optional(),
     title: name,
-    // shortcut: a lesson has pages in the stage's books only, until its teacher's book range is added (#415)
-    pages: z.partialRecord(z.enum(STAGE_BOOK_KINDS), range),
+    // A range in each book it has pages in, the teacher's book's too (#415).
+    pages: z.partialRecord(z.enum(BOOK_KINDS), range),
     tracks: z.array(name).max(MAX_LESSON_TRACKS),
     // The set's videos the lesson has (#329), by name as tracks are; a structure saved before has none.
     videos: z.array(name).max(MAX_LESSON_VIDEOS).optional(),
