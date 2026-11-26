@@ -15,6 +15,7 @@ import { BOOK_KINDS, type BookKind, MAX_TEXTBOOK_VIDEOS, MAX_TRACKS, MAX_TRACKS_
 import { openBlob, saveBlob } from "../blob/store";
 import type { Database } from "../db/client";
 import { blob, textbook, textbookFile, textbookPage } from "../db/schema";
+import { type TextbookStructure, withoutBook } from "../../domain/textbook-structure";
 
 const run = promisify(execFile);
 
@@ -179,6 +180,84 @@ export async function addTeachersBook(
   });
   if (added && "id" in added) void renderBook(db, teacherId, added.id);
   return added;
+}
+
+type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * Takes the set's teacher's book off (#417): its pages and its row. The file
+ * row is locked first: a rendering still writing its pages waits, then finds
+ * the book gone and fails, which leaves nothing behind. Its blobs are left to
+ * the cleanup of unreferenced ones.
+ */
+async function dropTeachersBook(tx: Tx, textbookId: string): Promise<boolean> {
+  const [book] = await tx
+    .select({ id: textbookFile.id })
+    .from(textbookFile)
+    .where(and(eq(textbookFile.textbookId, textbookId), eq(textbookFile.kind, "teachers_book")))
+    .for("update");
+  if (!book) return false;
+  await tx.delete(textbookPage).where(eq(textbookPage.fileId, book.id));
+  await tx.delete(textbookFile).where(eq(textbookFile.id, book.id));
+  return true;
+}
+
+/**
+ * «Заменить» (#417): a new PDF, uploaded first, in the teacher's book's
+ * place, rendered after it. The structure is not touched: a range past the
+ * new file's pages shows as a problem at its lesson (`structureProblems`).
+ * The old file is served to nobody from then on. Null when it is not this
+ * teacher's set; otherwise the new book's file, or a message she reads.
+ */
+export async function replaceTeachersBook(
+  db: Database,
+  teacherId: string,
+  textbookId: string,
+  input: { name: string; file: string },
+): Promise<{ id: string } | { error: string } | null> {
+  const replaced = await db.transaction(async (tx): Promise<{ id: string } | { error: string } | null> => {
+    const [own] = await tx
+      .select({ id: textbook.id })
+      .from(textbook)
+      .where(and(eq(textbook.id, textbookId), eq(textbook.teacherId, teacherId)))
+      .for("update");
+    if (!own) return null;
+    const [file] = await tx
+      .select({ contentType: blob.contentType, used: textbookFile.id })
+      .from(blob)
+      .leftJoin(textbookFile, eq(textbookFile.blobId, blob.id))
+      .where(and(eq(blob.id, input.file), eq(blob.teacherId, teacherId)))
+      .for("update", { of: blob });
+    if (!file || file.used || file.contentType !== "application/pdf") return { error: "Файл не найден: загрузите его ещё раз" };
+    if (!(await dropTeachersBook(tx, textbookId))) return { error: "Teacher's Book в учебнике нет: добавьте её" };
+    const [row] = await tx
+      .insert(textbookFile)
+      .values({ textbookId, kind: "teachers_book", name: input.name, blobId: input.file, position: 0, renderStatus: "queued", renderBoot: BOOT_ID })
+      .returning({ id: textbookFile.id });
+    return { id: row!.id };
+  });
+  if (replaced && "id" in replaced) void renderBook(db, teacherId, replaced.id);
+  return replaced;
+}
+
+/**
+ * «Убрать» (#417): takes the teacher's book off the set, and its ranges off
+ * the confirmed structure and the draft at once, the rest of them unchanged
+ * (product owner, 2026-11-26). False when it is not this teacher's set or it
+ * has no teacher's book.
+ */
+export async function removeTeachersBook(db: Database, teacherId: string, textbookId: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [own] = await tx
+      .select({ structure: textbook.structure, draft: textbook.structureDraft })
+      .from(textbook)
+      .where(and(eq(textbook.id, textbookId), eq(textbook.teacherId, teacherId)))
+      .for("update");
+    if (!own || !(await dropTeachersBook(tx, textbookId))) return false;
+    const strip = (s: unknown) => (s ? withoutBook(s as TextbookStructure, "teachers_book") : null);
+    await tx.update(textbook).set({ structure: strip(own.structure), structureDraft: strip(own.draft) }).where(eq(textbook.id, textbookId));
+    return true;
+  });
 }
 
 /** This teacher's sets, newest first. */

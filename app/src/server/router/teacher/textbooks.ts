@@ -7,8 +7,8 @@ import { DRAFT_AUTHORS, structureSchema } from "../../../domain/textbook-structu
 import { studentTaskSchema } from "../../../domain/student-task-schema";
 import { bookSourceSchema, MAX_LESSON_TASKS, skippedSchema } from "../../../domain/task-bank";
 import { confirmLessonTasks, readConfirmedTasks, readTaskBank, removeDraftTask, updateConfirmedTask } from "../../library/task-bank";
-import { findLesson, readStructure, saveTeacherStructure } from "../../library/textbook-structure";
-import { addTeachersBook, createTextbook, findTextbook, listTextbooks, retryRender } from "../../library/textbooks";
+import { findLesson, readStructure, saveTeacherStructure, structureProblems } from "../../library/textbook-structure";
+import { addTeachersBook, createTextbook, findTextbook, listTextbooks, removeTeachersBook, replaceTeachersBook, retryRender } from "../../library/textbooks";
 import { router, teacherProcedure } from "../core/trpc";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND" });
@@ -86,13 +86,16 @@ export const textbooksRouter = router({
           draft: structureSchema.nullable(),
           draftBy: z.enum(DRAFT_AUTHORS).nullable(),
           revision: z.string(),
+          // What no longer fits in the confirmed structure, by lesson (#417): after a book was replaced by a shorter one.
+          problems: z.array(z.string()),
         })
         .strict(),
     )
     .query(async ({ ctx, input }) => {
       const view = await readStructure(ctx.db, ctx.teacherId, input.id);
-      if (!view) throw notFound();
-      return view;
+      const found = view ? await findTextbook(ctx.db, ctx.teacherId, input.id) : null;
+      if (!view || !found) throw notFound();
+      return { ...view, problems: structureProblems(found, view.structure) };
     }),
 
   /**
@@ -225,6 +228,26 @@ export const textbooksRouter = router({
       if (!added) throw notFound();
       if ("error" in added) throw new TRPCError({ code: "BAD_REQUEST", message: added.error });
       return added;
+    }),
+
+  /** «Заменить» (#417): a new teacher's book in the place of the set's; the structure is kept, what no longer fits shows as its problems. */
+  replaceTeachersBook: teacherProcedure
+    .input(z.object({ textbookId: z.uuid(), name: fileName, file: z.uuid() }))
+    .output(z.object({ id: z.uuid() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      const replaced = await replaceTeachersBook(ctx.db, ctx.teacherId, input.textbookId, { name: input.name, file: input.file });
+      if (!replaced) throw notFound();
+      if ("error" in replaced) throw new TRPCError({ code: "BAD_REQUEST", message: replaced.error });
+      return replaced;
+    }),
+
+  /** «Убрать» (#417): the teacher's book off the set, its ranges off the structure and the draft. */
+  removeTeachersBook: teacherProcedure
+    .input(z.object({ textbookId: z.uuid() }))
+    .output(z.object({ ok: z.literal(true) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      if (!(await removeTeachersBook(ctx.db, ctx.teacherId, input.textbookId))) throw notFound();
+      return { ok: true as const };
     }),
 
   /** «Повторить»: renders a failed book again. */

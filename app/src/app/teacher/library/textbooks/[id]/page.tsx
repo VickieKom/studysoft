@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TextbookStructureEditor } from "@/components/textbook-structure-editor";
 import { TextbookTaskBank } from "@/components/textbook-task-bank";
-import { TextbookAddTeachersBook, TextbookRetry } from "@/components/textbook-upload-form";
+import { TextbookAddTeachersBook, TextbookRetry, TextbookTeachersBookActions } from "@/components/textbook-upload-form";
 import { BOOK_LABELS, RENDER_LABELS } from "@/domain/textbook";
 import { isNotFound } from "@/server/router";
 import { teacherCaller } from "../../../caller";
@@ -62,6 +62,16 @@ export default async function TextbookPage({ params }: Props) {
                   : "Не размечен"}
           </span>
         </div>
+        {structure.problems.length > 0 && (
+          <div role="alert" className="flex flex-col gap-1 rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
+            <p className="font-semibold">Разметка не сходится с книгами — поправьте уроки:</p>
+            <ul aria-label="Ошибки разметки" className="list-disc pl-5">
+              {structure.problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {structure.structure && (
           <ol className="flex flex-col gap-2">
             {structure.structure.units.map((unit) => (
@@ -102,6 +112,7 @@ export default async function TextbookPage({ params }: Props) {
             <span className="text-small text-text-secondary">{RENDER_LABELS[book.status]}</span>
             {book.status === "failed" && <TextbookRetry fileId={book.id} />}
           </div>
+          {book.kind === "teachers_book" && <TextbookTeachersBookActions textbookId={textbook.id} />}
           {book.status === "rendering" && <p className="text-small text-text-secondary">Страницы появятся, когда книга будет готова</p>}
           {book.status === "done" && (
             <ol className="grid grid-cols-2 gap-3 md:grid-cols-4">

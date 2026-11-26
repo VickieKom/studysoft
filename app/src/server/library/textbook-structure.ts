@@ -55,6 +55,17 @@ export function checkStructure(found: Found, input: unknown): { ok: true; struct
   return { ok: true, structure: withIds };
 }
 
+/**
+ * What no longer fits in the confirmed structure (#417): a range past a book
+ * replaced by a shorter one, a book taken off. Empty while a book is still
+ * rendering, whose pages are not known yet.
+ */
+export function structureProblems(found: Found, structure: TextbookStructure | null): string[] {
+  if (!structure || found.books.some((b) => b.status === "rendering")) return [];
+  const checked = checkStructure(found, structure);
+  return checked.ok ? [] : checked.errors;
+}
+
 /** The draft as the teacher's form loaded it: saving or confirming is refused when another draft replaced it meanwhile. */
 const draftRevision = sql<string>`md5(coalesce(${textbook.structureDraft}::text, ''))`;
 
