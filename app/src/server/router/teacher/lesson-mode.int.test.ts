@@ -61,11 +61,16 @@ beforeAll(async () => {
   other = createServerCaller(await signedInHeaders(teacherB));
 
   const book = await upload("book", pdf(8));
+  // The set has a teacher's book too (#414): the lesson mode never offers it to the stage.
+  const teachersBook = await upload("book", pdf(3));
   const track = await upload("track", mp3());
   ({ id: textbookId } = await teacher.teacher.textbooks.create({
     title: "Lesson mode set",
     level: "A2",
-    books: [{ kind: "students_book", name: "book.pdf", file: book }],
+    books: [
+      { kind: "students_book", name: "book.pdf", file: book },
+      { kind: "teachers_book", name: "teachers-book.pdf", file: teachersBook },
+    ],
     tracks: [{ name: "1-02", file: track }],
   }));
   for (let i = 0; i < 100 && (await teacher.teacher.textbooks.get({ id: textbookId })).books[0]!.status !== "done"; i++) {
@@ -168,6 +173,18 @@ describe("lesson mode", () => {
     expect(await codeOf(teacher.teacher.lessonMode.saveState({ lessonId, revision: 1, state: { ...kept.state, current: 7 } }))).toBe("BAD_REQUEST");
     // Adding her own warm-up during the lesson is fine.
     expect(await teacher.teacher.lessonMode.saveState({ lessonId, revision: 1, state: withMaterial(warmupId) })).toEqual({ saved: true });
+  });
+
+  it("never puts the teacher's book on the stage: it is not offered, and a state showing it is refused (#414)", async () => {
+    const lessonId = await plannedLesson("Без книги учителя");
+    const { kept, resources } = await teacher.teacher.lessonMode.open({ lessonId });
+    expect(resources.books.map((b) => b.kind)).toEqual(["students_book"]);
+    const book = kept.state.stages[1]!;
+    const onTeachersBook = { ...book, kind: "teachers_book", pages: { teachers_book: 2 } } as unknown as LessonState["stages"][number];
+    expect(await codeOf(teacher.teacher.lessonMode.saveState({ lessonId, revision: 1, state: { ...kept.state, stages: [kept.state.stages[0]!, onTeachersBook] } }))).toBe(
+      "BAD_REQUEST",
+    );
+    expect((await teacher.teacher.lessonMode.open({ lessonId })).kept.revision).toBe(0);
   });
 
   it("answers another teacher's lesson as a missing one, and leaves it alone", async () => {

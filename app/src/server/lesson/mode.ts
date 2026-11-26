@@ -15,6 +15,7 @@ import {
   type StageHomework,
   type StageVideo,
 } from "../../domain/lesson-state";
+import { isStageBook } from "../../domain/textbook";
 import type { TextbookStructure } from "../../domain/textbook-structure";
 import type { Database } from "../db/client";
 import { lessonState, libraryMaterial } from "../db/schema";
@@ -49,7 +50,8 @@ async function textbookResources(db: Database, teacherId: string, studentId: str
   const structure: TextbookStructure | null = book ? found!.structure : null;
   return {
     textbookTitle: found?.textbookTitle ?? null,
-    books: (book?.books ?? []).map((b) => ({ kind: b.kind, fileId: b.id, pageCount: b.pageCount })),
+    // The stage never shows the teacher's book (#414).
+    books: (book?.books ?? []).flatMap((b) => (isStageBook(b.kind) ? [{ kind: b.kind, fileId: b.id, pageCount: b.pageCount }] : [])),
     lessons: (structure?.units ?? []).flatMap((u) => u.lessons.map((l) => ({ id: l.id!, title: l.title, pages: l.pages, tracks: l.tracks }))),
     tracks: (book?.tracks ?? []).map((t) => ({ name: t.name, url: `/api/files/textbooks/${t.id}` })),
     videos: (book?.videos ?? []).map((v) => ({ id: v.id, title: v.name })),

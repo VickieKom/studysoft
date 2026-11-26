@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { boardSchema, cleanBoard } from "./board";
 import { MAX_STAGE_MINUTES, MAX_STAGES, type LessonPlan } from "./lesson-plan";
-import { BOOK_KINDS, BOOK_LABELS, type BookKind } from "./textbook";
+import { BOOK_LABELS, STAGE_BOOK_KINDS, type StageBookKind } from "./textbook";
 
 /** Stages added during a lesson come on top of a full plan. */
 export const MAX_LESSON_STAGES = MAX_STAGES + 10;
@@ -39,9 +39,9 @@ const stage = z.discriminatedUnion("type", [
       skip: z.string().trim().max(200),
       minutes,
       done: z.boolean(),
-      // The book on the stage, and the page each book was left at.
-      kind: z.enum(BOOK_KINDS),
-      pages: z.partialRecord(z.enum(BOOK_KINDS), page),
+      // The book on the stage, and the page each book was left at: never the teacher's book (#414).
+      kind: z.enum(STAGE_BOOK_KINDS),
+      pages: z.partialRecord(z.enum(STAGE_BOOK_KINDS), page),
     })
     .strict(),
   // A video stage reviews the video's tasks with the student's answers (#328), as a homework stage does; a stage kept before has «Все задания».
@@ -109,23 +109,23 @@ export type MaterialStage = Extract<StateStage, { type: "material" }>;
 export type TextbookVideoStage = Extract<StateStage, { type: "textbook_video" }>;
 
 /** A book of the student's set as the lesson mode needs it. */
-export type LessonBook = { kind: BookKind; fileId: string; pageCount: number };
+export type LessonBook = { kind: StageBookKind; fileId: string; pageCount: number };
 /** A lesson of the textbook: its page range in each book and its tracks. */
-export type BookLesson = { id: string; title: string; pages: Partial<Record<BookKind, { from: number; to: number }>>; tracks: string[] };
+export type BookLesson = { id: string; title: string; pages: Partial<Record<StageBookKind, { from: number; to: number }>>; tracks: string[] };
 
 /** The book a lesson stage opens in: the Student's Book when the lesson has pages in it, else the first book it has pages in. */
-export function firstBook(lesson: BookLesson | undefined, books: LessonBook[]): BookKind {
+export function firstBook(lesson: BookLesson | undefined, books: LessonBook[]): StageBookKind {
   const ready = books.filter((b) => b.pageCount > 0).map((b) => b.kind);
-  return BOOK_KINDS.find((k) => ready.includes(k) && lesson?.pages[k]) ?? ready[0] ?? "students_book";
+  return STAGE_BOOK_KINDS.find((k) => ready.includes(k) && lesson?.pages[k]) ?? ready[0] ?? "students_book";
 }
 
 /** The lesson's first page in a book, or page 1 when the lesson has none there. */
-export function lessonPage(lesson: BookLesson | undefined, kind: BookKind): number {
+export function lessonPage(lesson: BookLesson | undefined, kind: StageBookKind): number {
   return lesson?.pages[kind]?.from ?? 1;
 }
 
 /** The page a book stage shows in a book: where it was left, else the lesson's first page there. */
-export function pageIn(stage: BookStage, lesson: BookLesson | undefined, kind: BookKind): number {
+export function pageIn(stage: BookStage, lesson: BookLesson | undefined, kind: StageBookKind): number {
   return stage.pages[kind] ?? lessonPage(lesson, kind);
 }
 
@@ -201,7 +201,7 @@ export function bookStageLabel(lesson: BookLesson | undefined): string {
 }
 
 /** «Student's Book, стр. 4»: how a page is named on the stage and the panel. */
-export function pageLabel(kind: BookKind, at: number): string {
+export function pageLabel(kind: StageBookKind, at: number): string {
   return `${BOOK_LABELS[kind]}, стр. ${at}`;
 }
 

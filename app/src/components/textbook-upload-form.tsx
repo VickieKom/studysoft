@@ -114,6 +114,9 @@ export function TextbookUploadForm() {
             accept="application/pdf,.pdf"
             onChange={(e) => setBooks({ ...books, [kind]: e.target.files?.[0] })}
           />
+          {kind === "teachers_book" && (
+            <span className="text-caption text-text-muted">Необязательно. Видна только вам, на сцену не выводится</span>
+          )}
         </div>
       ))}
       <div className="flex flex-col gap-1">
@@ -154,6 +157,52 @@ export function TextbookUploadForm() {
       )}
       <Button type="submit" className="self-start" disabled={progress !== null}>
         Загрузить
+      </Button>
+    </form>
+  );
+}
+
+/** «Добавить Teacher's Book» (#414): the teacher's book of a set created without one; the page then shows it as it renders. */
+export function TextbookAddTeachersBook({ textbookId }: { textbookId: string }) {
+  const router = useRouter();
+  const id = useId();
+  const [file, setFile] = useState<File | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    if (!file) return setError("Выберите PDF Teacher's Book");
+    if (file.size > MAX_BOOK_BYTES) return setError("Книга больше 300 МБ");
+    setPending(true);
+    try {
+      const uploaded = await upload(file, "book");
+      await routerClient.teacher.textbooks.addTeachersBook.mutate({ textbookId, name: file.name, file: uploaded });
+      router.refresh();
+    } catch (caught) {
+      const message = (caught as { message?: string })?.message;
+      const isOwn = caught instanceof Refused || (caught as { data?: { code?: string } })?.data?.code === "BAD_REQUEST";
+      setError(isOwn && message ? message : "Не получилось загрузить. Попробуйте ещё раз");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-2">
+      <label htmlFor={`${id}-teachers-book`} className="text-small text-text-secondary">
+        {BOOK_LABELS.teachers_book} (PDF)
+      </label>
+      <input id={`${id}-teachers-book`} type="file" accept="application/pdf,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <span className="text-caption text-text-muted">Видна только вам: на странице учебника и при подготовке, на сцену не выводится</span>
+      {error && (
+        <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
+          {error}
+        </p>
+      )}
+      <Button type="submit" variant="secondary" className="self-start" disabled={pending}>
+        {pending ? "Загружается…" : "Добавить Teacher's Book"}
       </Button>
     </form>
   );

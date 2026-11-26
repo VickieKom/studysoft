@@ -6,7 +6,7 @@ import { gameResultSchema } from "../../../domain/game-result-format";
 import { keptStateSchema, lessonWordSchema, MAX_LESSON_WORDS } from "../../../domain/lesson-state";
 import { finishForm, finishLesson } from "../../lesson/finish";
 import { saveStageGameResult } from "../../library/game-results";
-import { BOOK_KINDS } from "../../../domain/textbook";
+import { STAGE_BOOK_KINDS } from "../../../domain/textbook";
 import { lessonVideos, lessonStage, MAX_NOTE_LENGTH, openLesson, saveLessonNote, saveLessonState } from "../../lesson/mode";
 import { requestOfLesson } from "../../crm/requests";
 import { router, teacherProcedure } from "../core/trpc";
@@ -31,9 +31,9 @@ const stageTask = z
 
 const resources = z
   .object({
-    books: z.array(z.object({ kind: z.enum(BOOK_KINDS), fileId: z.uuid(), pageCount: z.number().int() }).strict()),
+    books: z.array(z.object({ kind: z.enum(STAGE_BOOK_KINDS), fileId: z.uuid(), pageCount: z.number().int() }).strict()),
     lessons: z.array(
-      z.object({ id: z.uuid(), title: z.string(), pages: z.partialRecord(z.enum(BOOK_KINDS), range), tracks: z.array(z.string()) }).strict(),
+      z.object({ id: z.uuid(), title: z.string(), pages: z.partialRecord(z.enum(STAGE_BOOK_KINDS), range), tracks: z.array(z.string()) }).strict(),
     ),
     tracks: z.array(z.object({ name: z.string(), url: z.string().startsWith("/api/files/textbooks/") }).strict()),
     // The student's textbook videos (#329), for the labels of their stages.

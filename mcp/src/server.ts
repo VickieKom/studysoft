@@ -176,7 +176,7 @@ server.registerTool(
   {
     title: "List textbooks",
     description:
-      "The teacher's textbooks: id, title, level, the books (id, students_book or workbook, rendering status, page count) " +
+      "The teacher's textbooks: id, title, level, the books (id, students_book, workbook or teachers_book — the teacher's book, for the teacher's eyes only — rendering status, page count) " +
       "and the names of the tracks, and whether a structure is confirmed or a draft waits.",
   },
   () => tools.listTextbooks(),
