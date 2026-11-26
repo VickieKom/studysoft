@@ -5,6 +5,8 @@
 // document; screens get `assessmentView` only. The teacher's only.
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, max, or, sql } from "drizzle-orm";
 import { type AssessmentDocument, type AssessmentSkill, needsRecording, withoutQuestion } from "../../domain/assessment-format";
+import type { AssessmentAnswers, AutoScores } from "../../domain/assessment-answers";
+import type { CriteriaScores } from "../../domain/assessment-review";
 import type { Database } from "../db/client";
 import { orderedLessons, studentWithTextbook } from "../lesson/prep";
 import { assessment, lesson, vocabularyWord } from "../db/schema";
@@ -27,6 +29,11 @@ export type AssessmentRow = {
   submittedAt: Date | null;
   finishedAt: Date | null;
   createdAt: Date;
+  /** The child's answers and the auto-checked scores (#253), the teacher's criteria and when they went into «Прогресс» (#254). */
+  answers: AssessmentAnswers;
+  scores: AutoScores | null;
+  criteria: CriteriaScores;
+  progressWrittenAt: Date | null;
 };
 
 /**
@@ -53,16 +60,30 @@ const columns = {
   submittedAt: assessment.submittedAt,
   finishedAt: assessment.finishedAt,
   createdAt: assessment.createdAt,
+  answers: assessment.answers,
+  scores: assessment.scores,
+  criteria: assessment.criteria,
+  progressWrittenAt: assessment.progressWrittenAt,
 };
 
 const toRow = ({
   createdBy,
   ...r
-}: Omit<AssessmentRow, "status" | "document" | "fromAssistant"> & { status: string; createdBy: string; document: unknown }): AssessmentRow => ({
+}: Omit<AssessmentRow, "status" | "document" | "fromAssistant" | "answers" | "scores" | "criteria"> & {
+  status: string;
+  createdBy: string;
+  document: unknown;
+  answers: unknown;
+  scores: unknown;
+  criteria: unknown;
+}): AssessmentRow => ({
   ...r,
   status: r.status as AssessmentRow["status"],
   fromAssistant: createdBy === "agent",
   document: r.document as AssessmentDocument,
+  answers: (r.answers as AssessmentAnswers | null) ?? {},
+  scores: (r.scores as AutoScores | null) ?? null,
+  criteria: (r.criteria as CriteriaScores | null) ?? {},
 });
 
 /** The longest assessment as JSON, imported by the teacher or saved by the assistant: text only, its files are uploaded on the card. */

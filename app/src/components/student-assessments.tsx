@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { ASSESSMENT_STATUS_LABELS, type AssessmentFile, assessmentFileUrl } from "@/domain/assessment";
 import { type AssessmentSectionView, type AssessmentSkill, GAP, sectionLabel, TRUE_FALSE, TRUE_FALSE_LABELS } from "@/domain/assessment-format";
+import { AssessmentReview, type AssessmentReviewView } from "./assessment-review";
 import { Button } from "./button";
 import { routerClient } from "./router-client";
 
@@ -21,6 +22,8 @@ type Assessment = {
   /** Taken in a lesson (#253). */
   taking: "not_opened" | "open" | "closed" | "submitted" | "finished";
   speakingRecording: string | null;
+  /** Once ended: «Проверка» (#254). */
+  review: AssessmentReviewView | null;
 };
 
 /** How far the child is, as the teacher reads it on the card (#253). */
@@ -48,7 +51,7 @@ function message(cause: unknown): string {
  * the picture for «Говорение», and approves it; an approved one does not
  * change. While a lesson with the student is going on she opens it to them
  * (#253) and may end it with «Завершить замер»; the speaking recording made
- * on the lesson panel plays here.
+ * on the lesson panel plays here. Ended, it is scored in «Проверка» (#254).
  */
 export function StudentAssessments({ studentId, assessments }: { studentId: string; assessments: Assessment[] }) {
   const router = useRouter();
@@ -223,6 +226,14 @@ function AssessmentCard({ assessment }: { assessment: Assessment }) {
           )}
         </section>
       ))}
+      {assessment.review && (
+        <AssessmentReview
+          assessmentId={assessment.id}
+          skills={assessment.sections.map((s) => s.skill)}
+          speakingRecording={assessment.speakingRecording}
+          review={assessment.review}
+        />
+      )}
       {error && (
         <p role="alert" className="whitespace-pre-line rounded-control bg-danger-bg px-3 py-2 text-small text-danger">
           {error}

@@ -1106,6 +1106,11 @@ export const assessment = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     scores: jsonb("scores"),
+    // Scored by the teacher once ended (#254): «Письмо» and «Говорение», three
+    // criteria of 0–2 each (`domain/assessment-review.ts`). «Записать в
+    // прогресс» writes the percents as skill results and freezes them.
+    criteria: jsonb("criteria"),
+    progressWrittenAt: timestamp("progress_written_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
