@@ -4,7 +4,7 @@
 // store its snapshot with the draft.
 //
 // Never in the context: the last name, contacts, payments, links (#18), and
-// the keys of homework tasks.
+// the keys of homework tasks. A lesson's note is in it since #424.
 import { type AssessmentPeriod, assessmentPeriod } from "../assessment/assessments";
 import { feedbackForAssistant } from "../homework/feedback-rating";
 import { gamesForStudent } from "../library/material-students";
@@ -13,6 +13,7 @@ import type { GameAnswer } from "../../domain/game-result-format";
 import { type RecentHomework, recentResults } from "../homework/review";
 import { countedGameResults } from "../library/game-results";
 import { studentMistakes } from "./mistakes";
+import { recentLessons } from "./lesson-history";
 import { listNotes } from "./notes";
 import { findStudent } from "./students";
 import { wordMark } from "../../domain/word-training";
@@ -50,6 +51,8 @@ export type StudentContext = {
   assessmentPeriod: AssessmentPeriod;
   /** The child's feedback (#335): «что заходит», the topics «пока путаюсь», the latest «А ещё я хочу…». */
   feedback: Awaited<ReturnType<typeof feedbackForAssistant>>;
+  /** The latest held or missed lessons, newest first (#424): the plan's stages, the note, the words. */
+  recentLessons: Awaited<ReturnType<typeof recentLessons>>;
 };
 
 /** The context of one student of this teacher, or null — another teacher's student is the same as a missing one. */
@@ -86,5 +89,6 @@ export async function buildStudentContext(
     gamesForStudent: await gamesForStudent(db, teacherId, studentId),
     assessmentPeriod: await assessmentPeriod(db, teacherId, studentId),
     feedback: await feedbackForAssistant(db, teacherId, studentId),
+    recentLessons: await recentLessons(db, teacherId, studentId),
   };
 }

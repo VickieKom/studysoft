@@ -60,7 +60,11 @@ server.registerTool(
       "lesson material and of homework task (chosen in so many answers of so many), the kinds of lesson material in " +
       "pairs they found «Оба так себе» (in so many pairs of so many), the topics they want more of, the " +
       "topics they find hard («пока путаюсь») and their latest wishes («А ещё я хочу…»). Offer more of the liked kinds " +
-      "and topics, less of what was «Оба так себе», and repeat the topics they find hard.",
+      "and topics, less of what was «Оба так себе», and repeat the topics they find hard. And the 5 latest held or " +
+      "missed lessons, newest first (recentLessons): the date, the book lesson covered, the plan's stages — the book " +
+      "lesson with the exercises skipped, the warm-up, game or video, the homework review — the teacher's note and the " +
+      "lesson's words. Do not repeat a warm-up, game or video of these lessons, and take up what the notes say was hard " +
+      "or left for next time; a missed lesson moved nothing on.",
     inputSchema: studentIdInput,
   },
   (input) => tools.getStudentContext(input),
