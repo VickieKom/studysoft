@@ -100,6 +100,21 @@ const studentContext = z
         wishes: z.array(z.string()),
       })
       .strict(),
+    // The latest held or missed lessons, newest first (#424): the approved plan's stages — a book lesson with the
+    // exercises skipped, a library material by its kind, a homework review, a textbook video — the note and the words.
+    recentLessons: z.array(
+      z
+        .object({
+          date: z.iso.datetime(),
+          status: z.enum(["held", "missed"]),
+          intro: z.boolean(),
+          bookLesson: z.string().nullable(),
+          stages: z.array(z.object({ kind: z.string(), title: z.string().nullable(), skip: z.string().optional() }).strict()),
+          note: z.string().nullable(),
+          words: z.array(z.string()),
+        })
+        .strict(),
+    ),
   })
   .strict();
 
@@ -136,6 +151,7 @@ export const agentStudentsRouter = router({
         notes: context.notes.map((note) => ({ body: note.body, createdAt: note.createdAt.toISOString() })),
         recentHomework: context.recentHomework.map((h) => ({ ...h, submittedAt: h.submittedAt.toISOString() })),
         recentGames: context.recentGames.map((g) => ({ ...g, playedAt: g.playedAt.toISOString() })),
+        recentLessons: context.recentLessons.map(({ startsAt, ...l }) => ({ date: startsAt.toISOString(), ...l })),
         assessmentPeriod: {
           ...context.assessmentPeriod,
           lastAssessmentAt: context.assessmentPeriod.lastAssessmentAt?.toISOString() ?? null,

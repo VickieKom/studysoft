@@ -293,7 +293,8 @@ describe("the assessment period in the student context", () => {
     expect(period.lastAssessmentAt).toBeNull();
     expect(Math.round((now - new Date(period.since).getTime()) / DAY)).toBe(30);
     expect(period.coveredUnits.map((u) => u.unit)).toEqual(["Unit 2 · 2.1", "Unit 2 · 2.2"]);
-    expect(JSON.stringify(context)).not.toContain("Юнит 731");
+    // What the teacher typed when marking is not a lesson of the textbook; it is in the lesson history only (#424).
+    expect(JSON.stringify(period)).not.toContain("Юнит 731");
     expect(period.words.map((w) => w.word).sort()).toEqual(["compass", "pebble"]);
     const ids = new Set((await assistant.agent.studentWords({ studentId })).map((w) => w.id));
     for (const word of period.words) expect(ids.has(word.id)).toBe(true);

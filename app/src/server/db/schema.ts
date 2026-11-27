@@ -654,8 +654,9 @@ export const lesson = pgTable(
     // Charged to the balance (#83): set when the lesson is marked or cancelled (#81).
     charged: boolean("charged"),
     // What the teacher wrote when marking it: the unit covered and a note.
-    // Teacher only; kept on the lesson so it never joins the notes the
-    // assistant reads.
+    // Kept on the lesson, apart from the card's notes; the assistant reads it
+    // with the latest lessons of the student context (#424), the student and
+    // the parent never.
     unit: text("unit"),
     note: text("note"),
     // The student's personal measure for this lesson, entered when marking it (#266).
