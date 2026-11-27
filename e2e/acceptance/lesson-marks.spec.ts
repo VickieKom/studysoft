@@ -1,7 +1,8 @@
 // Acceptance for #82: the teacher marks a past lesson «Проведён» or
 // «Пропущен», the student card keeps the lesson history, an unmarked past
-// lesson asks to be marked, and none of it reaches the student, the parent or
-// the assistant.
+// lesson asks to be marked, and none of it reaches the student or the parent.
+// The assistant reads the unit and the note with the latest lessons of the
+// student context since #424 (product owner, 2026-11-26), and only there.
 //
 // The teacher starts signed in (sessions.setup.ts). Her time zone and every
 // student's are Moscow here. A past lesson is added with «+ Урок» for
@@ -244,7 +245,7 @@ async function agentCall(request: APIRequestContext, token: string, procedure: s
   return response.text();
 }
 
-test("the history reaches neither the student, nor the parent, nor the assistant", async ({
+test("the history reaches neither the student nor the parent; the assistant reads it only in the student context", async ({
   page,
   browser,
   playwright,
@@ -276,12 +277,12 @@ test("the history reaches neither the student, nor the parent, nor the assistant
   await expect(tokenField).not.toHaveValue("");
   const token = await tokenField.inputValue();
   const assistant = await playwright.request.newContext({ baseURL, storageState: NO_SESSION });
-  for (const answer of [
-    await agentCall(assistant, token, "agent.listStudents"),
-    await agentCall(assistant, token, "agent.studentContext", { studentId }),
-  ]) {
-    expect(answer).not.toContain(note);
-    expect(answer).not.toContain(unit);
-  }
+  const students = await agentCall(assistant, token, "agent.listStudents");
+  expect(students).not.toContain(note);
+  expect(students).not.toContain(unit);
+  // With the latest lessons (#424).
+  const context = await agentCall(assistant, token, "agent.studentContext", { studentId });
+  expect(context).toContain(note);
+  expect(context).toContain(unit);
   await assistant.dispose();
 });
