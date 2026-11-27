@@ -6,9 +6,10 @@
 // lesson's words; a lesson only marked on the card has its date, status,
 // unit and note, and no stages.
 //
-// A lesson finished before its time moves to the moment it was finished
-// (#154), so the lesson held here today is the newest, before yesterday's
-// missed one.
+// Every lesson here is in the past: a lesson finished before its time would
+// move to the moment it was finished (#154) and stay going on for the
+// scenarios after this one. A past lesson is prepared from its dialog on the
+// week, «Подготовка к уроку».
 //
 // That another teacher's assistant gets NOT_FOUND and that no student or
 // parent procedure returns a lesson's note is an integration test.
@@ -232,10 +233,10 @@ async function mark(page: Page, date: Date, firstName: string, status: "Пров
 
 const stages = (page: Page) => page.getByRole("list", { name: "План урока" }).getByRole("listitem");
 
-/** Prepares the student's nearest lesson: the warm-up first, then book lesson 1.2 with exercise «3» skipped. */
-async function prepare(page: Page, firstName: string) {
-  await page.goto("/teacher/prep");
-  await page.getByRole("list", { name: "Предстоящие уроки" }).getByRole("listitem").filter({ hasText: firstName }).getByRole("link").first().click();
+/** Prepares the student's lesson on that date from its dialog: the warm-up first, then book lesson 1.2 with exercise «3» skipped. */
+async function prepare(page: Page, date: Date, firstName: string) {
+  const { dialog } = await openLesson(page, date, firstName);
+  await dialog.getByRole("link", { name: "Подготовка к уроку", exact: true }).click();
   await expect(page).toHaveURL(/\/teacher\/prep\/[0-9a-f-]{36}$/);
   await expect(stages(page).first()).toContainText("Student's Book: 1.2");
   await page.getByLabel("Добавить из библиотеки").selectOption({ label: WARMUP });
@@ -283,33 +284,34 @@ test("the context lists the latest held and missed lessons, newest first, with t
   await warmup(page);
   const studentId = await createStudent(page, "Историк");
 
-  // Three days ago: held, marked on the card only, with a unit and a note.
-  const marked = moscowDate(-3);
+  // Four days ago: held, marked on the card only, with a unit and a note.
+  const marked = moscowDate(-4);
   await addLesson(page, "Историк", marked);
   await mark(page, marked, "Историк", "Проведён", { unit: "Unit 1 · 1.1", note: CARD_NOTE });
   // Yesterday: missed.
   const missed = moscowDate(-1);
   await addLesson(page, "Историк", missed);
   await mark(page, missed, "Историк", "Пропущен");
-  // Two days ago: cancelled.
-  const cancelled = moscowDate(-2);
+  // Three days ago: cancelled.
+  const cancelled = moscowDate(-3);
   await addLesson(page, "Историк", cancelled);
   const { day, dialog } = await openLesson(page, cancelled, "Историк");
   await dialog.getByRole("button", { name: "Отменить", exact: true }).click();
   await dialog.getByRole("button", { name: "Отменить урок", exact: true }).click();
   await expect(day.getByRole("button", { name: /Историк/ })).toContainText("отменён");
 
-  // Tomorrow's lesson, prepared and held today in the lesson mode.
-  await addLesson(page, "Историк", moscowDate(1));
-  await prepare(page, "Историк");
+  // Two days ago: prepared and held in the lesson mode.
+  const prepared = moscowDate(-2);
+  await addLesson(page, "Историк", prepared);
+  await prepare(page, prepared, "Историк");
   await holdLesson(page);
 
   const lessons = await studentContext(assistant, token, studentId);
-  expect(lessons.map((l) => l.status)).toEqual(["held", "missed", "held"]);
-  const [held, skipped, onCard] = lessons;
+  expect(lessons.map((l) => l.status)).toEqual(["missed", "held", "held"]);
+  const [skipped, held, onCard] = lessons;
 
   expect(held).toMatchObject({ intro: false, bookLesson: "Unit 1 · 1.2", note: PANEL_NOTE });
-  expect(isoDate(new Date(held!.date))).toBe(isoDate(new Date()));
+  expect(isoDate(new Date(held!.date))).toBe(isoDate(prepared));
   expect(held!.stages).toEqual([
     { kind: "warmup", title: WARMUP },
     { kind: "book", title: "Unit 1 · 1.2", skip: "3" },
