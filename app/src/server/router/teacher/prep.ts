@@ -5,7 +5,8 @@ import { MATERIAL_KINDS } from "../../../domain/library";
 import { bookSourceSchema, MAX_LESSON_TASKS } from "../../../domain/task-bank";
 import { studentTaskSchema } from "../../../domain/student-task-schema";
 import { buildHomeworkFromBank, prepBankTasks } from "../../lesson/bank-homework";
-import { findPreparation, savePlan, setStudentTextbook, studentTextbook, studentWithTextbook, upcomingLessons } from "../../lesson/prep";
+import { findPreparation, ownLesson, savePlan, setStudentTextbook, studentTextbook, studentWithTextbook, upcomingLessons } from "../../lesson/prep";
+import { recentLessons } from "../../crm/lesson-history";
 import { requestOfLesson } from "../../crm/requests";
 import { openTextbookVideo } from "../../library/textbook-videos";
 import { router, teacherProcedure } from "../core/trpc";
@@ -15,6 +16,32 @@ const choice = z.object({ id: z.uuid(), label: z.string(), title: z.string() }).
 
 /** «Подготовка» (#151): the teacher's upcoming lessons and their plans. */
 export const prepRouter = router({
+  /**
+   * «Прошлый урок» (#426): the student's latest held or missed lesson, as the
+   * assistant reads it in the student context (#424), or null when there is none.
+   */
+  previousLesson: teacherProcedure
+    .input(z.object({ lessonId: z.uuid() }))
+    .output(
+      z
+        .object({
+          date: z.iso.datetime(),
+          status: z.enum(["held", "missed"]),
+          bookLesson: z.string().nullable(),
+          stages: z.array(z.object({ kind: z.string(), title: z.string().nullable(), skip: z.string().optional() }).strict()),
+          note: z.string().nullable(),
+        })
+        .strict()
+        .nullable(),
+    )
+    .query(async ({ ctx, input }) => {
+      const found = await ownLesson(ctx.db, ctx.teacherId, input.lessonId);
+      if (!found) throw notFound();
+      const [latest] = await recentLessons(ctx.db, ctx.teacherId, found.studentId, 1);
+      if (!latest) return null;
+      return { date: latest.startsAt.toISOString(), status: latest.status, bookLesson: latest.bookLesson, stages: latest.stages, note: latest.note };
+    }),
+
   list: teacherProcedure
     .input(z.object({ studentId: z.uuid().optional() }))
     .output(

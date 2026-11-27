@@ -194,4 +194,26 @@ describe("lesson preparation", () => {
       code: "NOT_FOUND",
     });
   });
+
+  it("shows the previous held or missed lesson above the plan, none before the first; another teacher never reaches it (#426)", async () => {
+    const studentId = await newStudent("Прошлый урок", "1.1");
+    const upcoming = await addLesson(studentId, 2);
+    expect(await teacher.teacher.prep.previousLesson({ lessonId: upcoming })).toBeNull();
+
+    const held = await addLesson(studentId, -2);
+    await teacher.teacher.prep.save({ lessonId: held, plan: { stages: [book("1.2", "3")] }, homeworkId: null, revision: "" });
+    await teacher.teacher.schedule.mark({ lessonId: held, status: "held", charged: true, unit: "Unit 1 · 1.2", note: "Повторить was/were" });
+    expect(await teacher.teacher.prep.previousLesson({ lessonId: upcoming })).toMatchObject({
+      status: "held",
+      bookLesson: "Unit 1 · 1.2",
+      stages: [{ kind: "book", title: "Unit 1 · 1.2", skip: "3" }],
+      note: "Повторить was/were",
+    });
+
+    const missed = await addLesson(studentId, -1);
+    await teacher.teacher.schedule.mark({ lessonId: missed, status: "missed", charged: false, unit: "", note: "" });
+    expect(await teacher.teacher.prep.previousLesson({ lessonId: upcoming })).toMatchObject({ status: "missed", stages: [], note: null });
+
+    await expect(other.teacher.prep.previousLesson({ lessonId: upcoming })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 });

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LaunchLesson } from "@/components/launch-lesson";
 import { LessonPlanEditor } from "@/components/lesson-plan-editor";
+import { PreviousLesson } from "@/components/previous-lesson";
 import { formatPastDate } from "@/domain/homework";
 import { dateIn, timeIn } from "@/domain/schedule";
 import { isNotFound } from "@/server/router";
@@ -16,7 +17,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * A lesson's preparation (#151): the assistant's draft when there is one,
  * else the approved plan, else the plan proposed — the student's next book
- * lesson — and the homework draft for the lesson.
+ * lesson — and the homework draft for the lesson. Above the plan, the
+ * student's previous lesson (#426).
  */
 export default async function LessonPrepPage({ params }: Props) {
   const { lessonId } = await params;
@@ -24,8 +26,13 @@ export default async function LessonPrepPage({ params }: Props) {
   const { caller } = await teacherCaller();
   let prep;
   let bank;
+  let previous;
   try {
-    [prep, bank] = await Promise.all([caller.teacher.prep.get({ lessonId }), caller.teacher.prep.bankTasks({ lessonId })]);
+    [prep, bank, previous] = await Promise.all([
+      caller.teacher.prep.get({ lessonId }),
+      caller.teacher.prep.bankTasks({ lessonId }),
+      caller.teacher.prep.previousLesson({ lessonId }),
+    ]);
   } catch (error) {
     if (isNotFound(error)) notFound();
     throw error;
@@ -70,6 +77,7 @@ export default async function LessonPrepPage({ params }: Props) {
           </p>
         )}
       </header>
+      {previous && <PreviousLesson lesson={previous} timeZone={timeZone} />}
       <LessonPlanEditor
         // Kept across the refresh after saving, so «План сохранён» stays; a full reload starts it again from the server.
         key={prep.lessonId}

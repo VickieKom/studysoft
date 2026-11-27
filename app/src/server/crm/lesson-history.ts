@@ -33,7 +33,7 @@ export type PastLesson = {
 };
 
 /** The student's latest held or missed lessons, newest first. The caller has checked the student is this teacher's. */
-export async function recentLessons(db: Database, teacherId: string, studentId: string): Promise<PastLesson[]> {
+export async function recentLessons(db: Database, teacherId: string, studentId: string, limit = CONTEXT_LESSONS): Promise<PastLesson[]> {
   const rows = await db
     .select({
       id: lesson.id,
@@ -50,7 +50,7 @@ export async function recentLessons(db: Database, teacherId: string, studentId: 
     .leftJoin(lessonState, eq(lessonState.lessonId, lesson.id))
     .where(and(eq(lesson.teacherId, teacherId), eq(lesson.studentId, studentId), inArray(lesson.status, PAST_STATUSES)))
     .orderBy(desc(lesson.startsAt))
-    .limit(CONTEXT_LESSONS);
+    .limit(limit);
   if (rows.length === 0) return [];
 
   const plans = new Map(rows.map((r) => [r.id, parsedPlan(r.plan)]));
